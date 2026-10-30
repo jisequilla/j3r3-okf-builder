@@ -121,6 +121,22 @@ def _indent_of(line: str) -> int:
     return len(line) - len(line.lstrip())
 
 
+def _closing_quote(text: str, q: str) -> int | None:
+    i = 1
+    while i < len(text):
+        ch = text[i]
+        if q == '"' and ch == "\\":
+            i += 2
+            continue
+        if ch == q:
+            if q == "'" and text[i + 1 : i + 2] == "'":
+                i += 2
+                continue
+            return i
+        i += 1
+    return None
+
+
 def _check_supported(v: str, line: str) -> None:
     t = v.strip()
     if t[:1] in ("|", ">") and t not in _BLOCK_HEADERS:
@@ -186,10 +202,33 @@ def _mini_yaml(text: str) -> dict:
             out += "\n"
         return out, first_line_from(end)
 
+    def quoted_scalar(idx: int, indent: int, t: str):
+        # un escalar entre comillas que sigue en otras líneas se lee de `raw`:
+        # dentro de las comillas '#' es texto y no un comentario
+        q, text, end, blanks = t[0], t, pos[idx] + 1, 0
+        while True:
+            close = _closing_quote(text, q)
+            if close is not None:
+                rest = text[close + 1 :]
+                if rest.strip() and not (rest[:1] in " \t" and rest.strip().startswith("#")):
+                    raise ValueError(f"texto tras la comilla de cierre: {raw[end - 1]!r}")
+                return _scalar(text[: close + 1]), first_line_from(end)
+            if end >= len(raw) or (raw[end].strip() and _indent_of(raw[end]) <= indent):
+                raise ValueError(f"comilla sin cerrar: {raw[pos[idx]]!r}")
+            r = raw[end]
+            end += 1
+            if not r.strip():
+                blanks += 1
+                continue
+            text += ("\n" * blanks if blanks else " ") + r.strip()
+            blanks = 0
+
     def plain_scalar(idx: int, indent: int, v: str):
         # un escalar que sigue en líneas más indentadas se une con un espacio
         t = v.strip()
         closed = len(t) > 1 and t[0] in _CLOSERS and t[-1] == _CLOSERS[t[0]]
+        if not closed and t[:1] in ('"', "'"):
+            return quoted_scalar(idx, indent, t)
         parts, nxt = [t], idx + 1
         while not closed and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
             c = lines[nxt].strip()
@@ -204,6 +243,8 @@ def _mini_yaml(text: str) -> dict:
         if len(parts) == 1:
             return _scalar(t), nxt
         joined = "".join(parts)
+        if t[0] in _CLOSERS and not joined.endswith(_CLOSERS[t[0]]):
+            raise ValueError(f"'{t[0]}' sin cerrar: {lines[idx]!r}")
         return (_scalar(joined) if t[0] in _CLOSERS else joined), nxt
 
     def value(idx: int, indent: int, v: str):

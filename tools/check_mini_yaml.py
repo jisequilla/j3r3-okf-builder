@@ -42,6 +42,11 @@ CASES: list[tuple[str, str, dict]] = [
      {"sources": [{"uri": "a", "kind": "doc"}, {"uri": "b"}]}),
     ("quoted scalars", "a: \"x: y\"\nb: 'z # w'\n", {"a": "x: y", "b": "z # w"}),
     ("comments", "# head\na: 1  # trailing\nb: true\n", {"a": 1, "b": True}),
+    ("multi-line double-quoted with #", "description: \"A long text\n  with a #hashtag inside\"\n",
+     {"description": "A long text with a #hashtag inside"}),
+    ("multi-line single-quoted with #", "a: 'one\n  two #x'\nb: 1\n", {"a": "one two #x", "b": 1}),
+    ("quoted line that looks like a comment", "a: \"one\n  # two\"\n", {"a": "one # two"}),
+    ("multi-line quoted list item", "items:\n- \"one\n  two #x\"\n- b\n", {"items": ["one two #x", "b"]}),
 ]
 
 
@@ -113,7 +118,8 @@ def self_test() -> int:
         if yaml is not None and yaml.safe_load(text) != expected:
             print(f"FAIL self-test [{name}]: PyYAML={yaml.safe_load(text)!r} expected={expected!r}")
             return 1
-    for text in ("a: |+\n  x\n", "a: |2\n  x\n", "a: &x 1\n", "a: !!str 1\n", "a: *x\n"):
+    for text in ("a: |+\n  x\n", "a: |2\n  x\n", "a: &x 1\n", "a: !!str 1\n", "a: *x\n",
+                 "a: \"one\n  two\nb: 1\n", "a: 'one\n  two\n", "a: [1,\n  2\n"):
         try:
             _mini_yaml(text)
         except ValueError:
