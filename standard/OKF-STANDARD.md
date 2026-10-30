@@ -172,7 +172,7 @@ okf_profile: "knowledge/2.0"
 
 * [Ficha del proyecto](project.md) - Propósito, alcance y enlaces clave del proyecto.
 
-# Subdirectorios
+# Subdirectories
 
 * [architecture](architecture/index.md) - Architecture views and principles.
 * [decisions](decisions/index.md) - Architecture decision records (ADR).

@@ -40,7 +40,7 @@ Elección del `--actor` en 0.1→0.2: si se sabe quién escribió los conceptos 
 
 1. `okf-lint` con la versión destino (`--okf-version 0.2|0.1`) hasta 0 errores.
 2. `okf-index` si el cambio de `status` altera los índices (sufijos `_(draft)_`).
-3. El script ya añade `okf_version` en el `index.md` raíz y una entrada `**Migración**` en `log.md`; revisar el texto.
+3. El script ya añade `okf_version` en el `index.md` raíz y una entrada `**Migration**` en `log.md`; revisar el texto.
 4. Si quedan `LEGACY_CITATIONS` con la nota "sources y # Citations distintas", resolver a mano: la sección contiene citas que no están en `sources[]`.
 
 ## Tabla de mapeo

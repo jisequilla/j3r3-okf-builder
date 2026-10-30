@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""export_copilot.py — Genera el paquete OKF para GitHub Copilot a partir del plugin.
+"""export_copilot.py — Build the OKF pack for GitHub Copilot from the plugin.
 
-Copilot (VS Code agent mode, Copilot CLI y coding agent) descubre Agent Skills
-(SKILL.md, estándar agentskills.io) en .github/skills/, .claude/skills/ o
-.agents/skills/. Este exportador:
+Copilot (VS Code agent mode, Copilot CLI and coding agent) discovers Agent Skills
+(SKILL.md, agentskills.io standard) in .github/skills/, .claude/skills/ or
+.agents/skills/. This exporter:
 
-  1. Copia cada skill del plugin a <out>/.github/skills/<skill>/.
-  2. Concreta la convención <skills> de los SKILL.md a la ruta del repo destino.
-  3. Genera un custom agent .github/agents/okf.agent.md que orquesta los skills.
-  4. Genera AGENTS.md (fragmento) con el inventario y la regla de consumo de knowledge/.
+  1. Copies each plugin skill to <out>/.github/skills/<skill>/.
+  2. Resolves the <skills> convention of the SKILL.md files to the target repo path.
+  3. Writes a custom agent .github/agents/okf.agent.md that orchestrates the skills.
+  4. Writes an AGENTS.md snippet with the inventory and the rule for reading knowledge/.
 
-Uso:
+Usage:
     python3 tools/export_copilot.py [--out dist/copilot] [--skills-dir .github/skills] [--zip]
 """
 from __future__ import annotations
@@ -27,63 +27,64 @@ PLUGIN = ROOT / "plugin" / "okf-builder"
 
 AGENT_MD = """---
 name: okf
-description: Gestor de conocimiento OKF (Open Knowledge Format) del repositorio. Úsalo para inicializar knowledge/, capturar ADRs/runbooks/sistemas, validar, regenerar índices, migrar entre OKF 0.1 y 0.2 y responder preguntas sobre el proyecto a partir de knowledge/.
+description: OKF (Open Knowledge Format) knowledge manager for this repository. Use it to initialize knowledge/, capture ADRs/runbooks/systems, validate, regenerate indexes, migrate between OKF 0.1 and 0.2, and answer questions about the project from knowledge/.
 tools: ["read", "edit", "search", "shell"]
 ---
 
-Eres el agente OKF de este repositorio. El conocimiento del proyecto vive en `knowledge/`
-como bundle OKF (markdown + frontmatter YAML). Trabaja siempre a través de los skills
-`okf-*` de `{skills_dir}/`; son la fuente de verdad del estándar y contienen las
-plantillas y los scripts.
+You are the OKF agent of this repository. The project knowledge lives in `knowledge/`
+as an OKF bundle (markdown + YAML frontmatter). Always work through the `okf-*` skills
+in `{skills_dir}/`; they are the source of truth for the standard and hold the
+templates and the scripts.
 
-Reglas:
-1. Antes de responder sobre el proyecto, navega `knowledge/index.md` → índices de
-   directorio → conceptos (skill okf-ask). Cita rutas y nivel de confianza.
-2. Para crear o modificar conocimiento usa okf-capture: plantilla, `log.md`, índice y lint.
-   Nunca añadas `verified` con `human:` sin confirmación explícita de la persona.
-3. Antes de terminar cualquier cambio en `knowledge/`, ejecuta
-   `python3 {skills_dir}/okf-standard/scripts/okf_lint.py knowledge` y corrige los ERROR.
-4. Respeta la versión OKF del bundle (`okf_version` en `knowledge/index.md`); no mezcles
-   formas 0.1 y 0.2. Para cambiar de versión usa okf-migrate con `--dry-run` primero.
-5. Si no existe `knowledge/`, propone okf-init y espera confirmación.
+Rules:
+1. Before answering about the project, navigate `knowledge/index.md` → directory
+   indexes → concepts (okf-ask skill). Cite paths and the confidence level.
+2. To create or change knowledge use okf-capture: template, `log.md`, index and lint.
+   Never add `verified` with `human:` without the person's explicit confirmation.
+3. Before finishing any change in `knowledge/`, run
+   `python3 {skills_dir}/okf-standard/scripts/okf_lint.py knowledge` and fix every ERROR.
+4. Respect the OKF version of the bundle (`okf_version` in `knowledge/index.md`); do not mix
+   0.1 and 0.2 forms. To change version use okf-migrate with `--dry-run` first.
+5. If `knowledge/` does not exist, propose okf-init and wait for confirmation.
 """
 
-AGENTS_SNIPPET = """## Conocimiento del proyecto (OKF)
+AGENTS_SNIPPET = """## Project knowledge (OKF)
 
-El conocimiento vive en `knowledge/` (Open Knowledge Format, markdown + frontmatter YAML).
-Empieza siempre por `knowledge/index.md` y desciende por los `index.md` de cada directorio.
+Knowledge lives in `knowledge/` (Open Knowledge Format, markdown + YAML frontmatter).
+Always start at `knowledge/index.md` and go down through the `index.md` of each directory.
 
-Skills disponibles en `{skills_dir}/` (estándar Agent Skills, también válidos para Claude Code):
+Skills available in `{skills_dir}/` (Agent Skills standard, also valid for Claude Code):
 
-| Skill | Uso |
+| Skill | Use |
 |---|---|
-| okf-standard | Estándar OKF v0.1/v0.2, perfil knowledge/2.0, plantillas y scripts |
-| okf-init | Crear `knowledge/` |
-| okf-capture | Añadir ADR, runbook, sistema, API, tabla, métrica, término, política |
-| okf-lint | Validar conformidad (`python3 {skills_dir}/okf-standard/scripts/okf_lint.py knowledge`) |
-| okf-index | Regenerar `index.md` |
-| okf-ask | Responder preguntas citando conceptos y confianza |
-| okf-migrate | Migrar entre OKF 0.1 y 0.2 |
+| okf-standard | OKF v0.1/v0.2 standard, knowledge/2.0 profile, templates and scripts |
+| okf-init | Create `knowledge/` |
+| okf-capture | Add an ADR, runbook, system, API, table, metric, term, policy |
+| okf-lint | Check conformance (`python3 {skills_dir}/okf-standard/scripts/okf_lint.py knowledge`) |
+| okf-index | Regenerate `index.md` |
+| okf-ask | Answer questions citing concepts and confidence |
+| okf-migrate | Migrate between OKF 0.1 and 0.2 |
 
-Agente: `@okf` (`.github/agents/okf.agent.md`). Validación en CI: `okf_lint.py knowledge --strict`.
+Agent: `@okf` (`.github/agents/okf.agent.md`). CI validation: `okf_lint.py knowledge --strict`.
 """
 
 
-RUTAS_RE = re.compile(r"^> \*\*Rutas\.\*\*.*$\n?", re.M)
+# The paths note of the source SKILL.md files ("Rutas" until the skill prose is translated)
+PATHS_NOTE_RE = re.compile(r"^> \*\*(?:Rutas|Paths)\.\*\*.*$\n?", re.M)
 
 
 def rewrite(text: str, skills_dir: str) -> str:
-    text = RUTAS_RE.sub(f"> **Rutas.** Relativas a la raíz del repositorio; los skills `okf-*` están en `{skills_dir}/`.\n", text)
-    # Los skills fuente usan la convención <skills>; aquí se concreta a la ruta del repo destino.
+    text = PATHS_NOTE_RE.sub(f"> **Paths.** Relative to the repository root; the `okf-*` skills are in `{skills_dir}/`.\n", text)
+    # The source skills use the <skills> convention; here it becomes the target repo path.
     return text.replace("<skills>/", f"{skills_dir}/").replace("${CLAUDE_PLUGIN_ROOT}/skills", skills_dir)
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default="dist/copilot", help="directorio de salida (relativo al repo)")
+    ap.add_argument("--out", default="dist/copilot", help="output directory (relative to the repo)")
     ap.add_argument("--skills-dir", default=".github/skills",
-                    help=".github/skills (Copilot) | .agents/skills (neutro) | .claude/skills")
-    ap.add_argument("--zip", action="store_true", help="además, empaquetar como okf-copilot-pack.zip")
+                    help=".github/skills (Copilot) | .agents/skills (neutral) | .claude/skills")
+    ap.add_argument("--zip", action="store_true", help="also package the output as okf-copilot-pack.zip")
     args = ap.parse_args(argv)
 
     out = (ROOT / args.out).resolve()
@@ -102,13 +103,13 @@ def main(argv=None) -> int:
         for md in target.rglob("*.md"):
             md.write_text(rewrite(md.read_text(encoding="utf-8"), skills_dir), encoding="utf-8")
         n += 1
-    # licencia en el skill que incluye la spec de Google
+    # license in the skill that ships the Google spec
     lic = dst_skills / "okf-standard" / "references" / "OKF-SPEC-LICENSE.md"
     if lic.exists():
         std = dst_skills / "okf-standard" / "SKILL.md"
         s = std.read_text(encoding="utf-8")
         if "license:" not in s.split("---")[1]:
-            s = s.replace("\n---\n", "\nlicense: Apache-2.0 (specs de Google en references/); resto del skill según LICENSE del repo\n---\n", 1)
+            s = s.replace("\n---\n", "\nlicense: Apache-2.0 (Google specs in references/); the rest of the skill under the repo LICENSE\n---\n", 1)
         std.write_text(s, encoding="utf-8")
 
     agents = out / ".github" / "agents"
@@ -116,21 +117,21 @@ def main(argv=None) -> int:
     (agents / "okf.agent.md").write_text(AGENT_MD.format(skills_dir=skills_dir), encoding="utf-8")
     (out / "AGENTS.okf.md").write_text(AGENTS_SNIPPET.format(skills_dir=skills_dir), encoding="utf-8")
     (out / "README.md").write_text(
-        f"""# OKF pack para GitHub Copilot
+        f"""# OKF pack for GitHub Copilot
 
-Copia el contenido de este directorio en la raíz de tu repositorio:
+Copy the contents of this directory to the root of your repository:
 
-- `{skills_dir}/okf-*/` — Agent Skills (los descubre Copilot en VS Code, Copilot CLI y coding agent; también Claude Code y Gemini CLI si usas `.agents/skills`).
-- `.github/agents/okf.agent.md` — custom agent `@okf` que orquesta los skills.
-- `AGENTS.okf.md` — fragmento para pegar en tu `AGENTS.md` (o `.github/copilot-instructions.md`).
+- `{skills_dir}/okf-*/` — Agent Skills (discovered by Copilot in VS Code, Copilot CLI and coding agent; also by Claude Code and Gemini CLI if you use `.agents/skills`).
+- `.github/agents/okf.agent.md` — custom agent `@okf` that orchestrates the skills.
+- `AGENTS.okf.md` — snippet to paste into your `AGENTS.md` (or `.github/copilot-instructions.md`).
 
-Los scripts (`okf_init/lint/index/migrate.py`) están en `{skills_dir}/okf-standard/scripts/` y no tienen dependencias
-(Python ≥ 3.9). En Copilot, la ejecución de scripts pide confirmación salvo que añadas `allowed-tools` al SKILL.md.
+The scripts (`okf_init/lint/index/migrate.py`) are in `{skills_dir}/okf-standard/scripts/` and have no dependencies
+(Python ≥ 3.9). In Copilot, running scripts asks for confirmation unless you add `allowed-tools` to the SKILL.md.
 
-Generado desde el plugin okf-builder con `tools/export_copilot.py`; no edites aquí, edita el plugin y vuelve a exportar.
+Generated from the okf-builder plugin with `tools/export_copilot.py`; do not edit here: edit the plugin and export again.
 """, encoding="utf-8")
 
-    print(f"{n} skills exportados a {out} ({skills_dir})")
+    print(f"{n} skills exported to {out} ({skills_dir})")
     if args.zip:
         zpath = out.parent / "okf-copilot-pack.zip"
         with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:

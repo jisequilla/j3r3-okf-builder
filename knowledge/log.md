@@ -1,5 +1,8 @@
 # Historial del bundle
 
+## 2026-10-31
+* **Update**: ADR-0010 glossary extended with the Migration and Verification log labels.
+
 ## 2026-10-30
 * **Update**: Profile vocabulary moved to knowledge/2.0 (ADR-0010): directories, types and slugs renamed.
 * **Creación**: [ADR-0010](/decisiones/ADR-0010-ingles-canonico-perfil-2.md): inglés como idioma canónico y perfil knowledge/2.0, con glosario de migración.

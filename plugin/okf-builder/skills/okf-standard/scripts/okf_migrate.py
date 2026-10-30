@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""okf_migrate.py — Migra un bundle OKF entre v0.1 y v0.2 (ambos sentidos).
+"""okf_migrate.py — Migrate an OKF bundle between v0.1 and v0.2 (both directions).
 
-Uso:
+Usage:
     python3 okf_migrate.py [bundle] --to 0.2 [--actor process:okf-migrate] [--dry-run] [--out DIR]
     python3 okf_migrate.py [bundle] --to 0.1 [--keep-extensions] [--dry-run] [--out DIR]
 
-0.1 → 0.2 (sin pérdida):
+0.1 → 0.2 (lossless):
   - timestamp            → generated: { by: <actor>, at: <timestamp> }
-  - # Citations (cuerpo) → sources[] (id cit-n, resource, title) + notas al pie [^cit-n]
-  - okf_version "0.2" en index.md raíz; entrada en log.md
+  - # Citations (body)   → sources[] (id cit-n, resource, title) + footnotes [^cit-n]
+  - okf_version "0.2" in the root index.md; an entry in log.md
 
-0.2 → 0.1 (con pérdida salvo --keep-extensions):
+0.2 → 0.1 (lossy unless --keep-extensions):
   - generated.at         → timestamp
-  - sources[]            → # Citations con [n] [title](resource); [^id] → [n]
-  - verified, status, stale_after, usage_window, generated, sources se eliminan
-    (con --keep-extensions se conservan como claves extra, legal en ambas specs)
-  - okf_version "0.1" en index.md raíz; entrada en log.md
+  - sources[]            → # Citations with [n] [title](resource); [^id] → [n]
+  - verified, status, stale_after, usage_window, generated, sources are removed
+    (with --keep-extensions they are kept as extra keys, legal in both specs)
+  - okf_version "0.1" in the root index.md; an entry in log.md
 
---out DIR escribe una copia migrada y deja intacto el bundle fuente (recomendado para 0.2→0.1).
-Edita el texto del frontmatter por bloques de clave para preservar orden, comentarios y
-claves desconocidas; nunca re-serializa YAML completo.
+--out DIR writes a migrated copy and leaves the source bundle untouched (recommended for 0.2→0.1).
+It edits the frontmatter text by key blocks to keep order, comments and unknown keys;
+it never re-serializes the whole YAML.
 """
 from __future__ import annotations
 
@@ -45,10 +45,10 @@ DROP_ON_DOWNGRADE = ["verified", "status", "stale_after", "usage_window"]
 
 
 # --------------------------------------------------------------------------
-# Frontmatter como bloques de clave de primer nivel (preserva texto original)
+# Frontmatter as top-level key blocks (keeps the original text)
 # --------------------------------------------------------------------------
 def fm_blocks(raw: str) -> list[tuple[str | None, list[str]]]:
-    """[(clave|None para comentarios sueltos, líneas)] en orden."""
+    """[(key|None for loose comments, lines)] in order."""
     blocks: list[tuple[str | None, list[str]]] = []
     for line in raw.splitlines():
         m = re.match(r"^([A-Za-z_][\w-]*)\s*:", line)
@@ -58,7 +58,7 @@ def fm_blocks(raw: str) -> list[tuple[str | None, list[str]]]:
             blocks[-1][1].append(line)
         else:
             blocks.append((None, [line]))
-    # recortar líneas en blanco finales de cada bloque
+    # trim trailing blank lines of each block
     out = []
     for k, ls in blocks:
         while ls and not ls[-1].strip():
@@ -87,7 +87,7 @@ def yaml_str(v) -> str:
 
 
 def norm_ts(ts) -> str:
-    """ISO 8601 con offset explícito; si es naive se asume UTC (y se avisa)."""
+    """ISO 8601 with an explicit offset; a naive value is assumed to be UTC (and reported)."""
     s = ts.isoformat() if hasattr(ts, "isoformat") else str(ts).strip().strip("'\"")
     if re.search(r"(Z|[+-]\d{2}:\d{2})$", s):
         return s.replace("+00:00", "Z")
@@ -97,14 +97,14 @@ def norm_ts(ts) -> str:
 
 
 # --------------------------------------------------------------------------
-# Citas v0.1 <-> sources v0.2
+# v0.1 citations <-> v0.2 sources
 # --------------------------------------------------------------------------
 CIT_ITEM_RE = re.compile(r"^\s*(?:\[(\d+)\]|[-*])\s+(.*\S)\s*$")
 MDLINK_RE = re.compile(r"^\[([^\]]*)\]\(([^)\s]+)\)\s*(.*)$")
 
 
 def parse_citations(body: str):
-    """Devuelve (body_sin_seccion, [(n, title, url)])."""
+    """Return (body_without_section, [(n, title, url)])."""
     m = re.search(r"^#\s+Citations\s*$\n?(.*?)(?=^#\s|\Z)", body, re.M | re.S)
     if not m:
         return body, []
@@ -122,7 +122,7 @@ def parse_citations(body: str):
         elif re.match(r"^\S+$", text):
             title, url = "", text
         else:
-            # "url - descripción" o texto libre
+            # "url - description" or free text
             parts = text.split(None, 1)
             url, title = (parts[0], parts[1].lstrip("-– ").strip()) if re.match(r"^[a-z]+:|^/|^\.", parts[0]) else ("", text)
             if not url:
@@ -133,7 +133,7 @@ def parse_citations(body: str):
 
 
 def upgrade_citation_refs(body: str, ids: dict[int, str]) -> str:
-    # [n] suelto (no seguido de '(' ni ':' y no precedido por '^') → [^cit-n]
+    # a bare [n] (not followed by '(' or ':' and not preceded by '^') → [^cit-n]
     def rep(m):
         n = int(m.group(1))
         return f"[^{ids[n]}]" if n in ids else m.group(0)
@@ -141,14 +141,14 @@ def upgrade_citation_refs(body: str, ids: dict[int, str]) -> str:
 
 
 def downgrade_footnotes(body: str, id_to_n: dict[str, int]) -> str:
-    # eliminar definiciones [^id]: ...
+    # remove [^id]: ... definitions
     body = re.sub(r"^\[\^([^\]]+)\]:[^\n]*\n?", lambda m: "" if m.group(1) in id_to_n else m.group(0), body, flags=re.M)
     body = re.sub(r"\[\^([^\]]+)\]", lambda m: f"[{id_to_n[m.group(1)]}]" if m.group(1) in id_to_n else m.group(0), body)
     return body
 
 
 # --------------------------------------------------------------------------
-# Migración de un concepto
+# Migrating one concept
 # --------------------------------------------------------------------------
 def migrate_concept(text: str, to: str, actor: str, keep_ext: bool, notes: list[str], rel: str,
                     bundle: Path | None = None, doc_path: Path | None = None) -> str:
@@ -163,7 +163,7 @@ def migrate_concept(text: str, to: str, actor: str, keep_ext: bool, notes: list[
             i = get_block(blocks, "timestamp")
             ts = norm_ts(fm["timestamp"])
             if not re.search(r"(Z|[+-]\d{2}:\d{2})$", str(fm["timestamp"]).strip("'\"")) and not hasattr(fm["timestamp"], "tzinfo"):
-                notes.append(f"{rel}: timestamp sin offset; asumido UTC")
+                notes.append(f"{rel}: timestamp has no offset; assumed UTC")
             blocks[i] = ("generated", [f"generated: {{ by: {actor}, at: {ts} }}"])
         elif "timestamp" in fm:
             i = get_block(blocks, "timestamp")
@@ -188,7 +188,7 @@ def migrate_concept(text: str, to: str, actor: str, keep_ext: bool, notes: list[
             srcs = [x for x in fm.get("sources") or [] if isinstance(x, dict)]
             by_res = {str(x.get("resource", "")).lstrip("/"): x for x in srcs}
             if all(url.lstrip("/") in by_res for _, _, url in cits):
-                # Citations generadas por un downgrade previo: restaurar notas al pie y quitar la sección
+                # Citations written by an earlier downgrade: restore the footnotes and drop the section
                 ids = {n: str(by_res[url.lstrip("/")].get("id") or f"cit-{n}") for n, _, url in cits}
                 body2 = upgrade_citation_refs(body2, ids)
                 used = set(re.findall(r"\[\^([^\]]+)\]", body2))
@@ -198,7 +198,7 @@ def migrate_concept(text: str, to: str, actor: str, keep_ext: bool, notes: list[
                     body2 = body2.rstrip() + "\n\n" + "\n".join(defs) + "\n"
                 body = body2
             else:
-                notes.append(f"{rel}: tiene sources y # Citations distintas; sección Citations conservada sin convertir")
+                notes.append(f"{rel}: sources and # Citations differ; Citations section kept as is")
     else:  # to 0.1
         gen = fm.get("generated")
         if isinstance(gen, dict) and gen.get("at") is not None and "timestamp" not in fm:
@@ -208,7 +208,7 @@ def migrate_concept(text: str, to: str, actor: str, keep_ext: bool, notes: list[
                 blocks.insert(i, ("timestamp", [ts_line]))
             else:
                 blocks[i] = ("timestamp", [ts_line])
-                notes.append(f"{rel}: generated.by '{gen.get('by')}' descartado")
+                notes.append(f"{rel}: generated.by '{gen.get('by')}' dropped")
         elif isinstance(gen, dict) and not keep_ext:
             del blocks[get_block(blocks, "generated")]
         sources = fm.get("sources")
@@ -229,21 +229,21 @@ def migrate_concept(text: str, to: str, actor: str, keep_ext: bool, notes: list[
             if not keep_ext:
                 del blocks[get_block(blocks, "sources")]
                 if any(k in s for s in sources if isinstance(s, dict) for k in ("author", "usage_count", "last_modified")):
-                    notes.append(f"{rel}: señales de credibilidad de sources descartadas")
+                    notes.append(f"{rel}: credibility signals of sources dropped")
         if not keep_ext:
             for k in DROP_ON_DOWNGRADE:
                 i = get_block(blocks, k)
                 if i >= 0:
                     del blocks[i]
-                    notes.append(f"{rel}: '{k}' descartado")
+                    notes.append(f"{rel}: '{k}' dropped")
         if fm.get("type") == "Attested Computation":
-            notes.append(f"{rel}: type 'Attested Computation' pasa a tipo genérico en 0.1 (claves de computación conservadas)")
+            notes.append(f"{rel}: type 'Attested Computation' becomes a generic type in 0.1 (computation keys kept)")
 
     return "---\n" + blocks_to_raw(blocks) + "\n---\n\n" + body.lstrip("\n")
 
 
 def set_root_version(index_path: Path, to: str) -> None:
-    text = index_path.read_text(encoding="utf-8") if index_path.exists() else "# Índice\n"
+    text = index_path.read_text(encoding="utf-8") if index_path.exists() else "# Index\n"
     raw, body = split_frontmatter(text)
     if raw is None:
         raw = f'okf_version: "{to}"'
@@ -256,7 +256,7 @@ def set_root_version(index_path: Path, to: str) -> None:
 
 def append_log(log_path: Path, to: str, n: int) -> None:
     today = date.today().isoformat()
-    entry = f"* **Migración**: Bundle migrado a OKF v{to} ({n} conceptos) con okf-migrate."
+    entry = f"* **Migration**: Bundle migrated to OKF v{to} ({n} concepts) with okf-migrate."
     if log_path.exists():
         text = log_path.read_text(encoding="utf-8")
         if f"## {today}" in text:
@@ -265,26 +265,26 @@ def append_log(log_path: Path, to: str, n: int) -> None:
             m = re.search(r"^## ", text, re.M)
             text = (text[: m.start()] + f"## {today}\n{entry}\n\n" + text[m.start():]) if m else text.rstrip() + f"\n\n## {today}\n{entry}\n"
     else:
-        text = f"# Historial del bundle\n\n## {today}\n{entry}\n"
+        text = f"# Bundle history\n\n## {today}\n{entry}\n"
     log_path.write_text(text, encoding="utf-8")
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("bundle", nargs="?")
-    ap.add_argument("--to", required=True, choices=SUPPORTED_VERSIONS)
-    ap.add_argument("--actor", default="process:okf-migrate", help="generated.by para conceptos sin autor (0.1→0.2)")
-    ap.add_argument("--keep-extensions", action="store_true", help="0.2→0.1: conservar claves v0.2 como extensiones")
-    ap.add_argument("--out", help="escribir copia migrada en este directorio (el origen no se toca)")
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--force", action="store_true", help="migrar aunque la versión detectada ya sea la destino")
+    ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
+    ap.add_argument("--to", required=True, choices=SUPPORTED_VERSIONS, help="target OKF version")
+    ap.add_argument("--actor", default="process:okf-migrate", help="generated.by for concepts without an author (0.1→0.2)")
+    ap.add_argument("--keep-extensions", action="store_true", help="0.2→0.1: keep v0.2 keys as extensions")
+    ap.add_argument("--out", help="write a migrated copy to this directory (the source is left untouched)")
+    ap.add_argument("--dry-run", action="store_true", help="report the changes without writing them")
+    ap.add_argument("--force", action="store_true", help="migrate even if the detected version already is the target")
     ap.add_argument("--file", action="append", default=[],
-                    help="migrar solo este concepto (ruta relativa al bundle); repetible. No toca index/log")
+                    help="migrate only this concept (path relative to the bundle); repeatable. Leaves index/log alone")
     args = ap.parse_args(argv)
 
     src = Path(args.bundle).resolve() if args.bundle else find_bundle()
     if src is None or not src.is_dir():
-        print("ERROR: bundle no encontrado.", file=sys.stderr)
+        print("ERROR: bundle not found (knowledge/index.md). Pass its path.", file=sys.stderr)
         return 2
     detected, origin = detect_version(src)
     if args.file:
@@ -295,13 +295,13 @@ def main(argv=None) -> int:
                                   bundle=src, doc_path=fp)
             if not args.dry_run:
                 fp.write_text(new, encoding="utf-8")
-            print(f"{'(dry) ' if args.dry_run else ''}migrado {rel} → {args.to}")
+            print(f"{'(dry) ' if args.dry_run else ''}migrated {rel} → {args.to}")
         for n in notes:
-            print("  nota:", n)
+            print("  note:", n)
         return 0
-    print(f"Origen: {src} · versión detectada {detected} ({origin}) → destino {args.to}")
+    print(f"Source: {src} · detected version {detected} ({origin}) → target {args.to}")
     if detected == args.to and origin == "declared" and not args.force:
-        print("Ya está en la versión destino; nada que hacer (usa --force para reescribir).")
+        print("Already at the target version; nothing to do (use --force to rewrite).")
         return 0
 
     dst = src
@@ -321,15 +321,15 @@ def main(argv=None) -> int:
                               bundle=src, doc_path=doc.path)
         if new != doc.path.read_text(encoding="utf-8"):
             changed += 1
-            print(f"{'(dry) ' if args.dry_run else ''}migrado {doc.rel}")
+            print(f"{'(dry) ' if args.dry_run else ''}migrated {doc.rel}")
             if not args.dry_run:
                 (dst / doc.rel).write_text(new, encoding="utf-8")
     if not args.dry_run:
         set_root_version(dst / "index.md", args.to)
         append_log(dst / "log.md", args.to, changed)
     for n in notes:
-        print("  nota:", n)
-    print(f"\n{changed} conceptos migrados a OKF v{args.to}{' (dry-run)' if args.dry_run else ''} → {dst}")
+        print("  note:", n)
+    print(f"\n{changed} concepts migrated to OKF v{args.to}{' (dry-run)' if args.dry_run else ''} → {dst}")
     return 0
 
 

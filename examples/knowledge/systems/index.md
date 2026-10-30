@@ -2,4 +2,4 @@
 
 # systems
 
-_(vacío)_
+_(empty)_

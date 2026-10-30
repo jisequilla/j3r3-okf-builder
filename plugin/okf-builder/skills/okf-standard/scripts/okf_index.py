@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""okf_index.py — Regenera los index.md de un bundle OKF a partir del frontmatter.
+"""okf_index.py — Regenerate the index.md files of an OKF bundle from the frontmatter.
 
-Uso:
-    python3 okf_index.py [ruta/al/bundle] [--check] [--dir SUBDIR]
+Usage:
+    python3 okf_index.py [path/to/bundle] [--check] [--dir SUBDIR]
 
-- Agrupa conceptos por `type` dentro de cada directorio.
-- Lista subdirectorios con la primera frase de su propio index.md o su nombre.
-- Preserva en la raíz el frontmatter (okf_version, okf_profile) y cualquier
-  sección cuyo encabezado empiece por "# Notas".
-- --check: no escribe; exit 1 si algún index.md cambiaría.
+- Groups concepts by `type` inside each directory.
+- Lists subdirectories with the first sentence of their own index.md, or their name.
+- Keeps the root frontmatter (okf_version, okf_profile) and any section whose
+  heading starts with "# Notas".
+- --check: writes nothing; exit 1 if any index.md would change.
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ DIR_DESCRIPTIONS = {
     "attesters": "Deterministic receipt verification code.",
 }
 
-# Orden de secciones (tipos) en el índice; el resto alfabético después.
+# Order of the sections (types) in the index; the rest follow alphabetically.
 TYPE_ORDER = [
     "Project", "Architecture View", "Architecture Decision", "Term", "Glossary",
     "System", "API", "Dataset", "Table", "Metric", "Attested Computation",
@@ -70,10 +70,10 @@ def dir_description(d: Path) -> str:
     idx = d / "index.md"
     if idx.exists():
         _, body = split_frontmatter(idx.read_text(encoding="utf-8"))
-        m = re.search(r"^>\s*(.+)$", body, re.M)  # blockquote descriptivo opcional
+        m = re.search(r"^>\s*(.+)$", body, re.M)  # optional descriptive blockquote
         if m:
             return m.group(1).strip()
-    return DIR_DESCRIPTIONS.get(d.name, f"Conceptos de {d.name}.")
+    return DIR_DESCRIPTIONS.get(d.name, f"Concepts in {d.name}.")
 
 
 def existing_root_fm_and_notes(idx: Path) -> tuple[str, str]:
@@ -96,7 +96,7 @@ def build_index(bundle: Path, d: Path) -> str:
         if p.is_file() and p.suffix == ".md" and p.name not in RESERVED:
             doc = load_doc(bundle, p)
             fm = doc.frontmatter or {}
-            concepts.append((str(fm.get("type") or "Otros"), fm.get("title") or p.stem,
+            concepts.append((str(fm.get("type") or "Other"), fm.get("title") or p.stem,
                              fm.get("description") or "", p.name, fm.get("status")))
     subdirs = [p for p in sorted(d.iterdir()) if p.is_dir() and not p.name.startswith(".")
                and any(q.suffix == ".md" for q in p.rglob("*.md"))]
@@ -126,13 +126,13 @@ def build_index(bundle: Path, d: Path) -> str:
             out.append(line + tag)
         out.append("")
     if subdirs:
-        out.append("# Subdirectorios\n")
+        out.append("# Subdirectories\n")
         for s in subdirs:
             out.append(f"* [{s.name}]({s.name}/index.md) - {dir_description(s)}")
         out.append("")
     if not ordered and not subdirs:
         out.append(f"# {d.name}\n")
-        out.append("_(vacío)_\n")
+        out.append("_(empty)_\n")
     body = "\n".join(out).rstrip() + "\n"
     if notes:
         body += "\n" + notes
@@ -141,14 +141,14 @@ def build_index(bundle: Path, d: Path) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("bundle", nargs="?")
-    ap.add_argument("--check", action="store_true")
-    ap.add_argument("--dir", help="regenerar solo este subdirectorio (relativo al bundle)")
+    ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
+    ap.add_argument("--check", action="store_true", help="write nothing; exit 1 if any index.md is out of date")
+    ap.add_argument("--dir", help="regenerate only this subdirectory (relative to the bundle)")
     args = ap.parse_args(argv)
 
     bundle = Path(args.bundle).resolve() if args.bundle else find_bundle()
     if bundle is None:
-        print("ERROR: no se encontró el bundle.", file=sys.stderr)
+        print("ERROR: bundle not found (knowledge/index.md). Pass its path.", file=sys.stderr)
         return 2
 
     targets = [bundle / args.dir] if args.dir else [bundle, *[p for p in bundle.rglob("*") if p.is_dir() and not any(
@@ -164,14 +164,14 @@ def main(argv=None) -> int:
             changed += 1
             rel = idx.relative_to(bundle).as_posix()
             if args.check:
-                print(f"DESACTUALIZADO {rel}")
+                print(f"OUT OF DATE {rel}")
             else:
                 idx.write_text(new, encoding="utf-8")
-                print(f"ESCRITO {rel}")
+                print(f"WROTE {rel}")
     if args.check:
-        print(f"{changed} index.md desactualizados")
+        print(f"{changed} index.md out of date")
         return 1 if changed else 0
-    print(f"{changed} index.md regenerados")
+    print(f"{changed} index.md regenerated")
     return 0
 
 

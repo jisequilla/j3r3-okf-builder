@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""export_m365.py — Empaqueta los skills OKF para Microsoft 365 Copilot.
+"""export_m365.py — Package the OKF skills for Microsoft 365 Copilot.
 
-Genera dos salidas a partir de plugin/okf-builder/:
+Builds two outputs from plugin/okf-builder/:
 
-  dist/m365/okf-builder-m365.zip          Plugin de M365 Copilot Cowork (manifest.json v1.28
-                                          + skills/ + iconos). Se sube en M365 admin center >
-                                          Manage apps > Upload custom app, o con
+  dist/m365/okf-builder-m365.zip          M365 Copilot Cowork plugin (manifest.json v1.28
+                                          + skills/ + icons). Upload it in M365 admin center >
+                                          Manage apps > Upload custom app, or with
                                           `atk install --file-path ... --scope Personal`.
-  dist/m365/skills/okf-<skill>.zip        Un zip por skill (SKILL.md en la raíz) para
-                                          "Upload a skill" en Copilot Studio / Agent Builder.
+  dist/m365/skills/okf-<skill>.zip        One zip per skill (SKILL.md at the root) for
+                                          "Upload a skill" in Copilot Studio / Agent Builder.
 
-Diferencias respecto al plugin de Claude que resuelve este exportador:
-  - ${CLAUDE_PLUGIN_ROOT} no existe: cada skill debe ser autocontenido. Se copian en cada
-    skill los scripts y plantillas que usa y se reescriben las rutas a relativas al skill.
-  - Límite M365: ≤20 ficheros companion por skill, ≤5 MB/fichero, sin ficheros ocultos.
-  - name del SKILL.md == nombre de carpeta (regla ASKILL-P006).
+Differences from the Claude plugin that this exporter resolves:
+  - ${CLAUDE_PLUGIN_ROOT} does not exist: each skill must be self-contained. The scripts and
+    templates a skill uses are copied into it, and paths are rewritten relative to the skill.
+  - M365 limit: ≤20 companion files per skill, ≤5 MB per file, no hidden files.
+  - SKILL.md name == folder name (rule ASKILL-P006).
 
-Uso:
-    python3 tools/export_m365.py [--out dist/m365] [--developer "Nombre"] [--website URL]
+Usage:
+    python3 tools/export_m365.py [--out dist/m365] [--developer "Name"] [--website URL]
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ PLUGIN = ROOT / "plugin" / "okf-builder"
 SCRIPTS = PLUGIN / "skills" / "okf-standard" / "scripts"
 PLUGIN_JSON = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
 
-# Qué scripts/plantillas necesita cada skill (para ser autocontenido)
+# Which scripts/templates each skill needs (to be self-contained)
 NEEDS = {
     "okf-standard": {"scripts": [], "templates": True},
     "okf-init":     {"scripts": ["okf_init.py", "okf_common.py", "okf_index.py", "okf_migrate.py"], "templates": True},
@@ -48,19 +48,20 @@ NEEDS = {
 MAX_COMPANIONS = 20
 
 
-RUTAS_RE = re.compile(r"^> \*\*Rutas\.\*\*.*$\n?", re.M)
+# The paths note of the source SKILL.md files ("Rutas" until the skill prose is translated)
+PATHS_NOTE_RE = re.compile(r"^> \*\*(?:Rutas|Paths)\.\*\*.*$\n?", re.M)
 
 
 def rewrite(text: str, skill: str) -> str:
-    text = RUTAS_RE.sub("> **Rutas.** Este skill es autocontenido: scripts en `scripts/` y plantillas en `templates/` de su propio directorio base.\n"
+    text = PATHS_NOTE_RE.sub("> **Paths.** This skill is self-contained: scripts in `scripts/` and templates in `templates/` of its own base directory.\n"
                         if NEEDS[skill]["templates"] or NEEDS[skill]["scripts"] else "", text)
-    # Cada skill M365 es autocontenido: <skills>/okf-standard/scripts → scripts/ del propio skill
+    # Each M365 skill is self-contained: <skills>/okf-standard/scripts → the skill's own scripts/
     text = text.replace("<skills>/okf-standard/scripts/", "scripts/")
     if NEEDS[skill]["templates"]:
         text = text.replace("<skills>/okf-standard/templates/", "templates/")
     else:
-        text = text.replace("<skills>/okf-standard/templates/", "(plantillas: skill okf-standard) templates/")
-    text = text.replace("<skills>/okf-standard/references/", "(skill okf-standard) references/")
+        text = text.replace("<skills>/okf-standard/templates/", "(templates: okf-standard skill) templates/")
+    text = text.replace("<skills>/okf-standard/references/", "(okf-standard skill) references/")
     text = text.replace("<skills>/", "(skill) ")
     text = text.replace("${CLAUDE_PLUGIN_ROOT}/skills", "(skills)")
     return text
@@ -68,21 +69,21 @@ def rewrite(text: str, skill: str) -> str:
 
 M365_NOTE = """
 
-## Nota de entorno (Microsoft 365 Copilot)
+## Environment note (Microsoft 365 Copilot)
 
-Este skill se ejecuta en Microsoft 365 Copilot, no en un terminal sobre el repositorio. El bundle
-`knowledge/` llega como carpeta de OneDrive/SharePoint sincronizada desde el repo (o como archivos
-adjuntos). Pide la ruta o la carpeta al usuario si no es evidente. Los scripts `scripts/*.py` se
-ejecutan desde el directorio base de este skill con `python3` y reciben la ruta del bundle como
-argumento; si el entorno no permite ejecutar scripts, aplica las mismas reglas manualmente
-leyendo `references/` y las plantillas, y dilo explícitamente.
+This skill runs in Microsoft 365 Copilot, not in a terminal on the repository. The `knowledge/`
+bundle arrives as a OneDrive/SharePoint folder synced from the repo (or as attached files).
+Ask the user for the path or the folder if it is not obvious. The `scripts/*.py` scripts run
+from the base directory of this skill with `python3` and take the bundle path as an argument;
+if the environment cannot run scripts, apply the same rules by hand from `references/` and the
+templates, and say so explicitly.
 """
 
 
 def ensure_frontmatter(text: str, skill: str, author: str) -> str:
     m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
     if not m:
-        raise SystemExit(f"{skill}: SKILL.md sin frontmatter")
+        raise SystemExit(f"{skill}: SKILL.md has no frontmatter")
     fm = m.group(1)
     if not re.search(rf"^name:\s*{re.escape(skill)}\s*$", fm, re.M):
         fm = re.sub(r"^name:.*$", f"name: {skill}", fm, flags=re.M)
@@ -97,7 +98,7 @@ def build_skill(skill_src: Path, dst: Path, author: str) -> int:
     skill = skill_src.name
     shutil.copytree(skill_src, dst, ignore=shutil.ignore_patterns("__pycache__", ".*"))
     if skill == "okf-standard" and (dst / "scripts").exists():
-        shutil.rmtree(dst / "scripts")  # límite de 20 companions; los scripts van en los skills que los usan
+        shutil.rmtree(dst / "scripts")  # 20-companion limit; the scripts go into the skills that use them
     need = NEEDS[skill]
     if need["scripts"]:
         (dst / "scripts").mkdir(exist_ok=True)
@@ -111,10 +112,10 @@ def build_skill(skill_src: Path, dst: Path, author: str) -> int:
     sk.write_text(ensure_frontmatter(sk.read_text(encoding="utf-8"), skill, author).rstrip() + M365_NOTE, encoding="utf-8")
     companions = [p for p in dst.rglob("*") if p.is_file() and p.name != "SKILL.md"]
     if len(companions) > MAX_COMPANIONS:
-        raise SystemExit(f"{skill}: {len(companions)} ficheros companion > {MAX_COMPANIONS}")
+        raise SystemExit(f"{skill}: {len(companions)} companion files > {MAX_COMPANIONS}")
     for p in companions:
         if p.stat().st_size > 5 * 1024 * 1024 or p.name.startswith("."):
-            raise SystemExit(f"{skill}: fichero no válido para M365: {p}")
+            raise SystemExit(f"{skill}: file not valid for M365: {p}")
     return len(companions)
 
 
@@ -125,7 +126,7 @@ def make_icons(out: Path) -> None:
         src = PLUGIN / ".claude-plugin" / "icon.png"
         shutil.copy2(src, out / "color.png")
         shutil.copy2(src, out / "outline.png")
-        print("aviso: PIL no disponible; iconos sin redimensionar (192x192 / 32x32 requeridos)")
+        print("warning: PIL not available; icons not resized (192x192 / 32x32 required)")
         return
     img = Image.open(PLUGIN / ".claude-plugin" / "icon.png").convert("RGBA")
     img.resize((192, 192)).save(out / "color.png")
@@ -138,9 +139,9 @@ def make_icons(out: Path) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default="dist/m365")
-    ap.add_argument("--developer", default=PLUGIN_JSON.get("author", {}).get("name", "okf-builder"))
-    ap.add_argument("--website", default="https://github.com/jisequilla/j3r3-okf-builder")
+    ap.add_argument("--out", default="dist/m365", help="output directory (relative to the repo)")
+    ap.add_argument("--developer", default=PLUGIN_JSON.get("author", {}).get("name", "okf-builder"), help="developer name for the manifest")
+    ap.add_argument("--website", default="https://github.com/jisequilla/j3r3-okf-builder", help="developer website for the manifest")
     args = ap.parse_args(argv)
 
     out = (ROOT / args.out).resolve()
@@ -157,7 +158,7 @@ def main(argv=None) -> int:
         n = build_skill(skill_src, pkg / "skills" / skill_src.name, args.developer)
         skills.append(skill_src.name)
         print(f"skill {skill_src.name}: {n} companions")
-        # zip individual para Copilot Studio / Agent Builder (SKILL.md en la raíz del zip)
+        # one zip per skill for Copilot Studio / Agent Builder (SKILL.md at the zip root)
         zp = out / "skills" / f"{skill_src.name}.zip"
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted((pkg / "skills" / skill_src.name).rglob("*")):
@@ -176,9 +177,9 @@ def main(argv=None) -> int:
             "privacyUrl": args.website + "#privacy",
             "termsOfUseUrl": args.website + "#terms",
         },
-        "name": {"short": "OKF Builder", "full": "OKF Builder — conocimiento de proyecto en Open Knowledge Format"},
+        "name": {"short": "OKF Builder", "full": "OKF Builder — project knowledge in Open Knowledge Format"},
         "description": {
-            "short": "Gestiona knowledge/ en formato OKF: scaffold, captura, validación, consulta",
+            "short": "Manage knowledge/ in OKF format: scaffold, capture, validation, queries",
             "full": PLUGIN_JSON["description"],
         },
         "icons": {"color": "color.png", "outline": "outline.png"},
@@ -192,24 +193,24 @@ def main(argv=None) -> int:
         for f in sorted(pkg.rglob("*")):
             if f.is_file():
                 z.write(f, f.relative_to(pkg))
-    (out / "README.md").write_text(f"""# OKF para Microsoft 365 Copilot
+    (out / "README.md").write_text(f"""# OKF for Microsoft 365 Copilot
 
-## A) Plugin de M365 Copilot Cowork — `okf-builder-m365.zip`
-Paquete M365 (manifest v1.28 + {len(skills)} Agent Skills). Requiere Microsoft 365 Copilot y, hoy, el programa Frontier para Cowork.
-- Tenant (admin): M365 admin center → Manage apps → Upload custom app → Add agent → subir el zip. Aparece en Cowork → Sources & Skills → Plugins.
-- Personal (sin admin): `npm i -g @microsoft/m365agentstoolkit-cli && atk auth login && atk install --file-path okf-builder-m365.zip --scope Personal`.
-- Validación opcional: `wiqd plugin validate` (CLI preview de Microsoft).
+## A) M365 Copilot Cowork plugin — `okf-builder-m365.zip`
+M365 package (manifest v1.28 + {len(skills)} Agent Skills). Requires Microsoft 365 Copilot and, for now, the Frontier program for Cowork.
+- Tenant (admin): M365 admin center → Manage apps → Upload custom app → Add agent → upload the zip. It shows up in Cowork → Sources & Skills → Plugins.
+- Personal (no admin): `npm i -g @microsoft/m365agentstoolkit-cli && atk auth login && atk install --file-path okf-builder-m365.zip --scope Personal`.
+- Optional validation: `wiqd plugin validate` (Microsoft preview CLI).
 
-## B) Skills sueltos — `skills/okf-*.zip`
-Para Copilot Studio (nueva experiencia de agentes) o Agent Builder: Build → Skills → Upload a skill → arrastrar cada zip. Subir al menos `okf-standard`, `okf-ask` y `okf-capture`.
+## B) Standalone skills — `skills/okf-*.zip`
+For Copilot Studio (new agent experience) or Agent Builder: Build → Skills → Upload a skill → drag each zip. Upload at least `okf-standard`, `okf-ask` and `okf-capture`.
 
-## Conocimiento
-M365 Copilot no lee el repositorio git. Sincroniza la carpeta `knowledge/` a SharePoint/OneDrive (OneDrive sync del clon,
-o un job de CI que publique `knowledge/` en una biblioteca de documentos) y añádela como fuente de conocimiento del agente.
-OKF es markdown plano: se indexa tal cual. El repo sigue siendo la fuente de verdad; en M365 se lee y se proponen cambios
-que vuelven al repo por PR (o se editan en la carpeta sincronizada si se acepta ese flujo).
+## Knowledge
+M365 Copilot does not read the git repository. Sync the `knowledge/` folder to SharePoint/OneDrive (OneDrive sync of the clone,
+or a CI job that publishes `knowledge/` to a document library) and add it as a knowledge source of the agent.
+OKF is plain markdown: it is indexed as is. The repo stays the source of truth; in M365 it is read and changes are proposed
+that go back to the repo by PR (or are edited in the synced folder if that flow is accepted).
 
-Generado con `tools/export_m365.py`; no editar aquí.
+Generated with `tools/export_m365.py`; do not edit here.
 """, encoding="utf-8")
     print(f"→ {zp}\n→ {out / 'skills'}/*.zip\n{len(skills)} skills")
     return 0

@@ -7,7 +7,7 @@ okf_profile: "knowledge/2.0"
 
 * [Demo Pagos](project.md) - Plataforma de pagos de demostración _(draft)_
 
-# Subdirectorios
+# Subdirectories
 
 * [apis](apis/index.md) - Contratos de API y su semántica.
 * [architecture](architecture/index.md) - Vistas y principios de arquitectura.

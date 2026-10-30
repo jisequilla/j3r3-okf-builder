@@ -1,5 +1,5 @@
-> _(vacío)_
+> Deterministic receipt verification code.
 
 # attesters
 
-_(vacío)_
+_(empty)_
