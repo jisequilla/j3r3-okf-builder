@@ -1,29 +1,29 @@
 # AGENTS.md — okf-builder
 
-Este repositorio define el **estándar OKF (perfil knowledge/2.0)** y el plugin `okf-builder` que lo aplica. El propio repo usa OKF: su conocimiento está en `knowledge/` (empieza por `knowledge/index.md`).
+This repository defines the **OKF standard (knowledge/2.0 profile)** and the `okf-builder` plugin that applies it. The repo uses OKF itself: its knowledge lives in `knowledge/` (start at `knowledge/index.md`).
 
-## Fuente única y proyecciones
+## Single source and projections
 
-- Fuente de verdad de los skills: `plugin/okf-builder/skills/` (estándar Agent Skills, `SKILL.md`). Scripts en `okf-standard/scripts/`, plantillas en `okf-standard/templates/`.
-- Proyecciones por enlace simbólico: `.claude/skills` (Claude Code) y `.agents/skills` (GitHub Copilot, Gemini CLI) → la fuente. No editar ahí.
-- Proyecciones generadas: `make plugin` (Claude Cowork, `.plugin`), `make m365` (Microsoft 365 Copilot), `make copilot` (pack vendorizable para otros repos). Salida en `dist/` (ignorado por git).
-- Ficheros de contexto: este `AGENTS.md` es el común; `CLAUDE.md` y `GEMINI.md` lo importan.
+- Source of truth for the skills: `plugin/okf-builder/skills/` (Agent Skills standard, `SKILL.md`). Scripts in `okf-standard/scripts/`, templates in `okf-standard/templates/`.
+- Symlinked projections: `.claude/skills` (Claude Code) and `.agents/skills` (GitHub Copilot, Gemini CLI) → the source. Do not edit there.
+- Generated projections: `make plugin` (Claude Cowork, `.plugin`), `make m365` (Microsoft 365 Copilot), `make copilot` (vendorable pack for other repos). Output in `dist/` (ignored by git).
+- Context files: this `AGENTS.md` is the shared one; `CLAUDE.md` and `GEMINI.md` import it.
 
-## Reglas para cualquier agente
+## Rules for any agent
 
-1. Antes de cambiar el estándar, los skills o los scripts: leer `knowledge/decisions/` (ADRs). Si la decisión cambia, nuevo ADR que sustituye al anterior (`okf-capture`), nunca editar la historia.
-2. Todo cambio en `knowledge/` termina con `python3 plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py knowledge --strict` a 0 errores (`make lint`).
-3. Todo cambio en skills/scripts termina con `make test` (init 0.1/0.2, fixtures de Google v0.1/v0.2, migración round-trip).
-4. No añadir `verified: human:` a ningún concepto sin que una persona lo confirme explícitamente.
-5. Los skills no deben depender de variables de un vendor (`${CLAUDE_PLUGIN_ROOT}` solo aparece en la nota de rutas); usar la convención `<skills>/...`.
-6. Las specs de Google en `references/` son copias literales (Apache-2.0): no se editan; se actualizan desde el upstream y se registra en `log.md`.
+1. Before changing the standard, the skills or the scripts: read `knowledge/decisions/` (ADRs). If the decision changes, write a new ADR that supersedes the previous one (`okf-capture`); never edit history.
+2. Every change in `knowledge/` ends with `python3 plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py knowledge --strict` at 0 errors (`make lint`).
+3. Every change in skills/scripts ends with `make test` (init 0.1/0.2, Google fixtures v0.1/v0.2, round-trip migration).
+4. Do not add `verified: human:` to any concept unless a person explicitly confirms it.
+5. Skills must not depend on vendor variables (`${CLAUDE_PLUGIN_ROOT}` appears only in the paths note); use the `<skills>/...` convention.
+6. Google's specs in `references/` are verbatim copies (Apache-2.0): they are not edited; they are updated from upstream and the update is recorded in `log.md`.
 
-## Mapa rápido
+## Quick map
 
-| Ruta | Qué es |
+| Path | What it is |
 |---|---|
-| `knowledge/` | Conocimiento del proyecto (bundle OKF) |
-| `standard/` | Estándar y matriz de compatibilidad (copias canónicas también en `okf-standard/references/`) |
-| `plugin/okf-builder/` | Plugin / fuente de skills |
-| `tools/` | Exportadores (Copilot, M365) |
-| `examples/` | Bundle de ejemplo y fixtures de Google |
+| `knowledge/` | Project knowledge (OKF bundle) |
+| `standard/` | Standard and compatibility matrix (canonical copies also in `okf-standard/references/`) |
+| `plugin/okf-builder/` | Plugin / skills source |
+| `tools/` | Exporters (Copilot, M365) |
+| `examples/` | Example bundle and Google fixtures |

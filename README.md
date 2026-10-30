@@ -1,99 +1,101 @@
+[Leer en español](README.es.md)
+
 # j3r3-okf-builder
 
-Estándar de conocimiento de proyecto basado en **OKF (Open Knowledge Format v0.2, Google)** y plugin de Claude Code / Cowork para aplicarlo en cualquier repositorio.
+A project knowledge standard based on **OKF (Open Knowledge Format v0.2, Google)**, and a Claude Code / Cowork plugin that applies it in any repository.
 
-## Este repo usa OKF
+## This repo uses OKF
 
-El conocimiento del proyecto (decisiones, arquitectura, runbooks, políticas) está en [`knowledge/`](knowledge/index.md). Cualquier agente empieza por ahí; `AGENTS.md` (importado por `CLAUDE.md` y `GEMINI.md`) fija las reglas.
+The project's knowledge (decisions, architecture, runbooks, policies) lives in [`knowledge/`](knowledge/index.md). Every agent starts there; `AGENTS.md` (imported by `CLAUDE.md` and `GEMINI.md`) sets the rules.
 
-## Fuente única y proyecciones
+## Single source and projections
 
-Los skills viven una vez en `plugin/okf-builder/skills/`. Cada plataforma recibe una proyección:
+The skills live once, in `plugin/okf-builder/skills/`. Each platform gets a projection:
 
-| Plataforma | Proyección | Cómo |
+| Platform | Projection | How |
 |---|---|---|
-| Claude Code | `.claude/skills` → symlink | al clonar |
-| GitHub Copilot, Gemini CLI | `.agents/skills` → symlink | al clonar |
+| Claude Code | `.claude/skills` → symlink | on clone |
+| GitHub Copilot, Gemini CLI | `.agents/skills` → symlink | on clone |
 | Claude Cowork | `okf-builder.plugin` | `make plugin` |
 | Microsoft 365 Copilot | `dist/m365/okf-builder-m365.zip` + `dist/m365/skills/*.zip` | `make m365` |
-| Otros repos | `dist/copilot/` (`.github/skills` + `@okf` agent) | `make copilot` |
+| Other repos | `dist/copilot/` (`.github/skills` + `@okf` agent) | `make copilot` |
 
-`make all` genera todo tras pasar `make test`. En Windows sin `core.symlinks`, usar `make copilot` y copiar.
+`make all` builds everything once `make test` passes. On Windows without `core.symlinks`, use `make copilot` and copy.
 
-## Contenido
+## Contents
 
-| Ruta | Qué es |
+| Path | What it is |
 |---|---|
-| `standard/OKF-STANDARD.md` | El estándar: perfil `knowledge/2.0` (estructura, frontmatter, tipos, ciclo de vida, conformidad). |
-| `standard/OKF-COMPATIBILITY.md` | Diferencias OKF v0.1 ↔ v0.2, matriz de campos, reglas de mapeo y política de versiones. |
-| `templates/` | Plantillas de concepto (`{{marcadores}}`): ADR, runbook, sistema, API, tabla, métrica, término, política, vista, referencia, proyecto. |
-| `knowledge/` | Conocimiento del propio proyecto (bundle OKF conformante, 8 ADR). |
-| `tools/` | Exportadores de proyecciones (Copilot, M365). |
-| `plugin/okf-builder/` | Plugin / fuente única: skills `okf-standard`, `okf-init`, `okf-capture`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate` + scripts Python sin dependencias. |
-| `examples/knowledge/` | Bundle de ejemplo conformante. |
-| `.claude-plugin/marketplace.json` | Este repo actúa como marketplace de plugins. |
+| `standard/OKF-STANDARD.md` | The standard: the `knowledge/2.0` profile (structure, frontmatter, types, lifecycle, conformance). |
+| `standard/OKF-COMPATIBILITY.md` | OKF v0.1 ↔ v0.2 differences, field matrix, mapping rules and versioning policy. |
+| `templates/` | Concept templates (`{{placeholders}}`): ADR, runbook, system, API, table, metric, term, policy, view, reference, project. |
+| `knowledge/` | The project's own knowledge (a conformant OKF bundle, 8 ADRs). |
+| `tools/` | Projection exporters (Copilot, M365). |
+| `plugin/okf-builder/` | Plugin / single source: the skills `okf-standard`, `okf-init`, `okf-capture`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate` + dependency-free Python scripts. |
+| `examples/knowledge/` | A conformant example bundle. |
+| `.claude-plugin/marketplace.json` | This repo acts as a plugin marketplace. |
 
-## Instalación del plugin
+## Installing the plugin
 
-Desde Claude Code (repo publicado en GitHub):
+From Claude Code (repo published on GitHub):
 
 ```
 /plugin marketplace add <owner>/j3r3-okf-builder
 /plugin install okf-builder@j3r3-okf-builder
 ```
 
-En local, sin publicar:
+Locally, without publishing:
 
 ```
 claude --plugin-dir ./plugin/okf-builder
 ```
 
-En Cowork: cargar el fichero `.plugin` generado con `make plugin` (o el entregado en el chat).
+In Cowork: load the `.plugin` file built by `make plugin` (or the one delivered in the chat).
 
-## Uso en un proyecto
+## Using it in a project
 
 ```
-okf-init        → crea knowledge/ (index.md, log.md, project.md, subdirectorios)
-okf-capture     → "documenta esta decisión / crea un runbook / registra este servicio"
-okf-lint        → valida spec + perfil (apto para CI: python3 tools/okf/okf_lint.py knowledge --strict)
-okf-index       → regenera index.md desde el frontmatter
-okf-ask         → "¿por qué decidimos X?" navegando el bundle y citando confianza
-okf-migrate     → detecta versión y migra 0.1 ↔ 0.2 (siempre con --dry-run primero)
+okf-init        → creates knowledge/ (index.md, log.md, project.md, subdirectories)
+okf-capture     → "document this decision / create a runbook / register this service"
+okf-lint        → validates spec + profile (CI-ready: python3 tools/okf/okf_lint.py knowledge --strict)
+okf-index       → regenerates index.md from the frontmatter
+okf-ask         → "why did we decide X?" by navigating the bundle and citing trust level
+okf-migrate     → detects the version and migrates 0.1 ↔ 0.2 (always --dry-run first)
 ```
 
-## Scripts directamente
+## Running the scripts directly
 
 ```bash
-python3 plugin/okf-builder/skills/okf-standard/scripts/okf_init.py  --root . --title "Mi proyecto" --description "…" --actor human:<id>
+python3 plugin/okf-builder/skills/okf-standard/scripts/okf_init.py  --root . --title "My project" --description "…" --actor human:<id>
 python3 plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py  knowledge [--json] [--strict] [--no-profile]
 python3 plugin/okf-builder/skills/okf-standard/scripts/okf_index.py knowledge [--check] [--dir decisions]
 python3 plugin/okf-builder/skills/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
 ```
 
-## Uso con GitHub Copilot (y otros agentes)
+## Using it with GitHub Copilot (and other agents)
 
-Los skills siguen el estándar [Agent Skills](https://agentskills.io) que Copilot descubre en `.github/skills/` (VS Code agent mode, Copilot CLI, coding agent). `make copilot` genera `dist/copilot/` con:
+The skills follow the [Agent Skills](https://agentskills.io) standard, which Copilot discovers in `.github/skills/` (VS Code agent mode, Copilot CLI, coding agent). `make copilot` builds `dist/copilot/` with:
 
-- `.github/skills/okf-*/` — los 7 skills con scripts y plantillas, rutas reescritas (sin `${CLAUDE_PLUGIN_ROOT}`).
-- `.github/agents/okf.agent.md` — custom agent `@okf`.
-- `AGENTS.okf.md` — fragmento para `AGENTS.md`.
+- `.github/skills/okf-*/` — the 7 skills with scripts and templates, paths rewritten (no `${CLAUDE_PLUGIN_ROOT}`).
+- `.github/agents/okf.agent.md` — the `@okf` custom agent.
+- `AGENTS.okf.md` — a fragment for `AGENTS.md`.
 
-Copia `dist/copilot/.` en la raíz del repo destino. Claude Code también lee `.github/skills/`, así que un repo con el pack funciona con ambos sin el plugin. Variante neutra: `python3 tools/export_copilot.py --skills-dir .agents/skills`.
+Copy `dist/copilot/.` into the root of the target repo. Claude Code also reads `.github/skills/`, so a repo with the pack works with both, without the plugin. Neutral variant: `python3 tools/export_copilot.py --skills-dir .agents/skills`.
 
-## Uso con Microsoft 365 Copilot
+## Using it with Microsoft 365 Copilot
 
-M365 Copilot (Cowork, Copilot Studio, Agent Builder) acepta Agent Skills en el mismo formato `SKILL.md`. `make m365` genera:
+M365 Copilot (Cowork, Copilot Studio, Agent Builder) accepts Agent Skills in the same `SKILL.md` format. `make m365` builds:
 
-- `dist/m365/okf-builder-m365.zip` — plugin de **M365 Copilot Cowork** (manifest v1.28 + 7 skills autocontenidos). Subida por admin (Manage apps → Upload custom app) o personal con `atk install --file-path … --scope Personal`. Cowork requiere hoy el programa Frontier.
-- `dist/m365/skills/okf-*.zip` — un zip por skill para **Copilot Studio / Agent Builder** → Build → Skills → Upload a skill (GA).
+- `dist/m365/okf-builder-m365.zip` — an **M365 Copilot Cowork** plugin (manifest v1.28 + 7 self-contained skills). Uploaded by an admin (Manage apps → Upload custom app) or personally with `atk install --file-path … --scope Personal`. Cowork currently requires the Frontier program.
+- `dist/m365/skills/okf-*.zip` — one zip per skill for **Copilot Studio / Agent Builder** → Build → Skills → Upload a skill (GA).
 
-El conocimiento (`knowledge/`) no es accesible desde M365 Copilot vía git: sincronízalo a SharePoint/OneDrive y añádelo como fuente de conocimiento del agente. Es markdown plano, se indexa tal cual.
+M365 Copilot cannot reach the knowledge (`knowledge/`) through git: sync it to SharePoint/OneDrive and add it as a knowledge source for the agent. It is plain markdown and is indexed as is.
 
-## Referencias
+## References
 
-- Spec OKF: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf (copia en `plugin/okf-builder/skills/okf-standard/references/`, Apache-2.0)
-- Anuncio: https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing
+- OKF spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf (copy in `plugin/okf-builder/skills/okf-standard/references/`, Apache-2.0)
+- Announcement: https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing
 
-## Licencia
+## License
 
-Apache-2.0 (ver [`LICENSE`](LICENSE)). Las specs OKF de Google en `references/` son copias literales bajo su propia licencia Apache-2.0 ([`OKF-SPEC-LICENSE.md`](plugin/okf-builder/skills/okf-standard/references/OKF-SPEC-LICENSE.md)).
+Apache-2.0 (see [`LICENSE`](LICENSE)). Google's OKF specs in `references/` are verbatim copies under their own Apache-2.0 license ([`OKF-SPEC-LICENSE.md`](plugin/okf-builder/skills/okf-standard/references/OKF-SPEC-LICENSE.md)).

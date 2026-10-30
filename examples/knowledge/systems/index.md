@@ -1,4 +1,4 @@
-> Servicios, módulos y componentes desplegables.
+> Services, modules and deployable components.
 
 # systems
 

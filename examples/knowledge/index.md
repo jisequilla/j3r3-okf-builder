@@ -5,19 +5,19 @@ okf_profile: "knowledge/2.0"
 
 # Project
 
-* [Demo Pagos](project.md) - Plataforma de pagos de demostración _(draft)_
+* [Demo Payments](project.md) - Demo payments platform _(draft)_
 
 # Subdirectories
 
-* [apis](apis/index.md) - Contratos de API y su semántica.
-* [architecture](architecture/index.md) - Vistas y principios de arquitectura.
-* [computations](computations/index.md) - Computaciones sancionadas (Attested Computation).
-* [data](data/index.md) - Datasets, tablas y esquemas.
-* [decisions](decisions/index.md) - Registro de decisiones de arquitectura (ADR).
-* [domain](domain/index.md) - Glosario y conceptos de negocio.
-* [metrics](metrics/index.md) - Definiciones de métricas y KPIs.
-* [playbooks](playbooks/index.md) - Procedimientos de equipo y negocio.
-* [policies](policies/index.md) - Normas, estándares y compliance.
-* [references](references/index.md) - Material externo espejado, skills de ejecución y attesters.
-* [runbooks](runbooks/index.md) - Procedimientos operativos y de incidentes.
-* [systems](systems/index.md) - Servicios, módulos y componentes desplegables.
+* [apis](apis/index.md) - API contracts and their semantics.
+* [architecture](architecture/index.md) - Architecture views and principles.
+* [computations](computations/index.md) - Sanctioned computations (Attested Computation).
+* [data](data/index.md) - Datasets, tables and schemas.
+* [decisions](decisions/index.md) - Architecture decision records (ADRs).
+* [domain](domain/index.md) - Glossary and business concepts.
+* [metrics](metrics/index.md) - Metric and KPI definitions.
+* [playbooks](playbooks/index.md) - Team and business procedures.
+* [policies](policies/index.md) - Rules, standards and compliance.
+* [references](references/index.md) - Mirrored external material, execution skills and attesters.
+* [runbooks](runbooks/index.md) - Operational and incident procedures.
+* [systems](systems/index.md) - Services, modules and deployable components.

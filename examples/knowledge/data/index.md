@@ -1,4 +1,4 @@
-> Datasets, tablas y esquemas.
+> Datasets, tables and schemas.
 
 # data
 

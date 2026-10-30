@@ -1,4 +1,4 @@
-# Historial del bundle
+# Bundle history
 
 ## 2026-10-30
-* **Inicialización**: Estructura `knowledge/` creada con el perfil knowledge/1.0 (OKF v0.2).
+* **Initialization**: `knowledge/` structure created with the knowledge/1.0 profile (OKF v0.2).

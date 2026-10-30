@@ -1,4 +1,4 @@
-> Computaciones sancionadas (Attested Computation).
+> Sanctioned computations (Attested Computation).
 
 # computations
 

@@ -1,4 +1,4 @@
-> Definiciones de métricas y KPIs.
+> Metric and KPI definitions.
 
 # metrics
 

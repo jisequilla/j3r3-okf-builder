@@ -1,4 +1,4 @@
-> Glosario y conceptos de negocio.
+> Glossary and business concepts.
 
 # domain
 
