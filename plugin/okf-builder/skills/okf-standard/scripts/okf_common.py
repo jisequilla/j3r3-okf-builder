@@ -161,9 +161,11 @@ def _indent_of(line: str) -> int:
     return len(line) - len(line.lstrip())
 
 
-def _check_tab(line: str) -> None:
+def _check_line(line: str) -> None:
+    # todo inicio de línea fuera del cuerpo de un escalar de bloque
     if "\t" in line[: _indent_of(line)]:
         raise ValueError(f"tab en la indentación no soportado: {line!r}")
+    _check_start(line, line, inline=False)
 
 
 def _closing_quote(text: str, q: str) -> int | None:
@@ -182,15 +184,44 @@ def _closing_quote(text: str, q: str) -> int | None:
     return None
 
 
-def _check_supported(v: str, line: str) -> None:
-    t = v.strip()
-    if t[:1] in ("|", ">") and t not in _BLOCK_HEADERS:
-        raise ValueError(f"escalar de bloque no soportado (solo |, |-, >, >-): {line!r}")
-    if t[:1] in ("&", "*", "!"):
-        raise ValueError(f"anclas, alias y tags no soportados: {line!r}")
+_INDICATORS = {
+    "{": "mapa en flujo { }",
+    "[": "lista en flujo [ ]",
+    "&": "anclas (&)",
+    "*": "alias (*)",
+    "!": "tags (!)",
+    "?": "claves complejas (?)",
+    "%": "directivas (%)",
+    "@": "carácter reservado @",
+    "`": "carácter reservado `",
+    "|": "escalar de bloque |",
+    ">": "escalar de bloque >",
+}
+
+
+def _check_start(t: str, line: str, inline: bool) -> None:
+    # la regla del YAML reducido: un indicador solo se admite como valor en la
+    # misma línea que su clave o guion, y solo { }, [ ] y |, |-, >, >-
+    t = t.strip()
+    c = t[:1]
+    if c not in _INDICATORS:
+        return
+    if inline and (c in "{[" or t in _BLOCK_HEADERS):
+        return
+    if not inline and c in "{[|>":
+        raise ValueError(
+            f"{_INDICATORS[c]} solo se admite en la misma línea que su clave o guion: {line!r}"
+        )
+    if c in "|>":
+        raise ValueError(f"{_INDICATORS[c]} no soportado (solo |, |-, >, >-): {line!r}")
+    raise ValueError(f"{_INDICATORS[c]} no soportado: {line!r}")
 
 
 def _mini_yaml(text: str) -> dict:
+    """YAML reducido. Solo admite: mapas y listas de bloque (incluida "- clave: v"),
+    escalares planos y entre comillas (de una línea o continuados en líneas más
+    indentadas), escalares de bloque |, |-, >, >- y colecciones en flujo { } y [ ]
+    que abren en la misma línea que su clave o guion. Todo lo demás es ValueError."""
     raw = text.splitlines()
     for r in raw:
         if r.rstrip() in ("---", "..."):
@@ -291,7 +322,7 @@ def _mini_yaml(text: str) -> dict:
             if not r.strip():
                 blanks += 1
                 continue
-            _check_tab(r)
+            _check_line(r)
             if q == '"' and (len(text) - len(text.rstrip("\\"))) % 2:
                 raise ValueError(f"salto de línea escapado (\\ al final de línea) no soportado: {raw[pos[idx]]!r}")
             text +=("\n" * blanks if blanks else " ") + r.strip()
@@ -307,7 +338,7 @@ def _mini_yaml(text: str) -> dict:
         if not closed and t[:1] == "{" and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
             raise ValueError(f"mapa en flujo {{ }} multilínea no soportado: {lines[idx]!r}")
         while not closed and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
-            _check_tab(lines[nxt])
+            _check_line(lines[nxt])
             c = lines[nxt].strip()
             if ": " in c or c.endswith(":"):
                 raise ValueError(f"indentación inesperada: {lines[nxt]!r}")
@@ -325,7 +356,7 @@ def _mini_yaml(text: str) -> dict:
         return (_scalar(joined) if t[0] in _CLOSERS else joined), nxt
 
     def value(idx: int, indent: int, v: str):
-        _check_supported(v, lines[idx])
+        _check_start(v, lines[idx], inline=True)
         if v.strip() in _BLOCK_HEADERS:
             return block_scalar(idx, indent, v.strip())
         return plain_scalar(idx, indent, v)
@@ -343,7 +374,7 @@ def _mini_yaml(text: str) -> dict:
         d: dict = {}
         while idx < len(lines):
             line = lines[idx]
-            _check_tab(line)
+            _check_line(line)
             ind = len(line) - len(line.lstrip())
             if ind < indent or line.strip().startswith("- "):
                 break
@@ -371,7 +402,7 @@ def _mini_yaml(text: str) -> dict:
         lst: list = []
         while idx < len(lines):
             line = lines[idx]
-            _check_tab(line)
+            _check_line(line)
             ind = len(line) - len(line.lstrip())
             if ind != indent or not line.strip().startswith("- "):
                 break

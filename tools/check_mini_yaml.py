@@ -66,6 +66,11 @@ CASES: list[tuple[str, str, dict]] = [
     ("literal tab inside double quotes", "a: \"x\ty\"\n", {"a": "x\ty"}),
     ("tab-only blank line inside double quotes", "a: \"x\n\t\n  y\"\n", {"a": "x\ny"}),
     ("tab-only blank line inside single quotes", "a: 'x\n\t\n  y'\n", {"a": "x\ny"}),
+    ("flow map on the key line", "a: {x: 1}\n", {"a": {"x": 1}}),
+    ("flow list on the key line", "a: [1, 2]\n", {"a": [1, 2]}),
+    ("flow list and map on the dash line", "a:\n- [1, 2]\n- {x: 1}\n", {"a": [[1, 2], {"x": 1}]}),
+    ("multi-line flow list opened on the key line", "a: [1,\n  2]\n", {"a": [1, 2]}),
+    ("multi-line flow list opened on the dash line", "a:\n- [1,\n  2]\n", {"a": [[1, 2]]}),
 ]
 
 # (text, substring the ValueError message must contain)
@@ -86,6 +91,18 @@ UNSUPPORTED: list[tuple[str, str]] = [
     ("a: {x: 1,\n  y: 2}\n", "flujo"),
     ("a: \"x\" y\n  z\n", "comilla de cierre"), ("a: \"x\" y\n", "comilla de cierre"), ("a: 'x\n", "sin cerrar"),
     ("a: ['x' y]\n", "comilla de cierre"),
+    # un indicador al inicio de línea (fuera de un cuerpo de bloque): siempre error
+    ("a:\n  {x: 1}\n", "mapa en flujo"), ("a:\n  {x: 1,\n  y: 2}\n", "mapa en flujo"),
+    ("{x: 1}\n", "mapa en flujo"), ("a:\n  [1, 2]\n", "lista en flujo"),
+    ("a:\n  &x\n", "anclas"), ("a:\n  *x\n", "alias"), ("!!str a: 1\n", "tags"),
+    ("? a\n: 1\n", "claves complejas"), ("%YAML 1.2\na: 1\n", "directivas"),
+    ("@a: 1\n", "reservado @"), ("`a`: 1\n", "reservado `"),
+    ("a:\n  |\n    x\n", "bloque |"), ("a:\n  >\n    x\n", "bloque >"),
+    ("a: x\n  [y]\n", "lista en flujo"), ("items:\n- x\n  {y}\n", "mapa en flujo"),
+    ("a: 'x\n  [y]'\n", "lista en flujo"), ("a: [1,\n  [2]]\n", "lista en flujo"),
+    # el mismo indicador como valor en la línea de la clave o guion
+    ("a: ? x\n", "claves complejas"), ("a: %x\n", "directivas"), ("a: @x\n", "reservado @"),
+    ("a: `x\n", "reservado `"), ("a:\n- @x\n", "reservado @"),
 ]
 
 
