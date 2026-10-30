@@ -1,24 +1,24 @@
 ---
 name: okf-standard
-description: Conocimiento del estándar OKF (Open Knowledge Format v0.1 y v0.2 de Google), sus diferencias, y del perfil knowledge/2.0 para repos. Cárgalo cuando el usuario pregunte qué es OKF, cómo estructurar knowledge/, qué campos lleva el frontmatter, qué type usar, cómo escribir un ADR/runbook/métrica en OKF, o cuando otro skill okf-* necesite la spec. Triggers: "OKF", "open knowledge format", "estructura de conocimiento", "knowledge/", "frontmatter OKF", "bundle OKF", "plantilla ADR OKF", "OKF 0.1 vs 0.2", "versión de OKF".
+description: 'Knowledge of the OKF standard (Google''s Open Knowledge Format v0.1 and v0.2), the differences between them, and the knowledge/2.0 profile for repos. Load it when the user asks what OKF is, how to structure knowledge/, which fields the frontmatter carries, which type to use, how to write an ADR/runbook/metric in OKF, or when another okf-* skill needs the spec. Triggers: "OKF", "open knowledge format", "knowledge structure", "knowledge/", "OKF frontmatter", "OKF bundle", "OKF ADR template", "OKF 0.1 vs 0.2", "OKF version".'
 ---
 
-# Estándar OKF · perfil knowledge/2.0
+# OKF standard · knowledge/2.0 profile
 
-Este skill es la fuente de verdad del estándar dentro del plugin. Los demás skills (`okf-init`, `okf-capture`, `okf-lint`, `okf-index`, `okf-ask`) lo asumen.
+This skill is the source of truth for the standard inside the plugin. The other skills (`okf-init`, `okf-capture`, `okf-lint`, `okf-index`, `okf-ask`) assume it.
 
-## Resumen operativo (lo que hay que recordar siempre)
+## Operating summary (what to always keep in mind)
 
-- Un bundle = directorio `knowledge/` en la raíz del repo. Solo markdown + frontmatter YAML.
-- Fichero reservados: `index.md` (listado por directorio, sin frontmatter salvo la raíz con `okf_version`) y `log.md` (historial, fechas `## YYYY-MM-DD`, más reciente primero).
-- Todo `.md` no reservado es un **concepto**. Único campo obligatorio: `type`.
-- Perfil knowledge/2.0 añade como obligatorio: `generated: { by: <actor>, at: <ISO 8601> }` y la existencia de `index.md`, `log.md` y `project.md` (`type: Project`).
-- Actores: `human:<id>` · `process:<id>` · `<agente>/<version>`. Cuando este plugin escribe contenido, usa `okf-builder/<modelo>` como actor en `generated.by`; **nunca** inventar `verified` con `human:`: solo la persona lo añade.
-- Enlaces entre conceptos: absolutos al bundle `[x](/systems/x.md)`. Enlaces rotos = conocimiento pendiente, no error.
-- Lifecycle: `status: draft|stable|deprecated` (ausente ⇒ stable), `stale_after` instante absoluto. Nunca borrar: deprecar y enlazar al sustituto.
-- Procedencia: `sources[]` con `resource` obligatorio e `id` si el cuerpo cita con `[^id]`.
+- A bundle = the `knowledge/` directory at the repo root. Only markdown + YAML frontmatter.
+- Reserved files: `index.md` (listing per directory, no frontmatter except the root one with `okf_version`) and `log.md` (history, `## YYYY-MM-DD` dates, most recent first).
+- Every non-reserved `.md` is a **concept**. The only required field: `type`.
+- The knowledge/2.0 profile also requires `generated: { by: <actor>, at: <ISO 8601> }` and the presence of `index.md`, `log.md` and `project.md` (`type: Project`).
+- Actors: `human:<id>` · `process:<id>` · `<agent>/<version>`. When this plugin writes content, it uses `okf-builder/<model>` as the actor in `generated.by`; **never** invent a `verified` with `human:`: only the person adds it.
+- Links between concepts: bundle-absolute `[x](/systems/x.md)`. Broken links = pending knowledge, not an error.
+- Lifecycle: `status: draft|stable|deprecated` (absent ⇒ stable), `stale_after` an absolute instant. Never delete: deprecate and link to the replacement.
+- Provenance: `sources[]` with a required `resource`, and an `id` if the body cites it with `[^id]`.
 
-## Estructura de directorios del perfil
+## Profile directory structure
 
 ```
 knowledge/
@@ -27,13 +27,13 @@ knowledge/
   metrics/  computations/  runbooks/  playbooks/  policies/  references/
 ```
 
-Todos los subdirectorios son opcionales; cada uno lleva su `index.md`.
+All subdirectories are optional; each one has its own `index.md`.
 
-## Vocabulario de `type` → directorio → plantilla
+## `type` vocabulary → directory → template
 
-| type | directorio | plantilla |
+| type | directory | template |
 |---|---|---|
-| Project | raíz | `<skills>/okf-standard/templates/project.md` |
+| Project | root | `<skills>/okf-standard/templates/project.md` |
 | Architecture View | architecture/ | `<skills>/okf-standard/templates/architecture-view.md` |
 | Architecture Decision | decisions/ (`ADR-NNNN-slug.md`) | `<skills>/okf-standard/templates/adr.md` |
 | Term / Glossary | domain/ | `<skills>/okf-standard/templates/term.md` |
@@ -47,19 +47,19 @@ Todos los subdirectorios son opcionales; cada uno lleva su `index.md`.
 | Policy | policies/ | `<skills>/okf-standard/templates/policy.md` |
 | Reference | references/ | `<skills>/okf-standard/templates/reference.md` |
 
-Las plantillas usan marcadores `{{name}}`; sustituir todos antes de guardar. Si un marcador no aplica, eliminar la línea, no dejarlo vacío.
+The templates use `{{name}}` placeholders; replace all of them before saving. If a placeholder doesn't apply, remove the line rather than leaving it empty.
 
-## Versiones: v0.2 (por defecto) y v0.1
+## Versions: v0.2 (default) and v0.1
 
-- Un bundle es **0.1** si su `index.md` raíz declara `okf_version: "0.1"` o si sus conceptos usan `timestamp` / `# Citations` sin ninguna clave 0.2. Es **0.2** en el resto de casos.
-- Dos cambios rompedores: `timestamp` → `generated: { by, at }` y `# Citations` (cuerpo, `[n] [título](url)` o `- url`) → `sources[]` (frontmatter) + notas al pie `[^id]`. Todo lo demás de 0.2 (`verified`, `status`, `stale_after`, actores, Attested Computation, offset obligatorio en fechas) es aditivo.
-- **Escribir siempre en la versión del bundle.** En un bundle 0.1: `timestamp` en vez de `generated`, citas bajo `# Citations`, sin `status`/`verified`/`stale_after`. Las plantillas son 0.2; para un bundle 0.1 rellenar la plantilla y pasar `okf_migrate.py --to 0.1 --file <ruta>`.
-- Un consumidor 0.2 lee 0.1 (fallback a `timestamp` y `# Citations`); un consumidor 0.1 lee 0.2 ignorando claves desconocidas. Nunca mezclar formas en un mismo bundle.
-- Matriz completa, reglas de mapeo y política de intercambio: `references/OKF-COMPATIBILITY.md`. Migración: skill `okf-migrate`.
+- A bundle is **0.1** if its root `index.md` declares `okf_version: "0.1"`, or if its concepts use `timestamp` / `# Citations` without any 0.2 key. It is **0.2** in every other case.
+- Two breaking changes: `timestamp` → `generated: { by, at }` and `# Citations` (body, `[n] [title](url)` or `- url`) → `sources[]` (frontmatter) + `[^id]` footnotes. Everything else in 0.2 (`verified`, `status`, `stale_after`, actors, Attested Computation, required offset in dates) is additive.
+- **Always write in the bundle's version.** In a 0.1 bundle: `timestamp` instead of `generated`, citations under `# Citations`, no `status`/`verified`/`stale_after`. The templates are 0.2; for a 0.1 bundle fill in the template and run `okf_migrate.py --to 0.1 --file <path>`.
+- A 0.2 consumer reads 0.1 (falling back to `timestamp` and `# Citations`); a 0.1 consumer reads 0.2 by ignoring unknown keys. Never mix forms in one bundle.
+- Full matrix, mapping rules and exchange policy: `references/OKF-COMPATIBILITY.md`. Migration: the `okf-migrate` skill.
 
-## Dónde está todo (convención `<skills>`)
+## Where everything is (`<skills>` convention)
 
-`<skills>` = directorio que contiene los skills `okf-*` (el padre de este skill). Este skill lleva los scripts y las plantillas que usan los demás:
+`<skills>` = the directory that holds the `okf-*` skills (the parent of this skill). This skill carries the scripts and templates the others use:
 
 ```
 <skills>/okf-standard/scripts/okf_init.py | okf_lint.py | okf_index.py | okf_migrate.py | okf_common.py
@@ -67,18 +67,18 @@ Las plantillas usan marcadores `{{name}}`; sustituir todos antes de guardar. Si 
 <skills>/okf-standard/references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
 ```
 
-Python ≥ 3.9, sin dependencias (usa PyYAML si está instalado; `OKF_NO_PYYAML=1` fuerza el parser YAML reducido). Si el entorno no permite ejecutar scripts (p. ej. algunos agentes M365), aplicar las reglas manualmente desde `references/` y decirlo.
+Python ≥ 3.9, no dependencies (uses PyYAML if it is installed; `OKF_NO_PYYAML=1` forces the reduced YAML parser). If the environment doesn't allow running scripts (e.g. some M365 agents), apply the rules by hand from `references/` and say so.
 
-## Cuándo leer las referencias
+## When to read the references
 
-- Dudas de detalle del perfil (reglas de nombres, ciclo de vida, conformidad): leer `references/OKF-STANDARD.md`.
-- Dudas de la spec (sources, verified, Attested Computation, conformidad §11): leer `references/OKF-SPEC-v0.2.md`; para bundles antiguos, `references/OKF-SPEC-v0.1.md`. Copias literales de la spec de Google, licencia en `references/OKF-SPEC-LICENSE.md`.
-- Diferencias entre versiones y mapeo de campos: `references/OKF-COMPATIBILITY.md`.
+- Detailed profile questions (naming rules, lifecycle, conformance): read `references/OKF-STANDARD.md`.
+- Spec questions (sources, verified, Attested Computation, conformance §11): read `references/OKF-SPEC-v0.2.md`; for older bundles, `references/OKF-SPEC-v0.1.md`. These are verbatim copies of Google's spec, licensed under `references/OKF-SPEC-LICENSE.md`.
+- Differences between versions and field mapping: `references/OKF-COMPATIBILITY.md`.
 
-## Reglas de redacción de conceptos
+## Concept writing rules
 
-1. `description`: una frase, sin punto final redundante, útil fuera de contexto (aparece en índices y buscadores).
-2. Cuerpo estructurado: tablas y listas antes que prosa. Encabezados `# Schema`, `# Examples`, `# Computation` tienen significado convencional.
-3. Un concepto = una unidad de conocimiento. Si un documento cubre tres métricas, son tres conceptos enlazados desde uno narrativo.
-4. Citar fuentes externas con `sources[]` + nota al pie; no copiar texto externo literal.
-5. Al crear o modificar: entrada en `log.md` (raíz y, si existe, del directorio) y regenerar `index.md` (`okf-index`).
+1. `description`: one sentence, no redundant final period, useful out of context (it appears in indexes and search tools).
+2. Structured body: tables and lists before prose. The headings `# Schema`, `# Examples`, `# Computation` have a conventional meaning.
+3. One concept = one unit of knowledge. If a document covers three metrics, they are three concepts linked from one narrative concept.
+4. Cite external sources with `sources[]` + a footnote; don't copy external text verbatim.
+5. On create or change: an entry in `log.md` (root and, if there is one, the directory's) and regenerate `index.md` (`okf-index`).

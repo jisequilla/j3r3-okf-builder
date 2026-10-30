@@ -10,28 +10,28 @@ stale_after: {{iso_date}}
 generated: { by: {{actor}}, at: {{now}} }
 ---
 
-# Disparador
+# Trigger
 
-{{Alerta, síntoma o evento que activa este runbook. Enlaza al sistema: [X](/systems/x.md).}}
+{{Alert, symptom or event that starts this runbook. Link to the system: [X](/systems/x.md).}}
 
-# Impacto
+# Impact
 
-# Diagnóstico
+# Diagnosis
 
-1. Comprobar ...
+1. Check ...
 2. ...
 
-# Pasos de resolución
+# Resolution steps
 
 1. ...
 
 # Rollback
 
-# Escalado
+# Escalation
 
-| Nivel | Quién | Cuándo |
+| Level | Who | When |
 |---|---|---|
 
-# Post-incidente
+# Post-incident
 
-- Registrar en `log.md` y abrir ADR si procede.
+- Record it in `log.md` and open an ADR if needed.

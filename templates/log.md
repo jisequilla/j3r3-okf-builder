@@ -1,4 +1,4 @@
-# Historial del bundle
+# Bundle history
 
 ## {{date}}
-* **Initialization**: Estructura `knowledge/` creada con el perfil knowledge/2.0 (OKF v0.2).
+* **Initialization**: `knowledge/` structure created with the knowledge/2.0 profile (OKF v0.2).

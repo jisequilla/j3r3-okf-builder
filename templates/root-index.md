@@ -5,7 +5,7 @@ okf_profile: "knowledge/2.0"
 
 # Project
 
-* [Ficha del proyecto](project.md) - {{project_description}}
+* [Project overview](project.md) - {{project_description}}
 
 # Subdirectories
 

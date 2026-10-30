@@ -8,14 +8,14 @@ owner: team:{{team}}
 generated: { by: {{actor}}, at: {{now}} }
 ---
 
-# Cuándo aplicar
+# When to apply
 
-# Pre-requisitos
+# Prerequisites
 
-# Pasos
+# Steps
 
 1. ...
 
-# Resultado esperado
+# Expected result
 
-# Relacionados
+# Related

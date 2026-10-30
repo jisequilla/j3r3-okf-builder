@@ -1,24 +1,24 @@
 ---
 name: okf-index
-description: Regenera los index.md de knowledge/ a partir del frontmatter de los conceptos (agrupados por type, con description) y comprueba si están desactualizados. Usar cuando el usuario diga "regenera los índices", "okf index", "actualiza index.md", o después de añadir/mover/deprecar conceptos.
+description: Regenerates the index.md files of knowledge/ from the concepts' frontmatter (grouped by type, with description) and checks whether they are out of date. Use when the user says "regenerate the indexes", "okf index", "update index.md", or after adding/moving/deprecating concepts.
 ---
 
 # okf-index
 
-> **Rutas.** `<skills>` es el directorio que contiene los skills `okf-*` (el padre de este skill): `${CLAUDE_PLUGIN_ROOT}/skills` en el plugin de Claude, `.claude/skills`, `.agents/skills`, `.github/skills` o `.gemini/skills` en un repo. Los scripts viven en `<skills>/okf-standard/scripts/` y las plantillas en `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
 
-## Pasos
+## Steps
 
-1. Comprobar estado sin escribir:
+1. Check the state without writing:
    ```bash
    python3 "<skills>/okf-standard/scripts/okf_index.py" [<bundle>] --check
    ```
-2. Regenerar (todos o un directorio):
+2. Regenerate (all, or one directory):
    ```bash
    python3 "<skills>/okf-standard/scripts/okf_index.py" [<bundle>] [--dir <subdir>]
    ```
-3. Reglas que aplica el generador (no duplicarlas a mano):
-   - Secciones por `type` en el orden del perfil; entradas `* [title](fichero.md) - description`, con sufijo `_(draft)_` / `_(deprecated)_`.
-   - Sección `# Subdirectories` con la descripción del blockquote `> ...` del `index.md` hijo o la del perfil.
-   - Raíz: conserva el frontmatter (`okf_version`, `okf_profile`) y cualquier sección `# Notas...` escrita a mano. En subdirectorios conserva también `# Notas...`.
-4. Mostrar el diff resumido (qué índices cambiaron) y registrar en `log.md` solo si el cambio es relevante (p. ej. reorganización), no por cada regeneración rutinaria.
+3. Rules the generator applies (don't duplicate them by hand):
+   - Sections by `type` in the profile's order; entries `* [title](file.md) - description`, with a `_(draft)_` / `_(deprecated)_` suffix.
+   - A `# Subdirectories` section with the description from the `> ...` blockquote of the child `index.md`, or the profile's.
+   - Root: keeps the frontmatter (`okf_version`, `okf_profile`) and any hand-written section starting with `# Notas`. In subdirectories it also keeps `# Notas...`.
+4. Show the summarized diff (which indexes changed) and log it in `log.md` only if the change is significant (e.g. a reorganization), not for every routine regeneration.

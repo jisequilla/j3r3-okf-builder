@@ -3,36 +3,36 @@ type: System
 title: {{name}}
 description: {{one_sentence_description}}
 resource: {{repo_or_catalog_url}}
-tags: [sistema, {{tags}}]
+tags: [system, {{tags}}]
 status: draft
 owner: team:{{team}}
 runtime: {{kubernetes|lambda|vm|...}}
 generated: { by: {{actor}}, at: {{now}} }
 ---
 
-# Responsabilidad
+# Responsibility
 
-{{Qué hace y qué no hace.}}
+{{What it does and what it doesn't do.}}
 
 # Interfaces
 
-| Dirección | Contraparte | Protocolo | Contrato |
+| Direction | Counterpart | Protocol | Contract |
 |---|---|---|---|
-| Expone | | REST | [API](/apis/....md) |
-| Consume | | | |
+| Exposes | | REST | [API](/apis/....md) |
+| Consumes | | | |
 
-# Dependencias
+# Dependencies
 
 * [Dataset](/data/....md)
-* [Sistema](/systems/....md)
+* [System](/systems/....md)
 
-# Operación
+# Operation
 
-* Runbooks: [Incidente X](/runbooks/....md)
+* Runbooks: [Incident X](/runbooks/....md)
 * Dashboards:
-* Alertas:
+* Alerts:
 
-# Configuración relevante
+# Relevant configuration
 
-| Variable | Descripción | Valor por entorno |
+| Variable | Description | Value per environment |
 |---|---|---|

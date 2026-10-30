@@ -3,7 +3,7 @@ type: Reference
 title: {{title}}
 description: {{one_sentence_description}}
 resource: {{original_url}}
-tags: [referencia]
+tags: [reference]
 status: draft
 generated: { by: {{actor}}, at: {{now}} }
 sources:
@@ -13,11 +13,11 @@ sources:
     last_modified: {{iso_date}}
 ---
 
-# Resumen
+# Summary
 
-{{Síntesis propia del material externo. No copiar literalmente.}}[^original]
+{{Your own synthesis of the external material. Don't copy it verbatim.}}[^original]
 
-# Puntos clave para este proyecto
+# Key points for this project
 
 - ...
 

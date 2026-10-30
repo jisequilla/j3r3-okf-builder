@@ -2,28 +2,28 @@
 type: Architecture View
 title: {{title}}
 description: {{one_sentence_description}}
-tags: [arquitectura, {{nivel: contexto|contenedores|componentes|despliegue}}]
+tags: [architecture, {{level: context|containers|components|deployment}}]
 status: draft
 generated: { by: {{actor}}, at: {{now}} }
 ---
 
-# Vista
+# View
 
 ```mermaid
 C4Context
   title {{title}}
 ```
 
-# Elementos
+# Elements
 
-| Elemento | Tipo | Responsabilidad | Concepto |
+| Element | Type | Responsibility | Concept |
 |---|---|---|---|
-| | | | [nombre](/systems/nombre.md) |
+| | | | [name](/systems/name.md) |
 
-# Principios y restricciones
+# Principles and constraints
 
 - ...
 
-# Decisiones relacionadas
+# Related decisions
 
 * [ADR-0001](/decisions/ADR-0001-....md)

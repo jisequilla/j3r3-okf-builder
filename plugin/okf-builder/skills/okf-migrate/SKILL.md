@@ -1,48 +1,48 @@
 ---
 name: okf-migrate
-description: Migra un bundle OKF entre v0.1 y v0.2 en ambos sentidos (timestamp↔generated, # Citations↔sources), detecta la versión de un bundle y exporta copias degradadas para consumidores antiguos. Usar cuando el usuario diga "migra a OKF 0.2", "convierte este bundle a 0.1", "qué versión de OKF es esto", "okf migrate", "exporta para un consumidor v0.1", o cuando okf-lint reporte LEGACY_*, V02_FIELD_IN_V01 o MIXED_VERSIONS.
+description: 'Migrates an OKF bundle between v0.1 and v0.2 in both directions (timestamp↔generated, # Citations↔sources), detects a bundle''s version and exports downgraded copies for older consumers. Use when the user says "migrate to OKF 0.2", "convert this bundle to 0.1", "which OKF version is this", "okf migrate", "export for a v0.1 consumer", or when okf-lint reports LEGACY_*, V02_FIELD_IN_V01 or MIXED_VERSIONS.'
 ---
 
 # okf-migrate
 
-> **Rutas.** `<skills>` es el directorio que contiene los skills `okf-*` (el padre de este skill): `${CLAUDE_PLUGIN_ROOT}/skills` en el plugin de Claude, `.claude/skills`, `.agents/skills`, `.github/skills` o `.gemini/skills` en un repo. Los scripts viven en `<skills>/okf-standard/scripts/` y las plantillas en `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
 
-## Detectar versión
+## Detect the version
 
 ```bash
 python3 "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --no-profile --json | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['okf_version'],d['version_origin'])"
 ```
-`declared` = `okf_version` en el `index.md` raíz; `heuristic` = inferida de los campos; `mixed` = formas 0.1 y 0.2 mezcladas; `default` = sin señales (se trata como 0.2).
+`declared` = `okf_version` in the root `index.md`; `heuristic` = inferred from the fields; `mixed` = 0.1 and 0.2 forms mixed; `default` = no signals (treated as 0.2).
 
-## Migrar
+## Migrate
 
-Siempre primero `--dry-run`; mostrar al usuario la lista de conceptos afectados y las notas de pérdida antes de escribir.
+Always `--dry-run` first; show the user the list of affected concepts and the loss notes before writing.
 
 ```bash
-# 0.1 → 0.2 (sin pérdida). --actor: a quién atribuir generated.by de los conceptos antiguos
+# 0.1 → 0.2 (lossless). --actor: who to attribute generated.by to for the old concepts
 python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.2 --actor <actor> --dry-run
 python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.2 --actor <actor>
 
-# 0.2 → 0.1: SIEMPRE a una copia (--out); el bundle fuente se queda en 0.2
-python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --keep-extensions --out <dir-export>
+# 0.2 → 0.1: ALWAYS to a copy (--out); the source bundle stays at 0.2
+python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --keep-extensions --out <export-dir>
 
-# Un solo concepto (p. ej. tras okf-capture en un bundle 0.1 con plantilla 0.2)
+# A single concept (e.g. after okf-capture in a 0.1 bundle with a 0.2 template)
 python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file runbooks/x.md
 ```
 
-Elección del `--actor` en 0.1→0.2: si se sabe quién escribió los conceptos (p. ej. el agente de Google), `reference_agent/<modelo>`; si fueron personas, `human:<id>` solo si el usuario lo confirma; en caso de duda `process:okf-migrate` (valor por defecto, honesto: no se sabe).
+Choosing `--actor` for 0.1→0.2: if you know who wrote the concepts (e.g. Google's agent), `reference_agent/<model>`; if people wrote them, `human:<id>` only if the user confirms it; when in doubt, `process:okf-migrate` (the default, and honest: nobody knows).
 
-## Qué se pierde al bajar a 0.1 (sin `--keep-extensions`)
+## What is lost when going down to 0.1 (without `--keep-extensions`)
 
-`generated.by`, `verified[]`, `status`, `stale_after`, `usage_window`, señales de `sources[]` (`author`, `usage_count`, `last_modified`). Con `--keep-extensions` se conservan como claves extra: ambas specs obligan a tolerarlas, pero un consumidor 0.1 no las interpreta. `Attested Computation` pasa a tipo genérico; sus claves de computación se conservan siempre.
+`generated.by`, `verified[]`, `status`, `stale_after`, `usage_window`, and the `sources[]` signals (`author`, `usage_count`, `last_modified`). With `--keep-extensions` they are kept as extra keys: both specs require consumers to tolerate them, but a 0.1 consumer doesn't interpret them. `Attested Computation` becomes a generic type; its computation keys are always kept.
 
-## Después de migrar
+## After migrating
 
-1. `okf-lint` con la versión destino (`--okf-version 0.2|0.1`) hasta 0 errores.
-2. `okf-index` si el cambio de `status` altera los índices (sufijos `_(draft)_`).
-3. El script ya añade `okf_version` en el `index.md` raíz y una entrada `**Migration**` en `log.md`; revisar el texto.
-4. Si quedan `LEGACY_CITATIONS` con la nota "sources y # Citations distintas", resolver a mano: la sección contiene citas que no están en `sources[]`.
+1. `okf-lint` with the target version (`--okf-version 0.2|0.1`) until there are 0 errors.
+2. `okf-index` if the `status` change alters the indexes (`_(draft)_` suffixes).
+3. The script already adds `okf_version` to the root `index.md` and a `**Migration**` entry to `log.md`; review the text.
+4. If `LEGACY_CITATIONS` remain with the note "sources and # Citations differ; Citations section kept as is", resolve them by hand: the section holds citations that aren't in `sources[]`.
 
-## Tabla de mapeo
+## Mapping table
 
-Ver `<skills>/okf-standard/references/OKF-COMPATIBILITY.md` §2 y §6.
+See `<skills>/okf-standard/references/OKF-COMPATIBILITY.md` §2 and §6.

@@ -1,25 +1,25 @@
 ---
 name: okf-ask
-description: Responde preguntas sobre el proyecto consultando knowledge/ (bundle OKF) con divulgación progresiva y citando conceptos, estado y nivel de confianza. Usar cuando el usuario pregunte "¿por qué decidimos X?", "¿cómo se opera Y?", "¿qué significa Z en este proyecto?", "¿qué sabemos de…?", "consulta el conocimiento", "okf ask", o cuando una tarea de código requiera contexto de arquitectura o dominio del repo.
+description: Answers questions about the project by reading knowledge/ (an OKF bundle) with progressive disclosure, citing concepts, their status and their trust level. Use when the user asks "why did we decide X?", "how do we operate Y?", "what does Z mean in this project?", "what do we know about…?", "check the knowledge", "okf ask", or when a coding task needs architecture or domain context from the repo.
 ---
 
 # okf-ask
 
-> **Rutas.** `<skills>` es el directorio que contiene los skills `okf-*` (el padre de este skill): `${CLAUDE_PLUGIN_ROOT}/skills` en el plugin de Claude, `.claude/skills`, `.agents/skills`, `.github/skills` o `.gemini/skills` en un repo. Los scripts viven en `<skills>/okf-standard/scripts/` y las plantillas en `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
 
-## Pasos
+## Steps
 
-1. Leer `knowledge/index.md`. Elegir los directorios relevantes por la pregunta (decisions para "por qué", runbooks para "cómo operar", domain para "qué significa", systems/architecture para "cómo está montado", data/metrics para "de dónde sale este número").
-2. Leer el `index.md` de esos directorios; seleccionar conceptos por `description`. Abrir solo los necesarios (máximo ~8 en una primera pasada). Seguir enlaces solo si la respuesta lo requiere. Si hace falta búsqueda textual: `grep -ril "<término>" knowledge/`.
-3. Evaluar cada concepto usado:
-   - `status` (`deprecated` ⇒ mencionarlo y buscar `superseded_by`).
-   - `stale_after` vencido ⇒ avisar de posible obsolescencia.
-   - Confianza: sin `verified` ⇒ *sin verificar*; `verified` con `human:` ⇒ *revisado por persona*; solo procesos/agentes ⇒ *confirmado por máquina*.
-   - `generated.at` para la antigüedad; en bundles 0.1, `timestamp`. Fuentes: `sources[]` o, en 0.1, la sección `# Citations`.
-4. Responder de forma directa y breve. Al final, bloque **Fuentes** con la ruta de cada concepto (`knowledge/decisions/ADR-0007-....md`) y su estado/confianza en una línea. Si dos conceptos se contradicen, decirlo y preferir el más reciente verificado.
-5. Si el conocimiento no está en el bundle: decirlo explícitamente, responder con lo que se pueda deducir del código marcándolo como *no documentado*, y ofrecer `okf-capture` para registrarlo. Si al responder se detecta un error en un concepto, proponer la corrección (no aplicarla sin confirmación).
+1. Read `knowledge/index.md`. Pick the directories that fit the question (decisions for "why", runbooks for "how to operate", domain for "what does it mean", systems/architecture for "how is it built", data/metrics for "where does this number come from").
+2. Read the `index.md` of those directories; select concepts by `description`. Open only the ones you need (at most ~8 in a first pass). Follow links only if the answer requires it. If you need a text search: `grep -ril "<term>" knowledge/`.
+3. Assess each concept you use:
+   - `status` (`deprecated` ⇒ say so and look for `superseded_by`).
+   - `stale_after` in the past ⇒ warn that the content may be stale.
+   - Trust: no `verified` ⇒ *unverified*; `verified` with `human:` ⇒ *human-reviewed*; only processes/agents ⇒ *machine-confirmed*.
+   - `generated.at` for age; in 0.1 bundles, `timestamp`. Sources: `sources[]` or, in 0.1, the `# Citations` section.
+4. Answer directly and briefly. At the end, add a **Sources** block with the path of each concept (`knowledge/decisions/ADR-0007-....md`) and its status/trust on one line. If two concepts contradict each other, say so and prefer the most recent verified one.
+5. If the knowledge is not in the bundle: say so explicitly, answer with what can be inferred from the code and mark it as *undocumented*, and offer `okf-capture` to record it. If while answering you find an error in a concept, propose the fix (do not apply it without confirmation).
 
-## No hacer
+## Don't
 
-- No responder desde memoria general del framework/tecnología cuando el bundle contiene una decisión específica del proyecto: la decisión del proyecto manda.
-- No presentar conceptos `draft` o sin verificar como hechos establecidos sin señalarlo.
+- Don't answer from general knowledge of the framework/technology when the bundle holds a project-specific decision: the project's decision wins.
+- Don't present `draft` or unverified concepts as established facts without flagging them.
