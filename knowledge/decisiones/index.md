@@ -10,3 +10,4 @@
 * [ADR-0006: Scripts Python sin dependencias externas](ADR-0006-scripts-sin-dependencias.md) - Las herramientas (init, lint, index, migrate) son Python ≥ 3.9 sin pip; PyYAML se usa solo si está presente.
 * [ADR-0007: Fuente única de skills y proyecciones por plataforma](ADR-0007-fuente-unica-y-proyecciones.md) - Los skills viven una sola vez en plugin/okf-builder/skills; cada plataforma recibe una proyección (symlink o paquete generado).
 * [ADR-0008: El repo okf-builder documenta su propio conocimiento con OKF](ADR-0008-dogfooding.md) - Este repositorio aplica el perfil knowledge/1.0 a sí mismo; las decisiones del proyecto son ADRs en knowledge/decisiones.
+* [ADR-0009: Construir los cambios multi-etapa por capas y tickets delegados](ADR-0009-construir-por-capas-y-tickets.md) - Los cambios que tocan varias capas del repo se dividen en tickets verificables que construyen agentes en worktrees aislados, y la sesión principal solo juzga, verifica y mergea. _(draft)_
