@@ -67,7 +67,7 @@ Las plantillas usan marcadores `{{name}}`; sustituir todos antes de guardar. Si 
 <skills>/okf-standard/references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
 ```
 
-Python ≥ 3.9, sin dependencias. Si el entorno no permite ejecutar scripts (p. ej. algunos agentes M365), aplicar las reglas manualmente desde `references/` y decirlo.
+Python ≥ 3.9, sin dependencias (usa PyYAML si está instalado; `OKF_NO_PYYAML=1` fuerza el parser YAML reducido). Si el entorno no permite ejecutar scripts (p. ej. algunos agentes M365), aplicar las reglas manualmente desde `references/` y decirlo.
 
 ## Cuándo leer las referencias
 

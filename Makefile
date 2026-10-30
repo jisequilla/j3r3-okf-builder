@@ -23,6 +23,21 @@ test:
 	python3 $(S)/okf_migrate.py examples/fixtures/google-crypto-bitcoin-v0.1 --to 0.2 --out /tmp/okf-m1 >/dev/null && python3 $(S)/okf_lint.py /tmp/okf-m1 --no-profile --strict | tail -1
 	python3 $(S)/okf_migrate.py examples/fixtures/google-acme-retail-v0.2 --to 0.1 --keep-extensions --out /tmp/okf-m2 >/dev/null && python3 $(S)/okf_lint.py /tmp/okf-m2 --no-profile | tail -1
 	python3 $(S)/okf_migrate.py /tmp/okf-m2 --to 0.2 --out /tmp/okf-m3 --force >/dev/null && python3 $(S)/okf_lint.py /tmp/okf-m3 --no-profile --strict | tail -1
+	@echo "[5] [1]-[4] sin PyYAML (OKF_NO_PYYAML=1)"
+	rm -rf /tmp/okf-ny-test && OKF_NO_PYYAML=1 python3 $(S)/okf_init.py --root /tmp/okf-ny-test --title T --description D --actor human:test >/dev/null
+	OKF_NO_PYYAML=1 python3 $(S)/okf_index.py /tmp/okf-ny-test/knowledge --check && OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py /tmp/okf-ny-test/knowledge --strict | tail -1
+	test -f /tmp/okf-ny-test/knowledge/project.md && test -d /tmp/okf-ny-test/knowledge/decisions && test -d /tmp/okf-ny-test/knowledge/policies && grep -q 'knowledge/2.0' /tmp/okf-ny-test/knowledge/index.md
+	rm -rf /tmp/okf-ny-test1 && OKF_NO_PYYAML=1 python3 $(S)/okf_init.py --root /tmp/okf-ny-test1 --title T --description D --actor human:test --okf-version 0.1 >/dev/null
+	OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py /tmp/okf-ny-test1/knowledge --strict | tail -1
+	OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py examples/fixtures/google-crypto-bitcoin-v0.1 --no-profile --strict | tail -1
+	OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py examples/fixtures/google-acme-retail-v0.2 --no-profile --strict | tail -1
+	rm -rf /tmp/okf-ny-m1 /tmp/okf-ny-m2 /tmp/okf-ny-m3
+	OKF_NO_PYYAML=1 python3 $(S)/okf_migrate.py examples/fixtures/google-crypto-bitcoin-v0.1 --to 0.2 --out /tmp/okf-ny-m1 >/dev/null && OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py /tmp/okf-ny-m1 --no-profile --strict | tail -1
+	OKF_NO_PYYAML=1 python3 $(S)/okf_migrate.py examples/fixtures/google-acme-retail-v0.2 --to 0.1 --keep-extensions --out /tmp/okf-ny-m2 >/dev/null && OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py /tmp/okf-ny-m2 --no-profile | tail -1
+	OKF_NO_PYYAML=1 python3 $(S)/okf_migrate.py /tmp/okf-ny-m2 --to 0.2 --out /tmp/okf-ny-m3 --force >/dev/null && OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py /tmp/okf-ny-m3 --no-profile --strict | tail -1
+	@echo "[6] parser reducido frente a PyYAML"
+	python3 tools/check_mini_yaml.py --self-test
+	python3 tools/check_mini_yaml.py knowledge examples
 	@echo "OK"
 copilot:
 	python3 tools/export_copilot.py --zip
