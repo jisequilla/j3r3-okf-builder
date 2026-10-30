@@ -71,6 +71,16 @@ CASES: list[tuple[str, str, dict]] = [
     ("flow list and map on the dash line", "a:\n- [1, 2]\n- {x: 1}\n", {"a": [[1, 2], {"x": 1}]}),
     ("multi-line flow list opened on the key line", "a: [1,\n  2]\n", {"a": [1, 2]}),
     ("multi-line flow list opened on the dash line", "a:\n- [1,\n  2]\n", {"a": [[1, 2]]}),
+    # un indicador al inicio de una línea de continuación es texto, no un indicador
+    ("plain continuation starting with [", "a: x\n  [y]\n", {"a": "x [y]"}),
+    ("list item continuation starting with {", "items:\n- x\n  {y}\n", {"items": ["x {y}"]}),
+    ("plain continuation starting with & | `", "a: x\n  &y\nb: x\n  |y\nc: x\n  `y\n",
+     {"a": "x &y", "b": "x |y", "c": "x `y"}),
+    ("quoted continuation starting with [ @ *", "a: 'x\n  [y]'\nb: \"x\n  @y\"\nc: 'x\n  *y'\n",
+     {"a": "x [y]", "b": "x @y", "c": "x *y"}),
+    ("nested flow list continued on the next line", "a: [1,\n  [2]]\n", {"a": [1, [2]]}),
+    ("nested flow map inside a continued flow list", "a: [1,\n  {x: 2}]\n", {"a": [1, {"x": 2}]}),
+    ("dash line with a continued nested flow list", "a:\n- [1,\n  [2]]\n", {"a": [[1, [2]]]}),
 ]
 
 # (text, substring the ValueError message must contain)
@@ -98,8 +108,9 @@ UNSUPPORTED: list[tuple[str, str]] = [
     ("? a\n: 1\n", "claves complejas"), ("%YAML 1.2\na: 1\n", "directivas"),
     ("@a: 1\n", "reservado @"), ("`a`: 1\n", "reservado `"),
     ("a:\n  |\n    x\n", "bloque |"), ("a:\n  >\n    x\n", "bloque >"),
-    ("a: x\n  [y]\n", "lista en flujo"), ("items:\n- x\n  {y}\n", "mapa en flujo"),
-    ("a: 'x\n  [y]'\n", "lista en flujo"), ("a: [1,\n  [2]]\n", "lista en flujo"),
+    ("a:\n- - x\n", "secuencia compacta"), ("- - x\n", "secuencia compacta"),
+    ("a:\n- - x: 1\n", "secuencia compacta"), ("a: - x\n", "secuencia compacta"),
+    ("a: [1, 2] x\n", "sin cerrar"), ("a: {x: 1} y\n", "sin cerrar"),
     # el mismo indicador como valor en la línea de la clave o guion
     ("a: ? x\n", "claves complejas"), ("a: %x\n", "directivas"), ("a: @x\n", "reservado @"),
     ("a: `x\n", "reservado `"), ("a:\n- @x\n", "reservado @"),

@@ -161,11 +161,22 @@ def _indent_of(line: str) -> int:
     return len(line) - len(line.lstrip())
 
 
-def _check_line(line: str) -> None:
-    # todo inicio de línea fuera del cuerpo de un escalar de bloque
+def _check_tab(line: str) -> None:
     if "\t" in line[: _indent_of(line)]:
         raise ValueError(f"tab en la indentación no soportado: {line!r}")
+
+
+def _check_line(line: str) -> None:
+    # línea que abre una entrada de mapa o un elemento de lista; las líneas de
+    # continuación de un escalar solo se comprueban con _check_tab
+    _check_tab(line)
     _check_start(line, line, inline=False)
+
+
+def _check_dash_value(t: str, line: str) -> None:
+    t = t.strip()
+    if t == "-" or t.startswith("- "):
+        raise ValueError(f"guion como valor (secuencia compacta - -) no soportado: {line!r}")
 
 
 def _closing_quote(text: str, q: str) -> int | None:
@@ -322,7 +333,7 @@ def _mini_yaml(text: str) -> dict:
             if not r.strip():
                 blanks += 1
                 continue
-            _check_line(r)
+            _check_tab(r)
             if q == '"' and (len(text) - len(text.rstrip("\\"))) % 2:
                 raise ValueError(f"salto de línea escapado (\\ al final de línea) no soportado: {raw[pos[idx]]!r}")
             text +=("\n" * blanks if blanks else " ") + r.strip()
@@ -338,9 +349,9 @@ def _mini_yaml(text: str) -> dict:
         if not closed and t[:1] == "{" and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
             raise ValueError(f"mapa en flujo {{ }} multilínea no soportado: {lines[idx]!r}")
         while not closed and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
-            _check_line(lines[nxt])
+            _check_tab(lines[nxt])
             c = lines[nxt].strip()
-            if ": " in c or c.endswith(":"):
+            if t[:1] not in "{[" and (": " in c or c.endswith(":")):
                 raise ValueError(f"indentación inesperada: {lines[nxt]!r}")
             gap = raw[pos[nxt - 1] + 1 : pos[nxt]]
             if (nxt - 1) in commented or any(g.strip() for g in gap):
@@ -348,15 +359,16 @@ def _mini_yaml(text: str) -> dict:
             parts.append("\n" * len(gap) if gap else " ")
             parts.append(c)
             nxt += 1
+        joined = "".join(parts)
+        if t[0] in "{[" and not joined.endswith(_CLOSERS[t[0]]):
+            raise ValueError(f"'{t[0]}' sin cerrar o con texto tras el cierre: {lines[idx]!r}")
         if len(parts) == 1:
             return _scalar(t), nxt
-        joined = "".join(parts)
-        if t[0] in _CLOSERS and not joined.endswith(_CLOSERS[t[0]]):
-            raise ValueError(f"'{t[0]}' sin cerrar: {lines[idx]!r}")
         return (_scalar(joined) if t[0] in _CLOSERS else joined), nxt
 
     def value(idx: int, indent: int, v: str):
         _check_start(v, lines[idx], inline=True)
+        _check_dash_value(v, lines[idx])
         if v.strip() in _BLOCK_HEADERS:
             return block_scalar(idx, indent, v.strip())
         return plain_scalar(idx, indent, v)
@@ -407,6 +419,7 @@ def _mini_yaml(text: str) -> dict:
             if ind != indent or not line.strip().startswith("- "):
                 break
             rest = line.strip()[2:]
+            _check_dash_value(rest, line)
             if ":" in rest and not rest.lstrip().startswith(("{", "[", '"', "'")):
                 # mapa inline que empieza en la línea del guion
                 k, v = rest.split(":", 1)
