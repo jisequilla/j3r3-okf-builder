@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""okf_init.py — Crea la estructura knowledge/ del perfil knowledge/2.0 (OKF v0.2).
+"""okf_init.py — Create the knowledge/ structure of the knowledge/2.0 profile (OKF v0.2).
 
-Uso:
-    python3 okf_init.py --root /ruta/al/repo --title "Mi proyecto" \
-        --description "Una frase" --actor human:jisequilla [--repo-url URL] \
+Usage:
+    python3 okf_init.py --root /path/to/repo --title "My project" \
+        --description "One sentence" --actor human:jisequilla [--repo-url URL] \
         [--dirs architecture,decisions,...] [--force]
 
-No sobreescribe ficheros existentes salvo --force. Idempotente.
+Existing files are not overwritten unless --force is given. Idempotent.
 """
 from __future__ import annotations
 
@@ -35,6 +35,8 @@ DIR_DESC = {
     "playbooks": "Team and business procedures.",
     "policies": "Rules, standards and compliance.",
     "references": "Mirrored external material, execution skills and attesters.",
+    "skills": "Execution instructions (executors) for computations.",
+    "attesters": "Deterministic receipt verification code.",
 }
 
 
@@ -47,24 +49,24 @@ def render(name: str, **vars) -> str:
 
 def write(path: Path, content: str, force: bool) -> str:
     if path.exists() and not force:
-        return f"omitido (existe) {path}"
+        return f"skipped (exists) {path}"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-    return f"creado {path}"
+    return f"created {path}"
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root", default=".", help="raíz del repositorio")
-    ap.add_argument("--title", required=True)
-    ap.add_argument("--description", required=True)
-    ap.add_argument("--actor", required=True, help="human:<id> | process:<id> | <agente>/<version>")
-    ap.add_argument("--repo-url", default="")
-    ap.add_argument("--tags", default="")
-    ap.add_argument("--dirs", default=",".join(DEFAULT_DIRS))
-    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--root", default=".", help="repository root")
+    ap.add_argument("--title", required=True, help="project title")
+    ap.add_argument("--description", required=True, help="one-sentence project description")
+    ap.add_argument("--actor", required=True, help="human:<id> | process:<id> | <agent>/<version>")
+    ap.add_argument("--repo-url", default="", help="repository URL for project.md")
+    ap.add_argument("--tags", default="", help="comma-separated tags for project.md")
+    ap.add_argument("--dirs", default=",".join(DEFAULT_DIRS), help="comma-separated directories to create")
+    ap.add_argument("--force", action="store_true", help="overwrite existing files")
     ap.add_argument("--okf-version", default="0.2", choices=("0.1", "0.2"),
-                    help="versión OKF del bundle (0.1 solo para interoperar con consumidores antiguos)")
+                    help="OKF version of the bundle (0.1 only to interoperate with older consumers)")
     args = ap.parse_args(argv)
 
     k = Path(args.root).resolve() / "knowledge"
@@ -78,28 +80,28 @@ def main(argv=None) -> int:
 
     root_idx = ['---', f'okf_version: "{args.okf_version}"', 'okf_profile: "knowledge/2.0"', '---', '',
                 '# Project', '', f'* [{args.title}](project.md) - {args.description}', '',
-                '# Subdirectorios', '']
+                '# Subdirectories', '']
     for d in dirs:
-        root_idx.append(f"* [{d}]({d}/index.md) - {DIR_DESC.get(d, f'Conceptos de {d}.')}")
+        root_idx.append(f"* [{d}]({d}/index.md) - {DIR_DESC.get(d, f'Concepts in {d}.')}")
     log.append(write(k / "index.md", "\n".join(root_idx) + "\n", args.force))
 
     log.append(write(k / "log.md", render("log.md", date=date.today().isoformat()), args.force))
 
     for d in dirs:
-        desc = DIR_DESC.get(d, f"Conceptos de {d}.")
-        log.append(write(k / d / "index.md", f"# {d}\n\n> {desc}\n\n_(vacío)_\n", args.force))
+        desc = DIR_DESC.get(d, f"Concepts in {d}.")
+        log.append(write(k / d / "index.md", f"# {d}\n\n> {desc}\n\n_(empty)_\n", args.force))
         if d == "references":
             for sub in ("skills", "attesters"):
                 log.append(write(k / d / sub / "index.md",
-                                 f"# {sub}\n\n> {DIR_DESC.get(sub, '')}\n\n_(vacío)_\n", args.force))
+                                 f"# {sub}\n\n> {DIR_DESC[sub]}\n\n_(empty)_\n", args.force))
     print("\n".join(log))
-    # Normalizar índices con el mismo generador que okf-index
+    # Normalize the indexes with the same generator as okf-index
     from okf_index import main as index_main  # noqa: E402
     if args.okf_version == "0.1":
         from okf_migrate import main as migrate_main  # noqa: E402
         migrate_main([str(k), "--to", "0.1", "--force"])
     index_main([str(k)])
-    print(f"\nBundle inicializado en {k} (OKF v{args.okf_version})")
+    print(f"\nBundle initialized in {k} (OKF v{args.okf_version})")
     return 0
 
 

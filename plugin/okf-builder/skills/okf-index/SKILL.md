@@ -19,6 +19,6 @@ description: Regenera los index.md de knowledge/ a partir del frontmatter de los
    ```
 3. Reglas que aplica el generador (no duplicarlas a mano):
    - Secciones por `type` en el orden del perfil; entradas `* [title](fichero.md) - description`, con sufijo `_(draft)_` / `_(deprecated)_`.
-   - Sección `# Subdirectorios` con la descripción del blockquote `> ...` del `index.md` hijo o la del perfil.
+   - Sección `# Subdirectories` con la descripción del blockquote `> ...` del `index.md` hijo o la del perfil.
    - Raíz: conserva el frontmatter (`okf_version`, `okf_profile`) y cualquier sección `# Notas...` escrita a mano. En subdirectorios conserva también `# Notas...`.
 4. Mostrar el diff resumido (qué índices cambiaron) y registrar en `log.md` solo si el cambio es relevante (p. ej. reorganización), no por cada regeneración rutinaria.

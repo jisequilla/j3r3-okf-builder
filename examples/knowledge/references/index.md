@@ -1,6 +1,6 @@
 > Material externo espejado, skills de ejecución y attesters.
 
-# Subdirectorios
+# Subdirectories
 
-* [attesters](attesters/index.md) - _(vacío)_
-* [skills](skills/index.md) - _(vacío)_
+* [attesters](attesters/index.md) - Deterministic receipt verification code.
+* [skills](skills/index.md) - Execution instructions (executors) for computations.

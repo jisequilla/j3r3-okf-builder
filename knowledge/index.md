@@ -7,7 +7,7 @@ okf_profile: "knowledge/2.0"
 
 * [OKF Builder](project.md) - Estándar OKF (perfil knowledge/2.0) y plugin okf-builder para gestionar conocimiento de proyectos con Claude, Copilot, M365 y Gemini _(draft)_
 
-# Subdirectorios
+# Subdirectories
 
 * [architecture](architecture/index.md) - Vistas y principios de arquitectura.
 * [decisions](decisions/index.md) - Registro de decisiones de arquitectura (ADR).

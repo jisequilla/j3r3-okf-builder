@@ -1,9 +1,9 @@
-"""Utilidades compartidas para las herramientas OKF del plugin okf-builder.
+"""Shared utilities for the OKF tools of the okf-builder plugin.
 
-Sin dependencias externas: si PyYAML está instalado se usa; si no, un parser
-YAML reducido suficiente para frontmatter OKF (mapas, listas, flow mappings
-`{ a: b }`, flow lists `[a, b]`, escalares, escalares multilínea y de bloque
-`|`, `|-`, `>`, `>-`). Con OKF_NO_PYYAML=1 se fuerza el parser reducido.
+No external dependencies: PyYAML is used when installed; otherwise a reduced
+YAML parser that is enough for OKF frontmatter (maps, lists, flow mappings
+`{ a: b }`, flow lists `[a, b]`, scalars, multi-line scalars and block scalars
+`|`, `|-`, `>`, `>-`). OKF_NO_PYYAML=1 forces the reduced parser.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ if os.environ.get("OKF_NO_PYYAML") == "1":
 
 
 # --------------------------------------------------------------------------
-# YAML reducido
+# Reduced YAML
 # --------------------------------------------------------------------------
 def _scalar(tok: str) -> Any:
     t = tok.strip()
@@ -44,7 +44,7 @@ def _scalar(tok: str) -> Any:
         return False
     if t[:1] in ('"', "'"):
         if _closing_quote(t, t[0]) != len(t) - 1:
-            raise ValueError(f"comilla sin cerrar o texto tras la comilla de cierre: {t!r}")
+            raise ValueError(f"unclosed quote or text after the closing quote: {t!r}")
         return _unescape_double(t[1:-1]) if t[0] == '"' else t[1:-1].replace("''", "'")
     if re.fullmatch(r"-?\d+", t):
         return int(t)
@@ -76,14 +76,14 @@ def _unescape_double(s: str) -> str:
         if esc == "u":
             hexa = s[i + 2 : i + 6]
             if not re.fullmatch(r"[0-9A-Fa-f]{4}", hexa):
-                raise ValueError(f"escape \\u sin 4 dígitos hexadecimales: {s!r}")
+                raise ValueError(f"\\u escape without 4 hex digits: {s!r}")
             code = int(hexa, 16)
             if 0xD800 <= code <= 0xDFFF:
-                raise ValueError(f"escape \\u{hexa} (surrogate) no soportado: {s!r}")
+                raise ValueError(f"\\u{hexa} escape (surrogate) not supported: {s!r}")
             out.append(chr(code))
             i += 6
             continue
-        raise ValueError(f"escape \\{esc} no soportado en comillas dobles: {s!r}")
+        raise ValueError(f"\\{esc} escape not supported in double quotes: {s!r}")
     return "".join(out)
 
 
@@ -163,12 +163,12 @@ def _indent_of(line: str) -> int:
 
 def _check_tab(line: str) -> None:
     if "\t" in line[: _indent_of(line)]:
-        raise ValueError(f"tab en la indentación no soportado: {line!r}")
+        raise ValueError(f"tab in indentation not supported: {line!r}")
 
 
 def _check_line(line: str) -> None:
-    # línea que abre una entrada de mapa o un elemento de lista; las líneas de
-    # continuación de un escalar solo se comprueban con _check_tab
+    # a line that opens a map entry or a list item; continuation lines of a
+    # scalar are only checked with _check_tab
     _check_tab(line)
     _check_start(line, line, inline=False)
 
@@ -176,7 +176,7 @@ def _check_line(line: str) -> None:
 def _check_dash_value(t: str, line: str) -> None:
     t = t.strip()
     if t == "-" or t.startswith("- "):
-        raise ValueError(f"guion como valor (secuencia compacta - -) no soportado: {line!r}")
+        raise ValueError(f"dash as a value (compact sequence - -) not supported: {line!r}")
 
 
 def _closing_quote(text: str, q: str) -> int | None:
@@ -196,23 +196,23 @@ def _closing_quote(text: str, q: str) -> int | None:
 
 
 _INDICATORS = {
-    "{": "mapa en flujo { }",
-    "[": "lista en flujo [ ]",
-    "&": "anclas (&)",
-    "*": "alias (*)",
+    "{": "flow map { }",
+    "[": "flow list [ ]",
+    "&": "anchors (&)",
+    "*": "aliases (*)",
     "!": "tags (!)",
-    "?": "claves complejas (?)",
-    "%": "directivas (%)",
-    "@": "carácter reservado @",
-    "`": "carácter reservado `",
-    "|": "escalar de bloque |",
-    ">": "escalar de bloque >",
+    "?": "complex keys (?)",
+    "%": "directives (%)",
+    "@": "reserved character @",
+    "`": "reserved character `",
+    "|": "block scalar |",
+    ">": "block scalar >",
 }
 
 
 def _check_start(t: str, line: str, inline: bool) -> None:
-    # la regla del YAML reducido: un indicador solo se admite como valor en la
-    # misma línea que su clave o guion, y solo { }, [ ] y |, |-, >, >-
+    # the reduced-YAML rule: an indicator is only accepted as a value on the
+    # same line as its key or dash, and only { }, [ ] and |, |-, >, >-
     t = t.strip()
     c = t[:1]
     if c not in _INDICATORS:
@@ -221,28 +221,28 @@ def _check_start(t: str, line: str, inline: bool) -> None:
         return
     if not inline and c in "{[|>":
         raise ValueError(
-            f"{_INDICATORS[c]} solo se admite en la misma línea que su clave o guion: {line!r}"
+            f"{_INDICATORS[c]} is only accepted on the same line as its key or dash: {line!r}"
         )
     if c in "|>":
-        raise ValueError(f"{_INDICATORS[c]} no soportado (solo |, |-, >, >-): {line!r}")
-    raise ValueError(f"{_INDICATORS[c]} no soportado: {line!r}")
+        raise ValueError(f"{_INDICATORS[c]} not supported (only |, |-, >, >-): {line!r}")
+    raise ValueError(f"{_INDICATORS[c]} not supported: {line!r}")
 
 
 def _mini_yaml(text: str) -> dict:
-    """YAML reducido. Solo admite: mapas y listas de bloque (incluida "- clave: v"),
-    escalares planos y entre comillas (de una línea o continuados en líneas más
-    indentadas), escalares de bloque |, |-, >, >- y colecciones en flujo { } y [ ]
-    que abren en la misma línea que su clave o guion. Todo lo demás es ValueError."""
+    """Reduced YAML. It only accepts: block maps and lists (including "- key: v"),
+    plain and quoted scalars (on one line or continued on more indented lines),
+    block scalars |, |-, >, >- and flow collections { } and [ ] that open on the
+    same line as their key or dash. Everything else is a ValueError."""
     raw = text.splitlines()
     for r in raw:
         if r.rstrip() in ("---", "..."):
-            raise ValueError(f"multidocumento no soportado: {r!r}")
-    # líneas significativas (sin comentarios ni vacías) y su posición en `raw`
+            raise ValueError(f"multi-document YAML not supported: {r!r}")
+    # significant lines (no comments, not blank) and their position in `raw`
     lines: list[str] = []
     pos: list[int] = []
     commented: set[int] = set()
-    # líneas vacías o de solo comentario con tab en la indentación: error salvo
-    # que queden dentro de un escalar entre comillas o de bloque (`in_scalar`)
+    # blank or comment-only lines with a tab in the indentation: an error unless
+    # they fall inside a quoted or block scalar (`in_scalar`)
     tab_blank: list[int] = []
     in_scalar: set[int] = set()
     for i, r in enumerate(raw):
@@ -262,8 +262,8 @@ def _mini_yaml(text: str) -> dict:
         return j
 
     def block_scalar(idx: int, indent: int, header: str):
-        # | |- > >- se leen de `raw` para conservar '#' y líneas vacías
-        # la indentación del cuerpo se cuenta solo en espacios
+        # | |- > >- are read from `raw` to keep '#' and blank lines;
+        # the body indentation counts spaces only
         start = end = pos[idx] + 1
         body_indent = None
         while end < len(raw):
@@ -279,20 +279,20 @@ def _mini_yaml(text: str) -> dict:
         if body_indent is None:
             for r in raw[start:end]:
                 if "\t" in r:
-                    raise ValueError(f"tab en una línea de solo espacios de un escalar de bloque: {r!r}")
+                    raise ValueError(f"tab in a whitespace-only line of a block scalar: {r!r}")
             return "", first_line_from(end)
-        # como PyYAML: una línea más larga que la indentación del cuerpo es texto
-        # (aunque sean solo espacios); las demás líneas vacías son saltos
+        # as in PyYAML: a line longer than the body indentation is text
+        # (even if it is only spaces); the other blank lines are line breaks
         leading, segs, last = 0, [], start
         for i in range(start, end):
             r = raw[i]
             spaces = len(r) - len(r.lstrip(" "))
             if not r.strip() and spaces < body_indent and r[spaces:]:
-                raise ValueError(f"tab en la indentación de un escalar de bloque no soportado: {r!r}")
+                raise ValueError(f"tab in the indentation of a block scalar not supported: {r!r}")
             if len(r) > body_indent:
                 if not segs and not r.strip():
                     raise ValueError(
-                        f"línea inicial de solo espacios más indentada que el escalar de bloque: {raw[pos[idx]]!r}"
+                        f"leading whitespace-only line indented deeper than the block scalar: {raw[pos[idx]]!r}"
                     )
                 segs.append([r[body_indent:], 0])
                 last = i
@@ -315,19 +315,19 @@ def _mini_yaml(text: str) -> dict:
         return out, first_line_from(end)
 
     def quoted_scalar(idx: int, indent: int, t: str):
-        # un escalar entre comillas que sigue en otras líneas se lee de `raw`:
-        # dentro de las comillas '#' es texto y no un comentario
+        # a quoted scalar that continues on other lines is read from `raw`:
+        # inside the quotes '#' is text, not a comment
         q, text, end, blanks = t[0], t, pos[idx] + 1, 0
         while True:
             close = _closing_quote(text, q)
             if close is not None:
                 rest = text[close + 1 :]
                 if rest.strip() and not (rest[:1] in " \t" and rest.strip().startswith("#")):
-                    raise ValueError(f"texto tras la comilla de cierre: {raw[end - 1]!r}")
+                    raise ValueError(f"text after the closing quote: {raw[end - 1]!r}")
                 in_scalar.update(range(pos[idx] + 1, end))
                 return _scalar(text[: close + 1]), first_line_from(end)
             if end >= len(raw) or (raw[end].strip() and _indent_of(raw[end]) <= indent):
-                raise ValueError(f"comilla sin cerrar: {raw[pos[idx]]!r}")
+                raise ValueError(f"unclosed quote: {raw[pos[idx]]!r}")
             r = raw[end]
             end += 1
             if not r.strip():
@@ -335,33 +335,33 @@ def _mini_yaml(text: str) -> dict:
                 continue
             _check_tab(r)
             if q == '"' and (len(text) - len(text.rstrip("\\"))) % 2:
-                raise ValueError(f"salto de línea escapado (\\ al final de línea) no soportado: {raw[pos[idx]]!r}")
+                raise ValueError(f"escaped line break (\\ at end of line) not supported: {raw[pos[idx]]!r}")
             text +=("\n" * blanks if blanks else " ") + r.strip()
             blanks = 0
 
     def plain_scalar(idx: int, indent: int, v: str):
-        # un escalar que sigue en líneas más indentadas se une con un espacio
+        # a scalar that continues on more indented lines is joined with a space
         t = v.strip()
         if t[:1] in ('"', "'"):
             return quoted_scalar(idx, indent, t)
         closed = len(t) > 1 and t[0] in _CLOSERS and t[-1] == _CLOSERS[t[0]]
         parts, nxt = [t], idx + 1
         if not closed and t[:1] == "{" and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
-            raise ValueError(f"mapa en flujo {{ }} multilínea no soportado: {lines[idx]!r}")
+            raise ValueError(f"multi-line flow map {{ }} not supported: {lines[idx]!r}")
         while not closed and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
             _check_tab(lines[nxt])
             c = lines[nxt].strip()
             if t[:1] not in "{[" and (": " in c or c.endswith(":")):
-                raise ValueError(f"indentación inesperada: {lines[nxt]!r}")
+                raise ValueError(f"unexpected indentation: {lines[nxt]!r}")
             gap = raw[pos[nxt - 1] + 1 : pos[nxt]]
             if (nxt - 1) in commented or any(g.strip() for g in gap):
-                raise ValueError(f"comentario dentro de un escalar multilínea: {lines[nxt]!r}")
+                raise ValueError(f"comment inside a multi-line scalar: {lines[nxt]!r}")
             parts.append("\n" * len(gap) if gap else " ")
             parts.append(c)
             nxt += 1
         joined = "".join(parts)
         if t[0] in "{[" and not joined.endswith(_CLOSERS[t[0]]):
-            raise ValueError(f"'{t[0]}' sin cerrar o con texto tras el cierre: {lines[idx]!r}")
+            raise ValueError(f"'{t[0]}' unclosed or with text after the closer: {lines[idx]!r}")
         if len(parts) == 1:
             return _scalar(t), nxt
         return (_scalar(joined) if t[0] in _CLOSERS else joined), nxt
@@ -374,7 +374,7 @@ def _mini_yaml(text: str) -> dict:
         return plain_scalar(idx, indent, v)
 
     def parse_block(idx: int, indent: int):
-        # devuelve (valor, siguiente_idx)
+        # returns (value, next_idx)
         if idx >= len(lines):
             return None, idx
         first = lines[idx]
@@ -391,9 +391,9 @@ def _mini_yaml(text: str) -> dict:
             if ind < indent or line.strip().startswith("- "):
                 break
             if ind > indent:
-                raise ValueError(f"indentación inesperada: {line!r}")
+                raise ValueError(f"unexpected indentation: {line!r}")
             if ":" not in line:
-                raise ValueError(f"línea sin ':' en mapa: {line!r}")
+                raise ValueError(f"line without ':' in a map: {line!r}")
             k, v = line.strip().split(":", 1)
             k = k.strip()
             if v.strip() == "":
@@ -421,7 +421,7 @@ def _mini_yaml(text: str) -> dict:
             rest = line.strip()[2:]
             _check_dash_value(rest, line)
             if ":" in rest and not rest.lstrip().startswith(("{", "[", '"', "'")):
-                # mapa inline que empieza en la línea del guion
+                # inline map that starts on the dash line
                 k, v = rest.split(":", 1)
                 sub_indent = ind + 2
                 lines[idx] = " " * sub_indent + rest
@@ -435,7 +435,7 @@ def _mini_yaml(text: str) -> dict:
     val, _ = parse_block(0, 0)
     for i in tab_blank:
         if i not in in_scalar:
-            raise ValueError(f"tab en la indentación de una línea vacía o de comentario no soportado: {raw[i]!r}")
+            raise ValueError(f"tab in the indentation of a blank or comment line not supported: {raw[i]!r}")
     return val if isinstance(val, dict) else {}
 
 
@@ -447,12 +447,12 @@ def parse_yaml(text: str) -> dict:
 
 
 # --------------------------------------------------------------------------
-# Documentos
+# Documents
 # --------------------------------------------------------------------------
 @dataclass
 class Doc:
     path: Path
-    rel: str  # ruta relativa al bundle, con /
+    rel: str  # path relative to the bundle, with /
     frontmatter: dict | None
     body: str
     fm_error: str | None = None
@@ -507,7 +507,7 @@ def extract_links(body: str) -> list[str]:
 
 
 def resolve_link(bundle: Path, doc: Doc, target: str) -> Path | None:
-    """Devuelve la ruta en disco de un enlace interno, o None si es externo."""
+    """Return the on-disk path of an internal link, or None if it is external."""
     if re.match(r"^[a-z][a-z0-9+.-]*:", target) or target.startswith("#"):
         return None
     target = target.split("#", 1)[0]
@@ -564,7 +564,7 @@ def declared_version(bundle: Path) -> str | None:
 
 
 def version_signals(docs: list[Doc]) -> tuple[int, int]:
-    """(n_conceptos con señales 0.2, n_conceptos con señales 0.1)."""
+    """(n concepts with 0.2 signals, n concepts with 0.1 signals)."""
     s02 = s01 = 0
     for d in docs:
         if d.is_reserved or not d.frontmatter:
@@ -578,7 +578,7 @@ def version_signals(docs: list[Doc]) -> tuple[int, int]:
 
 
 def detect_version(bundle: Path, docs: list[Doc] | None = None) -> tuple[str, str]:
-    """Devuelve (version, origen) con origen en {declared, heuristic, default, mixed}."""
+    """Return (version, origin) with origin in {declared, heuristic, default, mixed}."""
     dv = declared_version(bundle)
     if dv in SUPPORTED_VERSIONS:
         return dv, "declared"
@@ -594,7 +594,7 @@ def detect_version(bundle: Path, docs: list[Doc] | None = None) -> tuple[str, st
 
 
 def find_bundle(start: Path | None = None) -> Path | None:
-    """Busca knowledge/ hacia arriba desde start (o cwd)."""
+    """Search upwards from start (or cwd) for knowledge/."""
     p = (start or Path.cwd()).resolve()
     for cand in [p, *p.parents]:
         if (cand / "knowledge" / "index.md").exists():

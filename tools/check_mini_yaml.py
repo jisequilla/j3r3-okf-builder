@@ -61,7 +61,7 @@ CASES: list[tuple[str, str, dict]] = [
     ("double-quoted \\n", "a: \"nl\\nhere\"\n", {"a": "nl\nhere"}),
     ("double-quoted \\\\", "a: \"back\\\\slash\"\n", {"a": "back\\slash"}),
     ("double-quoted \\/ \\r \\0", "a: \"s\\/l\\rr\\0z\"\n", {"a": "s/l\rr\0z"}),
-    ("double-quoted \\uXXXX", "a: \"\\u00e9\"\n", {"a": "é"}),
+    ("double-quoted \\uXXXX", "a: \"\\u00e9\"\n", {"a": "\u00e9"}),
     ("double-quoted \\\" before a comment", "a: \"x\\\" # y\"  # c\n", {"a": "x\" # y"}),
     ("literal tab inside double quotes", "a: \"x\ty\"\n", {"a": "x\ty"}),
     ("tab-only blank line inside double quotes", "a: \"x\n\t\n  y\"\n", {"a": "x\ny"}),
@@ -71,7 +71,7 @@ CASES: list[tuple[str, str, dict]] = [
     ("flow list and map on the dash line", "a:\n- [1, 2]\n- {x: 1}\n", {"a": [[1, 2], {"x": 1}]}),
     ("multi-line flow list opened on the key line", "a: [1,\n  2]\n", {"a": [1, 2]}),
     ("multi-line flow list opened on the dash line", "a:\n- [1,\n  2]\n", {"a": [[1, 2]]}),
-    # un indicador al inicio de una línea de continuación es texto, no un indicador
+    # an indicator at the start of a continuation line is text, not an indicator
     ("plain continuation starting with [", "a: x\n  [y]\n", {"a": "x [y]"}),
     ("list item continuation starting with {", "items:\n- x\n  {y}\n", {"items": ["x {y}"]}),
     ("plain continuation starting with & | `", "a: x\n  &y\nb: x\n  |y\nc: x\n  `y\n",
@@ -85,35 +85,35 @@ CASES: list[tuple[str, str, dict]] = [
 
 # (text, substring the ValueError message must contain)
 UNSUPPORTED: list[tuple[str, str]] = [
-    ("a: |+\n  x\n", "bloque"), ("a: |2\n  x\n", "bloque"), ("a: >+\n  x\n", "bloque"),
-    ("a: >2\n  x\n", "bloque"), ("a: |-2\n  x\n", "bloque"),
-    ("---\na: 1\n", "multidocumento"), ("a: 1\n...\n", "multidocumento"),
-    ("a: &x 1\n", "anclas"), ("a: &x\n  b: 1\n", "anclas"), ("a: !!str 1\n", "tags"), ("a: *x\n", "alias"),
-    ("a: \"one\n  two\nb: 1\n", "sin cerrar"), ("a: 'one\n  two\n", "sin cerrar"), ("a: [1,\n  2\n", "sin cerrar"),
-    ("a: \"one\\\n  two\"\n", "salto de línea escapado"),
+    ("a: |+\n  x\n", "block scalar"), ("a: |2\n  x\n", "block scalar"), ("a: >+\n  x\n", "block scalar"),
+    ("a: >2\n  x\n", "block scalar"), ("a: |-2\n  x\n", "block scalar"),
+    ("---\na: 1\n", "multi-document"), ("a: 1\n...\n", "multi-document"),
+    ("a: &x 1\n", "anchors"), ("a: &x\n  b: 1\n", "anchors"), ("a: !!str 1\n", "tags"), ("a: *x\n", "alias"),
+    ("a: \"one\n  two\nb: 1\n", "unclosed"), ("a: 'one\n  two\n", "unclosed"), ("a: [1,\n  2\n", "unclosed"),
+    ("a: \"one\\\n  two\"\n", "escaped line break"),
     ("a: \"\\x41\"\n", "\\x"), ("a: \"\\e\"\n", "\\e"), ("a: \"\\U0001F600\"\n", "\\U"),
     ("a: \"\\N\"\n", "\\N"), ("a: \"\\_\"\n", "\\_"), ("a: \"\\ud800\"\n", "surrogate"), ("a: \"\\u12\"\n", "\\u"),
     ("a: one\n\ttwo\n", "tab"), ("a:\n\tb: 1\n", "tab"), ("a: \"one\n\ttwo\"\n", "tab"),
     ("a: |\n  x\n\t\n  y\n", "tab"), ("a: |\n  \t\n", "tab"), ("a: |-\n   \t\n", "tab"),
-    ("a: >\n \t\n", "tab"), ("a: |\n\n\t\n", "tab"),("a: |\n    \n  x\n", "solo espacios"),
+    ("a: >\n \t\n", "tab"), ("a: |\n\n\t\n", "tab"),("a: |\n    \n  x\n", "whitespace-only"),
     ("a: 1\n\t\nb: 2\n", "tab"), ("a: 1\n\t# c\n", "tab"), ("a: 1\n \t\nb: 2\n", "tab"),
     ("\t\na: 1\n", "tab"), ("a:\n\t\n- x\n", "tab"), ("a: x\n\t\n  y\n", "tab"), ("a: [1,\n\t\n 2]\n", "tab"),
-    ("a: {x: 1,\n  y: 2}\n", "flujo"),
-    ("a: \"x\" y\n  z\n", "comilla de cierre"), ("a: \"x\" y\n", "comilla de cierre"), ("a: 'x\n", "sin cerrar"),
-    ("a: ['x' y]\n", "comilla de cierre"),
-    # un indicador al inicio de línea (fuera de un cuerpo de bloque): siempre error
-    ("a:\n  {x: 1}\n", "mapa en flujo"), ("a:\n  {x: 1,\n  y: 2}\n", "mapa en flujo"),
-    ("{x: 1}\n", "mapa en flujo"), ("a:\n  [1, 2]\n", "lista en flujo"),
-    ("a:\n  &x\n", "anclas"), ("a:\n  *x\n", "alias"), ("!!str a: 1\n", "tags"),
-    ("? a\n: 1\n", "claves complejas"), ("%YAML 1.2\na: 1\n", "directivas"),
-    ("@a: 1\n", "reservado @"), ("`a`: 1\n", "reservado `"),
-    ("a:\n  |\n    x\n", "bloque |"), ("a:\n  >\n    x\n", "bloque >"),
-    ("a:\n- - x\n", "secuencia compacta"), ("- - x\n", "secuencia compacta"),
-    ("a:\n- - x: 1\n", "secuencia compacta"), ("a: - x\n", "secuencia compacta"),
-    ("a: [1, 2] x\n", "sin cerrar"), ("a: {x: 1} y\n", "sin cerrar"),
-    # el mismo indicador como valor en la línea de la clave o guion
-    ("a: ? x\n", "claves complejas"), ("a: %x\n", "directivas"), ("a: @x\n", "reservado @"),
-    ("a: `x\n", "reservado `"), ("a:\n- @x\n", "reservado @"),
+    ("a: {x: 1,\n  y: 2}\n", "flow map"),
+    ("a: \"x\" y\n  z\n", "closing quote"), ("a: \"x\" y\n", "closing quote"), ("a: 'x\n", "unclosed"),
+    ("a: ['x' y]\n", "closing quote"),
+    # an indicator at the start of a line (outside a block body): always an error
+    ("a:\n  {x: 1}\n", "flow map"), ("a:\n  {x: 1,\n  y: 2}\n", "flow map"),
+    ("{x: 1}\n", "flow map"), ("a:\n  [1, 2]\n", "flow list"),
+    ("a:\n  &x\n", "anchors"), ("a:\n  *x\n", "alias"), ("!!str a: 1\n", "tags"),
+    ("? a\n: 1\n", "complex keys"), ("%YAML 1.2\na: 1\n", "directives"),
+    ("@a: 1\n", "reserved character @"), ("`a`: 1\n", "reserved character `"),
+    ("a:\n  |\n    x\n", "block scalar |"), ("a:\n  >\n    x\n", "block scalar >"),
+    ("a:\n- - x\n", "compact sequence"), ("- - x\n", "compact sequence"),
+    ("a:\n- - x: 1\n", "compact sequence"), ("a: - x\n", "compact sequence"),
+    ("a: [1, 2] x\n", "unclosed"), ("a: {x: 1} y\n", "unclosed"),
+    # the same indicator as a value on the key or dash line
+    ("a: ? x\n", "complex keys"), ("a: %x\n", "directives"), ("a: @x\n", "reserved character @"),
+    ("a: `x\n", "reserved character `"), ("a:\n- @x\n", "reserved character @"),
 ]
 
 

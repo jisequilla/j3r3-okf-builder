@@ -26,7 +26,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T19:31:49Z }
 | Directorio | `arquitectura/` · `decisiones/` · `dominio/` · `sistemas/` · `datos/` · `metricas/` · `computaciones/` · `politicas/` | `architecture/` · `decisions/` · `domain/` · `systems/` · `data/` · `metrics/` · `computations/` · `policies/` |
 | `type` | `Proyecto` · `Vista de Arquitectura` · `Decisión de Arquitectura` · `Término` · `Glosario` · `Sistema` · `Tabla` · `Métrica` · `Política` · `Referencia` | `Project` · `Architecture View` · `Architecture Decision` · `Term` · `Glossary` · `System` · `Table` · `Metric` · `Policy` · `Reference` |
 | `decision_status` | `propuesta` · `aceptada` · `sustituida` · `rechazada` | `proposed` · `accepted` · `superseded` · `rejected` |
-| Entrada de `log.md` | `Creación` · `Actualización` · `Deprecación` · `Inicialización` | `Creation` · `Update` · `Deprecation` · `Initialization` |
+| Entrada de `log.md` | `Creación` · `Actualización` · `Deprecación` · `Inicialización` · `Migración` · `Verificación` | `Creation` · `Update` · `Deprecation` · `Initialization` · `Migration` · `Verification` |
 | Fichero fijo | `proyecto.md` | `project.md` |
 | Salida del linter | `CONFORMANTE` · `conceptos` · `errores` · `avisos` | `CONFORMANT` · `concepts` · `errors` · `warnings` |
 

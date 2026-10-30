@@ -1,5 +1,5 @@
-> _(vacío)_
+> Execution instructions (executors) for computations.
 
 # skills
 
-_(vacío)_
+_(empty)_
