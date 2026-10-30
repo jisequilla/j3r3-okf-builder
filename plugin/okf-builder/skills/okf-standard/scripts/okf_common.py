@@ -2,7 +2,8 @@
 
 Sin dependencias externas: si PyYAML está instalado se usa; si no, un parser
 YAML reducido suficiente para frontmatter OKF (mapas, listas, flow mappings
-`{ a: b }`, flow lists `[a, b]`, escalares).
+`{ a: b }`, flow lists `[a, b]`, escalares, escalares multilínea y de bloque
+`|`, `|-`, `>`, `>-`). Con OKF_NO_PYYAML=1 se fuerza el parser reducido.
 """
 from __future__ import annotations
 
@@ -25,6 +26,8 @@ VALID_STATUS = {"draft", "stable", "deprecated"}
 try:  # pragma: no cover
     import yaml as _yaml  # type: ignore
 except Exception:  # pragma: no cover
+    _yaml = None
+if os.environ.get("OKF_NO_PYYAML") == "1":
     _yaml = None
 
 
@@ -110,9 +113,104 @@ def _strip_comment(line: str) -> str:
     return out.rstrip()
 
 
+_BLOCK_HEADERS = {"|", "|-", ">", ">-"}
+_CLOSERS = {'"': '"', "'": "'", "{": "}", "[": "]"}
+
+
+def _indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _check_supported(v: str, line: str) -> None:
+    t = v.strip()
+    if t[:1] in ("|", ">") and t not in _BLOCK_HEADERS:
+        raise ValueError(f"escalar de bloque no soportado (solo |, |-, >, >-): {line!r}")
+    if t[:1] in ("&", "*", "!"):
+        raise ValueError(f"anclas, alias y tags no soportados: {line!r}")
+
+
 def _mini_yaml(text: str) -> dict:
-    lines = [_strip_comment(l) for l in text.splitlines()]
-    lines = [l for l in lines if l.strip()]
+    raw = text.splitlines()
+    for r in raw:
+        if r.rstrip() in ("---", "..."):
+            raise ValueError(f"multidocumento no soportado: {r!r}")
+    # líneas significativas (sin comentarios ni vacías) y su posición en `raw`
+    lines: list[str] = []
+    pos: list[int] = []
+    commented: set[int] = set()
+    for i, r in enumerate(raw):
+        l = _strip_comment(r)
+        if l.strip():
+            if l != r.rstrip():
+                commented.add(len(lines))
+            lines.append(l)
+            pos.append(i)
+
+    def first_line_from(raw_idx: int) -> int:
+        j = 0
+        while j < len(pos) and pos[j] < raw_idx:
+            j += 1
+        return j
+
+    def block_scalar(idx: int, indent: int, header: str):
+        # | |- > >- se leen de `raw` para conservar '#' y líneas vacías
+        start = end = pos[idx] + 1
+        body_indent = None
+        while end < len(raw):
+            r = raw[end]
+            if r.strip():
+                ind = _indent_of(r)
+                if (body_indent is None and ind <= indent) or (body_indent is not None and ind < body_indent):
+                    break
+                if body_indent is None:
+                    body_indent = ind
+            end += 1
+        content = [r[body_indent:] if r.strip() else "" for r in raw[start:end]] if body_indent else []
+        while content and content[-1] == "":
+            content.pop()
+        if header[0] == "|":
+            out = "\n".join(content)
+        else:
+            if any(c[:1] in (" ", "\t") for c in content):
+                raise ValueError(f"escalar plegado con líneas más indentadas no soportado: {raw[pos[idx]]!r}")
+            out, blanks = "", 0
+            for c in content:
+                if c == "":
+                    blanks += 1
+                    continue
+                if out:
+                    out += "\n" * blanks if blanks else " "
+                out += c
+                blanks = 0
+        if out and not header.endswith("-"):
+            out += "\n"
+        return out, first_line_from(end)
+
+    def plain_scalar(idx: int, indent: int, v: str):
+        # un escalar que sigue en líneas más indentadas se une con un espacio
+        t = v.strip()
+        closed = len(t) > 1 and t[0] in _CLOSERS and t[-1] == _CLOSERS[t[0]]
+        parts, nxt = [t], idx + 1
+        while not closed and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
+            c = lines[nxt].strip()
+            if ": " in c or c.endswith(":"):
+                raise ValueError(f"indentación inesperada: {lines[nxt]!r}")
+            gap = raw[pos[nxt - 1] + 1 : pos[nxt]]
+            if (nxt - 1) in commented or any(g.strip() for g in gap):
+                raise ValueError(f"comentario dentro de un escalar multilínea: {lines[nxt]!r}")
+            parts.append("\n" * len(gap) if gap else " ")
+            parts.append(c)
+            nxt += 1
+        if len(parts) == 1:
+            return _scalar(t), nxt
+        joined = "".join(parts)
+        return (_scalar(joined) if t[0] in _CLOSERS else joined), nxt
+
+    def value(idx: int, indent: int, v: str):
+        _check_supported(v, lines[idx])
+        if v.strip() in _BLOCK_HEADERS:
+            return block_scalar(idx, indent, v.strip())
+        return plain_scalar(idx, indent, v)
 
     def parse_block(idx: int, indent: int):
         # devuelve (valor, siguiente_idx)
@@ -147,8 +245,7 @@ def _mini_yaml(text: str) -> dict:
                 d[k] = None
                 idx += 1
             else:
-                d[k] = _scalar(v)
-                idx += 1
+                d[k], idx = value(idx, indent, v)
         return d, idx
 
     def parse_list(idx: int, indent: int):
@@ -167,8 +264,8 @@ def _mini_yaml(text: str) -> dict:
                 val, idx = parse_map(idx, sub_indent)
                 lst.append(val)
             else:
-                lst.append(_scalar(rest))
-                idx += 1
+                val, idx = value(idx, indent, rest)
+                lst.append(val)
         return lst, idx
 
     val, _ = parse_block(0, 0)
