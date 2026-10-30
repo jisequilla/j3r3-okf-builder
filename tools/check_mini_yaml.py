@@ -64,6 +64,8 @@ CASES: list[tuple[str, str, dict]] = [
     ("double-quoted \\uXXXX", "a: \"\\u00e9\"\n", {"a": "é"}),
     ("double-quoted \\\" before a comment", "a: \"x\\\" # y\"  # c\n", {"a": "x\" # y"}),
     ("literal tab inside double quotes", "a: \"x\ty\"\n", {"a": "x\ty"}),
+    ("tab-only blank line inside double quotes", "a: \"x\n\t\n  y\"\n", {"a": "x\ny"}),
+    ("tab-only blank line inside single quotes", "a: 'x\n\t\n  y'\n", {"a": "x\ny"}),
 ]
 
 # (text, substring the ValueError message must contain)
@@ -78,6 +80,8 @@ UNSUPPORTED: list[tuple[str, str]] = [
     ("a: \"\\N\"\n", "\\N"), ("a: \"\\_\"\n", "\\_"), ("a: \"\\ud800\"\n", "surrogate"), ("a: \"\\u12\"\n", "\\u"),
     ("a: one\n\ttwo\n", "tab"), ("a:\n\tb: 1\n", "tab"), ("a: \"one\n\ttwo\"\n", "tab"),
     ("a: |\n  x\n\t\n  y\n", "tab"), ("a: |\n    \n  x\n", "solo espacios"),
+    ("a: 1\n\t\nb: 2\n", "tab"), ("a: 1\n\t# c\n", "tab"), ("a: 1\n \t\nb: 2\n", "tab"),
+    ("\t\na: 1\n", "tab"), ("a:\n\t\n- x\n", "tab"), ("a: x\n\t\n  y\n", "tab"), ("a: [1,\n\t\n 2]\n", "tab"),
     ("a: {x: 1,\n  y: 2}\n", "flujo"),
     ("a: \"x\" y\n  z\n", "comilla de cierre"), ("a: \"x\" y\n", "comilla de cierre"), ("a: 'x\n", "sin cerrar"),
     ("a: ['x' y]\n", "comilla de cierre"),

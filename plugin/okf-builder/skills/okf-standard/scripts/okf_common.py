@@ -199,6 +199,10 @@ def _mini_yaml(text: str) -> dict:
     lines: list[str] = []
     pos: list[int] = []
     commented: set[int] = set()
+    # líneas vacías o de solo comentario con tab en la indentación: error salvo
+    # que queden dentro de un escalar entre comillas o de bloque (`in_scalar`)
+    tab_blank: list[int] = []
+    in_scalar: set[int] = set()
     for i, r in enumerate(raw):
         l = _strip_comment(r)
         if l.strip():
@@ -206,6 +210,8 @@ def _mini_yaml(text: str) -> dict:
                 commented.add(len(lines))
             lines.append(l)
             pos.append(i)
+        elif "\t" in r[: _indent_of(r)]:
+            tab_blank.append(i)
 
     def first_line_from(raw_idx: int) -> int:
         j = 0
@@ -227,6 +233,7 @@ def _mini_yaml(text: str) -> dict:
                 if body_indent is None:
                     body_indent = ind
             end += 1
+        in_scalar.update(range(start, end))
         if body_indent is None:
             return "", first_line_from(end)
         # como PyYAML: una línea más larga que la indentación del cuerpo es texto
@@ -272,6 +279,7 @@ def _mini_yaml(text: str) -> dict:
                 rest = text[close + 1 :]
                 if rest.strip() and not (rest[:1] in " \t" and rest.strip().startswith("#")):
                     raise ValueError(f"texto tras la comilla de cierre: {raw[end - 1]!r}")
+                in_scalar.update(range(pos[idx] + 1, end))
                 return _scalar(text[: close + 1]), first_line_from(end)
             if end >= len(raw) or (raw[end].strip() and _indent_of(raw[end]) <= indent):
                 raise ValueError(f"comilla sin cerrar: {raw[pos[idx]]!r}")
@@ -378,6 +386,9 @@ def _mini_yaml(text: str) -> dict:
         return lst, idx
 
     val, _ = parse_block(0, 0)
+    for i in tab_blank:
+        if i not in in_scalar:
+            raise ValueError(f"tab en la indentación de una línea vacía o de comentario no soportado: {raw[i]!r}")
     return val if isinstance(val, dict) else {}
 
 
