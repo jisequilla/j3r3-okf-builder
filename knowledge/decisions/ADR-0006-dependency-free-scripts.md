@@ -1,23 +1,23 @@
 ---
 type: Architecture Decision
-title: "ADR-0006: Scripts Python sin dependencias externas"
-description: Las herramientas (init, lint, index, migrate) son Python ≥ 3.9 sin pip; PyYAML se usa solo si está presente.
+title: "ADR-0006: Python scripts without external dependencies"
+description: The tools (init, lint, index, migrate) are Python ≥ 3.9 without pip; PyYAML is used only if present.
 tags: [adr, tooling]
 status: stable
 adr_id: ADR-0006
 decision_status: accepted
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Contexto
+# Context
 
-Las herramientas deben correr en el sandbox de cualquier agente (Claude, Copilot, Gemini, M365) y en CI, donde no siempre hay red ni permisos para instalar paquetes.
+The tools must run in any agent's sandbox (Claude, Copilot, Gemini, M365) and in CI, where there is not always network access or permission to install packages.
 
-# Decisión
+# Decision
 
-Sin dependencias. `okf_common.py` incluye un parser YAML reducido para frontmatter OKF y usa PyYAML si existe. Los scripts se copian tal cual a `tools/okf/` de otros repos para CI.
+No dependencies. `okf_common.py` includes a reduced YAML parser for OKF frontmatter and uses PyYAML if it exists. The scripts are copied as they are into `tools/okf/` of other repos for CI.
 
-# Consecuencias
+# Consequences
 
-- Positivas: ejecutables en cualquier sandbox; copiables.
-- Negativas: el mini-parser no cubre YAML completo (anclas, multilínea `|`); suficiente para frontmatter OKF, y se prueba contra los bundles reales de Google.
+- Positive: runnable in any sandbox; copyable.
+- Negative: the mini-parser does not cover full YAML (anchors, multi-line `|`); it is enough for OKF frontmatter, and it is tested against Google's real bundles.

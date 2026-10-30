@@ -1,23 +1,23 @@
 ---
 type: Architecture Decision
-title: "ADR-0008: El repo okf-builder documenta su propio conocimiento con OKF"
-description: Este repositorio aplica el perfil knowledge/1.0 a sí mismo; las decisiones del proyecto son ADRs en knowledge/decisions.
-tags: [adr, proceso]
+title: "ADR-0008: The okf-builder repo documents its own knowledge with OKF"
+description: This repository applies profile knowledge/1.0 to itself; the project's decisions are ADRs in knowledge/decisions.
+tags: [adr, process]
 status: stable
 adr_id: ADR-0008
 decision_status: accepted
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Contexto
+# Context
 
-Las decisiones de diseño del estándar y del plugin vivían en conversaciones con el agente. Un estándar de conocimiento que no se usa a sí mismo no es creíble ni se prueba de verdad.
+The design decisions for the standard and the plugin lived in conversations with the agent. A knowledge standard that is not used on itself is neither credible nor truly tested.
 
-# Decisión
+# Decision
 
-`knowledge/` en la raíz de este repo, conformante con el perfil, validado en `make lint` con `--strict`. Cualquier agente que trabaje en el repo lee primero `knowledge/index.md` (regla en [AGENTS.md](/policies/agents-in-this-repo.md)). Los cambios de decisión se registran como nuevos ADR que sustituyen al anterior.
+`knowledge/` at the root of this repo, conformant with the profile, validated in `make lint` with `--strict`. Any agent working in the repo reads `knowledge/index.md` first (rule in [AGENTS.md](/policies/agents-in-this-repo.md)). Decision changes are recorded as new ADRs that supersede the previous one.
 
-# Consecuencias
+# Consequences
 
-- Positivas: el estándar se prueba en uso real; los agentes de cualquier plataforma heredan el contexto; la historia de decisiones es consultable.
-- Negativas: disciplina de mantenimiento; mitigada porque `okf-capture` y `okf-lint` hacen el trabajo mecánico.
+- Positive: the standard is tested in real use; agents on any platform inherit the context; the decision history can be queried.
+- Negative: maintenance discipline; mitigated because `okf-capture` and `okf-lint` do the mechanical work.

@@ -1,45 +1,45 @@
 ---
 type: Architecture Decision
-title: "ADR-0009: Construir los cambios multi-etapa por capas y tickets delegados"
-description: Los cambios que tocan varias capas del repo se dividen en tickets verificables que construyen agentes en worktrees aislados, y la sesión principal solo juzga, verifica y mergea.
-tags: [adr, proceso, agentes]
+title: "ADR-0009: Build multi-stage changes in layers and delegated tickets"
+description: Changes that touch several layers of the repo are split into verifiable tickets that agents build in isolated worktrees, and the main session only judges, verifies and merges.
+tags: [adr, process, agents]
 status: draft
 adr_id: ADR-0009
 decision_status: accepted
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T19:20:13Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Contexto
+# Context
 
-Hay cambios que cruzan todo el repo: el estándar, los scripts, los skills y el propio `knowledge/` (por ejemplo, traducir el perfil o renombrar su vocabulario). Hechos en una sola conversación, mezclan decisión e implementación, se saltan etapas de verificación y dejan el trabajo a medias cuando el contexto se compacta. Un subagente solo sabe lo que dice su brief, y su informe de "terminado" es una afirmación, no una prueba.
+Some changes cut across the whole repo: the standard, the scripts, the skills and `knowledge/` itself (for example, translating the profile or renaming its vocabulary). Done in a single conversation, they mix decision and implementation, skip verification stages and leave the work half done when the context is compacted. A subagent only knows what its brief says, and its "done" report is a claim, not a proof.
 
-# Decisión
+# Decision
 
-Adoptamos un patrón de construcción por capas y tickets, detallado en el runbook [Construir un cambio por capas](/runbooks/build-in-layers.md):
+We adopt a pattern of building in layers and tickets, detailed in the runbook [Build a change in layers](/runbooks/build-in-layers.md):
 
-1. **Capas en orden de dependencia.** Lo que decide el owner (ADR, vocabulario, glosario) va primero y se mergea y se sube a `origin/main` antes de lanzar las capas que dependen de ello.
-2. **Un ticket por unidad de trabajo**, preciso por ejemplos: tabla de entrada → salida esperada, lista cerrada de ficheros, patrón a copiar como `fichero:línea` y comandos de verificación exactos. Un ticket que no se puede escribir así no está listo para delegar.
-3. **La sesión principal juzga y no implementa.** Cada ticket pasa por pre-flight, builder en worktree con PR en draft, uno o dos revisores con contexto fresco (sin el informe del builder) y como máximo dos rondas de arreglos.
-4. **Verificación en capas, ninguna fiable por sí sola:** el builder demuestra cada criterio de aceptación (revertir → rojo → restaurar), los revisores intentan romper el diff, y la sesión principal vuelve a ejecutar `make test` y `make lint` sobre main mergeado antes de cerrar.
-5. **La prosa también se verifica de forma mecánica.** Como no tiene tests, cada ticket de prosa lleva una comprobación (por ejemplo, un grep de vocabulario residual que falla con un fichero plantado) y una pasada de revisión de deriva de significado contra el glosario.
-6. **Seguimiento independiente del tracker.** Cada ticket tiene su registro de trabajo (en el entorno del owner, un bead de `bd` local), que se cierra solo después del merge y con el PR citado. El repo no depende de ningún tracker.
+1. **Layers in dependency order.** What the owner decides (ADR, vocabulary, glossary) goes first, and is merged and pushed to `origin/main` before launching the layers that depend on it.
+2. **One ticket per unit of work**, precise by example: input → expected output table, closed list of files, pattern to copy as `file:line` and exact verification commands. A ticket that cannot be written this way is not ready to delegate.
+3. **The main session judges and does not implement.** Each ticket goes through pre-flight, a builder in a worktree with a draft PR, one or two reviewers with fresh context (without the builder's report) and at most two rounds of fixes.
+4. **Verification in layers, none reliable on its own:** the builder proves each acceptance criterion (revert → red → restore), the reviewers try to break the diff, and the main session reruns `make test` and `make lint` on the merged main before closing.
+5. **Prose is verified mechanically too.** Since it has no tests, each prose ticket carries a check (for example, a grep for leftover vocabulary that fails on a planted file) and a meaning-drift review pass against the glossary.
+6. **Tracking independent of the tracker.** Each ticket has its work record (in the owner's environment, a local `bd` bead), which is closed only after the merge and with the PR cited. The repo does not depend on any tracker.
 
-# Alternativas consideradas
+# Alternatives considered
 
-| Alternativa | Pros | Contras | Motivo de descarte |
+| Alternative | Pros | Cons | Reason rejected |
 |---|---|---|---|
-| Todo en la sesión principal | Sin coste de coordinación | Mezcla juicio e implementación; las etapas se saltan; frágil ante la compactación | No escala a cambios de ~150 ficheros |
-| Fan-out libre de subagentes sin tickets | Rápido | Deriva de terminología; sin criterios de aceptación; los informes se aceptan como prueba | La verificación queda en manos del implementador |
-| Copiar el tooling completo de otro repo (generadores de oleadas, mutation runs, delegation log) | Probado en otro contexto | Peso desproporcionado para unos pocos tickets | KISS: se incorporará si el volumen de tickets lo justifica |
+| Everything in the main session | No coordination cost | Mixes judgment and implementation; stages get skipped; fragile under compaction | Does not scale to changes of ~150 files |
+| Free fan-out of subagents without tickets | Fast | Terminology drift; no acceptance criteria; reports are accepted as proof | Verification is left to the implementer |
+| Copy the full tooling of another repo (wave generators, mutation runs, delegation log) | Proven in another context | Disproportionate weight for a few tickets | KISS: it will be added if the ticket volume justifies it |
 
-# Consecuencias
+# Consequences
 
-- Positivas: cada etapa deja un PR revisable; los cambios grandes resisten la compactación; cualquier agente, de cualquier plataforma, puede seguir el mismo procedimiento leyendo el runbook.
-- Negativas / deuda asumida: más ceremonia por cambio; solo compensa en cambios multi-etapa, así que los arreglos pequeños se siguen haciendo inline.
-- Acciones derivadas: aplicar el patrón a la migración del repo al inglés.
+- Positive: each stage leaves a reviewable PR; large changes survive compaction; any agent, on any platform, can follow the same procedure by reading the runbook.
+- Negative / accepted debt: more ceremony per change; it only pays off for multi-stage changes, so small fixes are still done inline.
+- Follow-up actions: apply the pattern to migrating the repo to English.
 
-# Relacionados
+# Related
 
-* [Construir un cambio por capas](/runbooks/build-in-layers.md)
-* [Reglas para agentes que trabajan en este repo](/policies/agents-in-this-repo.md)
+* [Build a change in layers](/runbooks/build-in-layers.md)
+* [Rules for agents working in this repo](/policies/agents-in-this-repo.md)
 * [ADR-0008: dogfooding](/decisions/ADR-0008-dogfooding.md)

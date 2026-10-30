@@ -1,16 +1,16 @@
 ---
 type: Term
-title: Concepto
-description: Un fichero .md no reservado dentro de un bundle; su ruta sin .md es su identidad.
-tags: [dominio, glosario, okf]
+title: Concept
+description: A non-reserved .md file inside a bundle; its path without .md is its identity.
+tags: [domain, glossary, okf]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Definición
+# Definition
 
-Un fichero .md no reservado dentro de un bundle; su ruta sin .md es su identidad.
+A non-reserved .md file inside a bundle; its path without .md is its identity.
 
-# Dónde aparece
+# Where it appears
 
-* [Estándar](/references/okf-standard.md)
+* [Standard](/references/okf-standard.md)

@@ -1,11 +1,11 @@
 ---
 type: Reference
-title: Open Knowledge Format (spec de Google)
-description: Especificación upstream v0.1 y v0.2, copiadas literalmente (Apache-2.0) en el skill okf-standard.
+title: Open Knowledge Format (Google spec)
+description: Upstream specification v0.1 and v0.2, copied verbatim (Apache-2.0) into the okf-standard skill.
 resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
-tags: [referencia, spec, upstream]
+tags: [reference, spec, upstream]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 sources:
   - id: spec
     resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
@@ -14,8 +14,8 @@ sources:
     last_modified: 2026-08-20T00:00:00Z
 ---
 
-# Resumen
+# Summary
 
-v0.1 publicada en junio de 2026 (commit `ee67a5c`); v0.2 en julio (`780fe9d`), con ajuste de timestamps en agosto (`62432a0`).[^spec] Procedimiento de actualización: [runbook](/runbooks/update-upstream-spec.md).
+v0.1 published in June 2026 (commit `ee67a5c`); v0.2 in July (`780fe9d`), with a timestamp adjustment in August (`62432a0`).[^spec] Update procedure: [runbook](/runbooks/update-upstream-spec.md).
 
 [^spec]: OKF SPEC.md

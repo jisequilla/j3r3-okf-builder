@@ -1,6 +1,6 @@
-> Normas, estándares y compliance.
+> Rules, standards and compliance.
 
 # Policies
 
-* [Reglas para agentes que trabajan en este repo](agents-in-this-repo.md) - Obligaciones de cualquier agente (Claude, Copilot, Gemini, M365) al modificar este repositorio; es el contenido normativo de AGENTS.md. _(draft)_
-* [Conformidad con el perfil knowledge/2.0](okf-conformance.md) - Todo bundle que produzca o toque este proyecto debe pasar okf_lint --strict en su versión declarada. _(draft)_
+* [Rules for agents working in this repo](agents-in-this-repo.md) - Obligations of any agent (Claude, Copilot, Gemini, M365) when modifying this repository; it is the normative content of AGENTS.md. _(draft)_
+* [Conformance with profile knowledge/2.0](okf-conformance.md) - Every bundle that this project produces or touches must pass okf_lint --strict in its declared version. _(draft)_

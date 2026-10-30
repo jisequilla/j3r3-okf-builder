@@ -1,16 +1,16 @@
 ---
 type: Term
 title: Bundle
-description: Directorio de markdown con frontmatter que constituye la unidad de distribución de conocimiento OKF; en el perfil, knowledge/ de un repo.
-tags: [dominio, glosario, okf]
+description: Directory of markdown with frontmatter that is the distribution unit of OKF knowledge; in the profile, a repo's knowledge/.
+tags: [domain, glossary, okf]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Definición
+# Definition
 
-Directorio de markdown con frontmatter que constituye la unidad de distribución de conocimiento OKF; en el perfil, knowledge/ de un repo.
+Directory of markdown with frontmatter that is the distribution unit of OKF knowledge; in the profile, a repo's knowledge/.
 
-# Dónde aparece
+# Where it appears
 
-* [Estándar](/references/okf-standard.md)
+* [Standard](/references/okf-standard.md)

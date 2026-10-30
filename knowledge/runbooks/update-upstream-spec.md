@@ -1,24 +1,24 @@
 ---
 type: Runbook
-title: Actualizar la spec OKF desde el upstream de Google
-description: Qué hacer cuando GoogleCloudPlatform/knowledge-catalog publica cambios en okf/SPEC.md.
+title: Update the OKF spec from Google's upstream
+description: What to do when GoogleCloudPlatform/knowledge-catalog publishes changes to okf/SPEC.md.
 resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
-tags: [runbook, spec, compatibilidad]
+tags: [runbook, spec, compatibility]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Disparador
+# Trigger
 
-Nueva versión en `okf/SPEC.md` upstream (revisar trimestralmente o al ver `stale_after` vencido en este runbook).
+A new version of `okf/SPEC.md` upstream (check quarterly, or when this runbook's `stale_after` has passed).
 
-# Pasos
+# Steps
 
-1. Descargar `SPEC.md` y compararlo con `okf-standard/references/OKF-SPEC-v<actual>.md`.
-2. Clasificar cambios: aditivos (nuevos campos opcionales) vs rompedores (renombrados, reservados).
-3. Actualizar `references/` (copia literal + licencia), `OKF-COMPATIBILITY.md` (matriz) y, si procede, `SUPPORTED_VERSIONS`, `V02_KEYS`/detección y `okf_migrate.py`.
-4. Añadir fixture upstream de la nueva versión en `examples/fixtures/` y caso en `make test`.
-5. ADR nuevo si cambia la política de versiones ([ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md)).
-6. Seguir [Publicar una versión](/runbooks/release-version.md).
+1. Download `SPEC.md` and compare it with `okf-standard/references/OKF-SPEC-v<current>.md`.
+2. Classify the changes: additive (new optional fields) vs breaking (renames, reserved names).
+3. Update `references/` (verbatim copy + license), `OKF-COMPATIBILITY.md` (matrix) and, where applicable, `SUPPORTED_VERSIONS`, `V02_KEYS`/detection and `okf_migrate.py`.
+4. Add an upstream fixture of the new version in `examples/fixtures/` and a case in `make test`.
+5. A new ADR if the version policy changes ([ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md)).
+6. Follow [Publish a version](/runbooks/release-version.md).

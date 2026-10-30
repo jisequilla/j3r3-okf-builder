@@ -1,16 +1,16 @@
 ---
 type: Term
-title: Nivel de confianza
-description: "Derivado de verified: unverified, machine-confirmed o human-reviewed; nunca se almacena, se infiere."
-tags: [dominio, glosario, okf]
+title: Trust level
+description: "Derived from verified: unverified, machine-confirmed or human-reviewed; never stored, always inferred."
+tags: [domain, glossary, okf]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Definición
+# Definition
 
-Derivado de verified: unverified, machine-confirmed o human-reviewed; nunca se almacena, se infiere.
+Derived from verified: unverified, machine-confirmed or human-reviewed; never stored, always inferred.
 
-# Dónde aparece
+# Where it appears
 
-* [Estándar](/references/okf-standard.md)
+* [Standard](/references/okf-standard.md)

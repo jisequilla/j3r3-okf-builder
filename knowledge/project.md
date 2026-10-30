@@ -1,40 +1,40 @@
 ---
 type: Project
 title: OKF Builder
-description: Estándar OKF (perfil knowledge/2.0) y plugin okf-builder para gestionar conocimiento de proyectos con Claude, Copilot, M365 y Gemini
+description: OKF standard (profile knowledge/2.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini
 resource: https://github.com/jisequilla/j3r3-okf-builder
-tags: [okf, conocimiento, plugin]
+tags: [okf, knowledge, plugin]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Propósito
+# Purpose
 
-Definir una estructura estándar de conocimiento por repositorio (`knowledge/`) basada en el Open Knowledge Format de Google, y entregar herramientas (skills + scripts) para crearla, mantenerla, validarla y consultarla desde cualquier agente de IA que el equipo use.
+Define a standard per-repository knowledge structure (`knowledge/`) based on Google's Open Knowledge Format, and deliver tools (skills + scripts) to create, maintain, validate and query it from any AI agent the team uses.
 
-# Alcance
+# Scope
 
-- Incluye: estándar (perfil), plantillas, scripts sin dependencias, skills Agent Skills, proyecciones para Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI y Microsoft 365 Copilot, soporte OKF v0.1 y v0.2.
-- Excluye: servir o indexar bundles (eso lo hacen los consumidores: Knowledge Catalog, SharePoint, buscadores); ejecutar computaciones atestadas.
+- Includes: the standard (profile), templates, dependency-free scripts, Agent Skills, projections for Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI and Microsoft 365 Copilot, OKF v0.1 and v0.2 support.
+- Excludes: serving or indexing bundles (consumers do that: Knowledge Catalog, SharePoint, search engines); running attested computations.
 
-# Equipo y propiedad
+# Team and ownership
 
-| Rol | Persona / equipo | Contacto |
+| Role | Person / team | Contact |
 |---|---|---|
 | Owner | human:jisequilla | jisequilla@gmail.com |
 
-# Enlaces clave
+# Key links
 
-| Recurso | URL |
+| Resource | URL |
 |---|---|
-| Repositorio | https://github.com/jisequilla/j3r3-okf-builder |
-| Spec upstream | https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf |
+| Repository | https://github.com/jisequilla/j3r3-okf-builder |
+| Upstream spec | https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf |
 
-# Mapa del conocimiento
+# Knowledge map
 
-* [Arquitectura](/architecture/index.md) — fuente única y proyecciones
-* [Decisiones](/decisions/index.md) — ADRs del estándar y del plugin
-* [Dominio](/domain/index.md) — glosario OKF
-* [Sistemas](/systems/index.md) — plugin, scripts, exportadores
-* [Runbooks](/runbooks/index.md) — release, exportación, actualización de la spec
-* [Políticas](/policies/index.md) — reglas que todo agente debe cumplir en este repo
+* [Architecture](/architecture/index.md) — single source and projections
+* [Decisions](/decisions/index.md) — ADRs for the standard and the plugin
+* [Domain](/domain/index.md) — OKF glossary
+* [Systems](/systems/index.md) — plugin, scripts, exporters
+* [Runbooks](/runbooks/index.md) — release, export, spec update
+* [Policies](/policies/index.md) — rules every agent must follow in this repo

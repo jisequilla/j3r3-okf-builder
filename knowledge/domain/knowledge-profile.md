@@ -1,16 +1,16 @@
 ---
 type: Term
-title: Perfil knowledge/2.0
-description: "Conjunto de reglas de este proyecto encima de OKF: directorios, tipos, generated obligatorio, index/log/proyecto requeridos."
-tags: [dominio, glosario, okf]
+title: Profile knowledge/2.0
+description: "This project's set of rules on top of OKF: directories, types, required generated, required index/log/project."
+tags: [domain, glossary, okf]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Definición
+# Definition
 
-Conjunto de reglas de este proyecto encima de OKF: directorios, tipos, generated obligatorio, index/log/proyecto requeridos.
+This project's set of rules on top of OKF: directories, types, required generated, required index/log/project.
 
-# Dónde aparece
+# Where it appears
 
-* [Estándar](/references/okf-standard.md)
+* [Standard](/references/okf-standard.md)

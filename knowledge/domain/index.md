@@ -1,10 +1,10 @@
-> Glosario y conceptos de negocio.
+> Glossary and business concepts.
 
 # Terms
 
-* [Actor](actor.md) - Identificador de quién produjo o verificó contenido: human:<id>, process:<id> o <agente>/<versión>. _(draft)_
-* [Bundle](bundle.md) - Directorio de markdown con frontmatter que constituye la unidad de distribución de conocimiento OKF; en el perfil, knowledge/ de un repo. _(draft)_
-* [Concepto](concept.md) - Un fichero .md no reservado dentro de un bundle; su ruta sin .md es su identidad. _(draft)_
-* [Perfil knowledge/2.0](knowledge-profile.md) - Conjunto de reglas de este proyecto encima de OKF: directorios, tipos, generated obligatorio, index/log/proyecto requeridos. _(draft)_
-* [Proyección](projection.md) - Copia o enlace de los skills fuente adaptado a una plataforma (symlink, .plugin, zip M365, pack Copilot). _(draft)_
-* [Nivel de confianza](trust-level.md) - Derivado de verified: unverified, machine-confirmed o human-reviewed; nunca se almacena, se infiere. _(draft)_
+* [Actor](actor.md) - Identifier of who produced or verified content: human:<id>, process:<id> or <agent>/<version>. _(draft)_
+* [Bundle](bundle.md) - Directory of markdown with frontmatter that is the distribution unit of OKF knowledge; in the profile, a repo's knowledge/. _(draft)_
+* [Concept](concept.md) - A non-reserved .md file inside a bundle; its path without .md is its identity. _(draft)_
+* [Profile knowledge/2.0](knowledge-profile.md) - This project's set of rules on top of OKF: directories, types, required generated, required index/log/project. _(draft)_
+* [Projection](projection.md) - Copy of or link to the source skills, adapted to a platform (symlink, .plugin, M365 zip, Copilot pack). _(draft)_
+* [Trust level](trust-level.md) - Derived from verified: unverified, machine-confirmed or human-reviewed; never stored, always inferred. _(draft)_

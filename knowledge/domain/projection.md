@@ -1,16 +1,16 @@
 ---
 type: Term
-title: Proyección
-description: Copia o enlace de los skills fuente adaptado a una plataforma (symlink, .plugin, zip M365, pack Copilot).
-tags: [dominio, glosario, okf]
+title: Projection
+description: Copy of or link to the source skills, adapted to a platform (symlink, .plugin, M365 zip, Copilot pack).
+tags: [domain, glossary, okf]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Definición
+# Definition
 
-Copia o enlace de los skills fuente adaptado a una plataforma (symlink, .plugin, zip M365, pack Copilot).
+Copy of or link to the source skills, adapted to a platform (symlink, .plugin, M365 zip, Copilot pack).
 
-# Dónde aparece
+# Where it appears
 
-* [Estándar](/references/okf-standard.md)
+* [Standard](/references/okf-standard.md)

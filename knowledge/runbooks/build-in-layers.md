@@ -1,44 +1,44 @@
 ---
 type: Runbook
-title: Construir un cambio por capas
-description: Procedimiento para llevar un cambio multi-etapa del repo de la decisión al merge mediante tickets delegados, revisión con contexto fresco y verificación sobre main.
-tags: [runbook, proceso, agentes]
+title: Build a change in layers
+description: Procedure for taking a multi-stage change of the repo from decision to merge through delegated tickets, fresh-context review and verification on main.
+tags: [runbook, process, agents]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T19:20:13Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Disparador
+# Trigger
 
-Un cambio que toca varias capas (estándar, scripts, skills, `knowledge/`) o más ficheros de los que una sesión puede revisar con atención. Los arreglos pequeños, la depuración con causa desconocida y los diseños sin cerrar no usan este runbook: se hacen inline o se aclaran antes con el owner. La decisión está en [ADR-0009](/decisions/ADR-0009-build-in-layers-and-tickets.md).
+A change that touches several layers (standard, scripts, skills, `knowledge/`) or more files than one session can review with care. Small fixes, debugging with an unknown cause and unsettled designs do not use this runbook: they are done inline or clarified with the owner first. The decision is in [ADR-0009](/decisions/ADR-0009-build-in-layers-and-tickets.md).
 
-# Pasos
+# Steps
 
-1. **Decidir con el owner.** Lo que es una decisión (un ADR nuevo con `okf-capture`, el vocabulario, un glosario de términos) no es un ticket: se cierra con el owner antes de construir.
-2. **Partir en capas** en orden de dependencia, y cada capa en tickets de como máximo unos 50 ficheros con una lista de ficheros cerrada. Como máximo 3 tickets en paralelo.
-3. **Escribir cada ticket** con:
-   - comportamiento como tabla de entrada → salida esperada;
-   - patrón a copiar como `fichero:línea`;
-   - criterios de aceptación, cada uno con el test (o la comprobación) que falla si se revierte el cambio;
-   - "se apoya en": lo que ya debe existir en main; si no existe, el builder para;
-   - comandos de verificación exactos (`make test`, `make lint`, el grep de la capa).
-4. **Abrir un registro por ticket** en el tracker que se use y guardar en él el texto del ticket.
-5. **Ejecutar cada ticket:**
-   1. *Pre-flight*: un agente lee el ticket contra el código y señala premisas falsas, ambigüedades y decisiones que son del owner.
-   2. *Builder*: trabaja en un worktree, demuestra cada criterio (revertir → rojo → restaurar), pega la salida en el cuerpo del PR y abre el PR en draft.
-   3. *Revisión*: uno o dos revisores con contexto fresco, sin el informe del builder. Usar dos lentes (corrección, tests) si se toca el estándar, el linter o un skill. Los hallazgos se clasifican como bloqueante, a corregir o nit; solo los bloqueantes fuerzan una ronda de arreglos.
-   4. *Arreglos*: como máximo dos rondas; si no basta, el ticket vuelve al owner.
-6. **Verificar y mergear desde la sesión principal:** ejecutar `make test` y `make lint` sobre main con la rama mergeada, mergear el PR y cerrar el registro citando el PR. Los nits pendientes van a un único registro de seguimiento.
-7. **Subir main antes de la capa siguiente.** Los worktrees de los agentes salen de `origin/main`, no del main local: una capa mergeada solo en local es invisible para la siguiente.
+1. **Decide with the owner.** What is a decision (a new ADR with `okf-capture`, the vocabulary, a term glossary) is not a ticket: it is settled with the owner before building.
+2. **Split into layers** in dependency order, and each layer into tickets of at most about 50 files with a closed file list. At most 3 tickets in parallel.
+3. **Write each ticket** with:
+   - behavior as an input → expected output table;
+   - pattern to copy as `file:line`;
+   - acceptance criteria, each with the test (or check) that fails if the change is reverted;
+   - "builds on": what must already exist on main; if it does not exist, the builder stops;
+   - exact verification commands (`make test`, `make lint`, the layer's grep).
+4. **Open one record per ticket** in whichever tracker is used and store the ticket text in it.
+5. **Run each ticket:**
+   1. *Pre-flight*: an agent reads the ticket against the code and flags false premises, ambiguities and decisions that belong to the owner.
+   2. *Builder*: works in a worktree, proves each criterion (revert → red → restore), pastes the output into the PR body and opens the PR as a draft.
+   3. *Review*: one or two reviewers with fresh context, without the builder's report. Use two lenses (correctness, tests) if the standard, the linter or a skill is touched. Findings are classified as blocking, to fix or nit; only blocking findings force a round of fixes.
+   4. *Fixes*: at most two rounds; if that is not enough, the ticket goes back to the owner.
+6. **Verify and merge from the main session:** run `make test` and `make lint` on main with the branch merged, merge the PR and close the record citing the PR. Pending nits go to a single follow-up record.
+7. **Push main before the next layer.** The agents' worktrees branch off `origin/main`, not the local main: a layer merged only locally is invisible to the next one.
 
-# Avisos
+# Warnings
 
-- El informe de un agente es una afirmación: el estado se lee del PR y de la salida de las comprobaciones, no de la respuesta (que puede llegar truncada).
-- Lanzar un workflow de agentes requiere un mensaje escrito del owner que nombre los tickets; una aprobación dada por un diálogo de preguntas no basta.
-- Un agente solo detiene procesos que él mismo ha arrancado, nunca por nombre de proceso.
-- Reanudar un workflow vuelve a ejecutar los agentes posteriores al primer cambio: para continuar una ejecución a medias, pasar su estado (PR, rama, etapa) como punto de partida.
+- An agent's report is a claim: the state is read from the PR and from the output of the checks, not from the answer (which may arrive truncated).
+- Launching an agent workflow requires a written message from the owner that names the tickets; an approval given through a question dialog is not enough.
+- An agent only stops processes it started itself, never by process name.
+- Resuming a workflow reruns the agents after the first change: to continue a half-finished run, pass its state (PR, branch, stage) as the starting point.
 
 # Rollback
 
-Cada ticket es un PR propio: revertir el merge del PR afectado. Si una capa ya tiene tickets dependientes mergeados, revertir en orden inverso de capas.
+Each ticket is its own PR: revert the merge of the affected PR. If a layer already has dependent tickets merged, revert in reverse layer order.

@@ -1,29 +1,29 @@
 ---
 type: System
-title: Exportadores de proyecciones
-description: tools/export_copilot.py y tools/export_m365.py generan las proyecciones de los skills para otros repos y para Microsoft 365 Copilot.
+title: Projection exporters
+description: tools/export_copilot.py and tools/export_m365.py generate the skill projections for other repos and for Microsoft 365 Copilot.
 resource: /tools
-tags: [sistema, exportadores, m365, copilot]
+tags: [system, exporters, m365, copilot]
 status: draft
 owner: human:jisequilla
 runtime: python3
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Responsabilidad
+# Responsibility
 
-| Exportador | Salida | Para |
+| Exporter | Output | For |
 |---|---|---|
-| export_copilot.py | `dist/copilot/.github/skills`, `.github/agents/okf.agent.md`, `AGENTS.okf.md` | Vendorizar skills en otro repo (Copilot, Claude, Gemini) |
-| export_m365.py | `dist/m365/okf-builder-m365.zip` (manifest v1.28) y `dist/m365/skills/*.zip` | Plugin Cowork M365 y subida por skill en Copilot Studio / Agent Builder |
+| export_copilot.py | `dist/copilot/.github/skills`, `.github/agents/okf.agent.md`, `AGENTS.okf.md` | Vendoring skills into another repo (Copilot, Claude, Gemini) |
+| export_m365.py | `dist/m365/okf-builder-m365.zip` (manifest v1.28) and `dist/m365/skills/*.zip` | M365 Cowork plugin and per-skill upload in Copilot Studio / Agent Builder |
 
-# Reglas que aplican
+# Applicable rules
 
-- Sustituyen la convención `<skills>/` por la ruta concreta del destino.
-- M365: copian en cada skill los scripts/plantillas que necesita (tabla `NEEDS`), eliminan `scripts/` de okf-standard para respetar el límite de 20 companions, añaden `license`/`metadata` y una nota de entorno.
-- El manifest M365 usa GUID estable (uuid5 de la URL del repo).
+- They replace the `<skills>/` convention with the concrete path of the target.
+- M365: they copy into each skill the scripts/templates it needs (`NEEDS` table), remove `scripts/` from okf-standard to respect the 20-companion limit, and add `license`/`metadata` and an environment note.
+- The M365 manifest uses a stable GUID (uuid5 of the repo URL).
 
-# Operación
+# Operation
 
-* [Exportar y entregar proyecciones](/runbooks/export-projections.md)
-* Decisión: [ADR-0007](/decisions/ADR-0007-single-source-and-projections.md)
+* [Export and deliver projections](/runbooks/export-projections.md)
+* Decision: [ADR-0007](/decisions/ADR-0007-single-source-and-projections.md)
