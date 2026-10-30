@@ -235,6 +235,9 @@ def _mini_yaml(text: str) -> dict:
             end += 1
         in_scalar.update(range(start, end))
         if body_indent is None:
+            for r in raw[start:end]:
+                if "\t" in r:
+                    raise ValueError(f"tab en una línea de solo espacios de un escalar de bloque: {r!r}")
             return "", first_line_from(end)
         # como PyYAML: una línea más larga que la indentación del cuerpo es texto
         # (aunque sean solo espacios); las demás líneas vacías son saltos
