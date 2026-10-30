@@ -3,9 +3,10 @@ type: Decisión de Arquitectura
 title: "ADR-0003: Directorios y tipos del perfil en español"
 description: Los directorios del perfil y los valores de type van en español, salvo references/ y Attested Computation que fija la spec.
 tags: [adr, estructura]
-status: stable
+status: deprecated
 adr_id: ADR-0003
-decision_status: aceptada
+decision_status: sustituida
+superseded_by: /decisiones/ADR-0010-ingles-canonico-perfil-2.md
 generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
 ---
 
