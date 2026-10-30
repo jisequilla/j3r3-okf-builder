@@ -1,23 +1,23 @@
 ---
 type: Architecture Decision
-title: "ADR-0002: Un bundle por repositorio en knowledge/"
-description: Cada repo lleva su conocimiento en knowledge/ co-localizado con el código, no en un repo central.
-tags: [adr, estructura]
+title: "ADR-0002: One bundle per repository in knowledge/"
+description: Each repo carries its knowledge in knowledge/, co-located with the code, not in a central repo.
+tags: [adr, structure]
 status: stable
 adr_id: ADR-0002
 decision_status: accepted
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Contexto
+# Context
 
-Opciones: bundle dentro de cada repo, repo central de conocimiento, o híbrido con índice agregado.
+Options: a bundle inside each repo, a central knowledge repo, or a hybrid with an aggregated index.
 
-# Decisión
+# Decision
 
-**Dentro de cada repo**, en `knowledge/` en la raíz. El bundle viaja con el código, se revisa en los mismos PR y los agentes que trabajan sobre el repo lo encuentran sin configuración.
+**Inside each repo**, in `knowledge/` at the root. The bundle travels with the code, is reviewed in the same PRs, and agents working on the repo find it without configuration.
 
-# Consecuencias
+# Consequences
 
-- Positivas: versionado y revisión unificados; descubrimiento trivial (`knowledge/index.md`).
-- Negativas: la vista transversal entre proyectos no existe de serie; si hace falta, un consumidor puede agregar varios bundles (fuera de alcance, ver [proyecto](/project.md)).
+- Positive: unified versioning and review; trivial discovery (`knowledge/index.md`).
+- Negative: there is no cross-project view out of the box; if one is needed, a consumer can aggregate several bundles (out of scope, see [project](/project.md)).

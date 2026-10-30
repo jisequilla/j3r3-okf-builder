@@ -1,34 +1,34 @@
 ---
 type: Architecture Decision
-title: "ADR-0007: Fuente única de skills y proyecciones por plataforma"
-description: Los skills viven una sola vez en plugin/okf-builder/skills; cada plataforma recibe una proyección (symlink o paquete generado).
-tags: [adr, arquitectura]
+title: "ADR-0007: Single source of skills and per-platform projections"
+description: Skills live only once in plugin/okf-builder/skills; each platform receives a projection (symlink or generated package).
+tags: [adr, architecture]
 status: stable
 adr_id: ADR-0007
 decision_status: accepted
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Contexto
+# Context
 
-El mismo conocimiento operativo debe funcionar en Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI y Microsoft 365 Copilot. Todas adoptan el estándar Agent Skills (`SKILL.md`), pero cada una lo descubre o empaqueta de forma distinta y tiene límites propios (M365: ≤20 ficheros companion por skill, skills autocontenidos). Mantener copias por plataforma divergiría.
+The same operational knowledge must work in Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI and Microsoft 365 Copilot. All of them adopt the Agent Skills standard (`SKILL.md`), but each discovers or packages it differently and has its own limits (M365: ≤20 companion files per skill, self-contained skills). Keeping per-platform copies would diverge.
 
-# Decisión
+# Decision
 
-- **Fuente única**: `plugin/okf-builder/skills/`. Scripts en `okf-standard/scripts/`, plantillas en `okf-standard/templates/`.
-- Los skills no usan variables de ningún vendor; usan la convención `<skills>/...` (padre del skill).
-- **Proyecciones por enlace**: `.claude/skills` y `.agents/skills` → fuente (Claude Code; Copilot y Gemini).
-- **Proyecciones generadas**: `make plugin` (Cowork), `make m365` (M365, autocontenido por skill), `make copilot` (pack vendorizable). Salida en `dist/`, no versionada.
-- Ver [vista de arquitectura](/architecture/single-source-projections.md).
+- **Single source**: `plugin/okf-builder/skills/`. Scripts in `okf-standard/scripts/`, templates in `okf-standard/templates/`.
+- Skills use no vendor's variables; they use the `<skills>/...` convention (the skill's parent).
+- **Link projections**: `.claude/skills` and `.agents/skills` → source (Claude Code; Copilot and Gemini).
+- **Generated projections**: `make plugin` (Cowork), `make m365` (M365, self-contained per skill), `make copilot` (vendorable pack). Output in `dist/`, not versioned.
+- See [architecture view](/architecture/single-source-projections.md).
 
-# Alternativas consideradas
+# Alternatives considered
 
-| Alternativa | Contras | Motivo de descarte |
+| Alternative | Cons | Reason rejected |
 |---|---|---|
-| Copias por plataforma en el repo | Divergen; 5× mantenimiento | Es el problema que se quiere evitar |
-| Solo plugin de Claude + conversores de terceros (`atk import openplugin`, `wiqd`) | No reescriben rutas ni reparten scripts | Insuficiente para M365 |
+| Per-platform copies in the repo | They diverge; 5× maintenance | It is the problem we want to avoid |
+| Claude plugin only + third-party converters (`atk import openplugin`, `wiqd`) | They neither rewrite paths nor distribute scripts | Insufficient for M365 |
 
-# Consecuencias
+# Consequences
 
-- Positivas: un cambio, todas las plataformas; `make check-links` y `make all` lo verifican.
-- Negativas: symlinks requieren `core.symlinks` en Windows; en ese caso usar `make copilot` y copiar.
+- Positive: one change, every platform; `make check-links` and `make all` verify it.
+- Negative: symlinks require `core.symlinks` on Windows; in that case use `make copilot` and copy.

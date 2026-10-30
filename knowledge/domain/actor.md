@@ -1,16 +1,16 @@
 ---
 type: Term
 title: Actor
-description: "Identificador de quién produjo o verificó contenido: human:<id>, process:<id> o <agente>/<versión>."
-tags: [dominio, glosario, okf]
+description: "Identifier of who produced or verified content: human:<id>, process:<id> or <agent>/<version>."
+tags: [domain, glossary, okf]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Definición
+# Definition
 
-Identificador de quién produjo o verificó contenido: human:<id>, process:<id> o <agente>/<versión>.
+Identifier of who produced or verified content: human:<id>, process:<id> or <agent>/<version>.
 
-# Dónde aparece
+# Where it appears
 
-* [Estándar](/references/okf-standard.md)
+* [Standard](/references/okf-standard.md)

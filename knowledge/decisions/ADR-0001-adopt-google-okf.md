@@ -1,30 +1,30 @@
 ---
 type: Architecture Decision
-title: "ADR-0001: Adoptar el Open Knowledge Format de Google como base del estándar"
-description: El conocimiento de proyecto se representa como bundle OKF (markdown + frontmatter YAML) en lugar de un formato propio.
-tags: [adr, estandar]
+title: "ADR-0001: Adopt Google's Open Knowledge Format as the basis of the standard"
+description: Project knowledge is represented as an OKF bundle (markdown + YAML frontmatter) instead of a format of our own.
+tags: [adr, standard]
 status: stable
 adr_id: ADR-0001
 decision_status: accepted
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Contexto
+# Context
 
-Se necesitaba una estructura estándar de conocimiento reutilizable entre proyectos y consumible por agentes. Las opciones eran un formato propio, un vault Obsidian con convenciones, o adoptar OKF (publicado por Google en junio de 2026, formaliza el patrón LLM-wiki).
+We needed a standard knowledge structure that could be reused across projects and consumed by agents. The options were a format of our own, an Obsidian vault with conventions, or adopting OKF (published by Google in June 2026; it formalizes the LLM-wiki pattern).
 
-# Decisión
+# Decision
 
-Adoptamos OKF como base y definimos encima un **perfil** (`knowledge/1.0`) con lo que OKF deja abierto: directorios, vocabulario de tipos y campos obligatorios adicionales. Ver [Política de conformidad](/policies/okf-conformance.md).
+We adopt OKF as the basis and define a **profile** (`knowledge/1.0`) on top of it with what OKF leaves open: directories, type vocabulary and additional required fields. See [Conformance policy](/policies/okf-conformance.md).
 
-# Alternativas consideradas
+# Alternatives considered
 
-| Alternativa | Pros | Contras | Motivo de descarte |
+| Alternative | Pros | Cons | Reason rejected |
 |---|---|---|---|
-| Formato propio | Control total | Sin interoperabilidad; hay que escribir todos los consumidores | OKF cubre el 90 % con un estándar abierto |
-| Vault Obsidian | Tooling maduro | Convenciones no especificadas; wikilinks no estándar | OKF es markdown estándar y ya interopera con Knowledge Catalog |
+| Our own format | Full control | No interoperability; every consumer has to be written | OKF covers 90 % with an open standard |
+| Obsidian vault | Mature tooling | Unspecified conventions; non-standard wikilinks | OKF is standard markdown and already interoperates with Knowledge Catalog |
 
-# Consecuencias
+# Consequences
 
-- Positivas: interoperable con cualquier indexador markdown y con Google Knowledge Catalog; versionable en git; sin runtime.
-- Negativas: dependencia de la evolución de la spec (v0.1→v0.2 ya trajo dos cambios rompedores); mitigado en [ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md).
+- Positive: interoperable with any markdown indexer and with Google Knowledge Catalog; versionable in git; no runtime.
+- Negative: dependence on how the spec evolves (v0.1→v0.2 already brought two breaking changes); mitigated in [ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md).

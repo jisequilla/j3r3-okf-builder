@@ -1,37 +1,37 @@
 ---
 type: System
-title: Plugin okf-builder
-description: Paquete de 7 skills Agent Skills (okf-standard, init, capture, lint, index, ask, migrate) que aplican el perfil knowledge/2.0.
+title: okf-builder plugin
+description: Package of 7 Agent Skills (okf-standard, init, capture, lint, index, ask, migrate) that apply profile knowledge/2.0.
 resource: /plugin/okf-builder
-tags: [sistema, plugin, skills]
+tags: [system, plugin, skills]
 status: draft
 owner: human:jisequilla
 runtime: agent-skills
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Responsabilidad
+# Responsibility
 
-Dar a cualquier agente las instrucciones para crear, mantener, validar, consultar y migrar bundles OKF. No ejecuta nada por sí mismo: delega en [los scripts](/systems/scripts-okf.md).
+Give any agent the instructions to create, maintain, validate, query and migrate OKF bundles. It runs nothing by itself: it delegates to [the scripts](/systems/scripts-okf.md).
 
 # Interfaces
 
-| Skill | Disparadores típicos | Usa |
+| Skill | Typical triggers | Uses |
 |---|---|---|
-| okf-standard | "qué es OKF", "qué type uso", "0.1 vs 0.2" | references/, templates/ |
-| okf-init | "inicializa OKF", "crea knowledge" | okf_init.py |
-| okf-capture | "documenta esta decisión", "crea un runbook" | templates, okf_index.py, okf_lint.py, okf_migrate.py --file |
-| okf-lint | "valida knowledge" | okf_lint.py |
-| okf-index | "regenera índices" | okf_index.py |
-| okf-ask | "¿por qué decidimos…?" | lectura progresiva de index.md |
-| okf-migrate | "migra a 0.2", "exporta para 0.1" | okf_migrate.py |
+| okf-standard | "what is OKF", "which type do I use", "0.1 vs 0.2" | references/, templates/ |
+| okf-init | "initialize OKF", "create knowledge" | okf_init.py |
+| okf-capture | "document this decision", "create a runbook" | templates, okf_index.py, okf_lint.py, okf_migrate.py --file |
+| okf-lint | "validate knowledge" | okf_lint.py |
+| okf-index | "regenerate indexes" | okf_index.py |
+| okf-ask | "why did we decide…?" | progressive reading of index.md |
+| okf-migrate | "migrate to 0.2", "export for 0.1" | okf_migrate.py |
 
-# Dependencias
+# Dependencies
 
-* [Scripts OKF](/systems/scripts-okf.md)
-* Manifest: `plugin/okf-builder/.claude-plugin/plugin.json` (versión semver; `marketplace.json` en la raíz del repo).
+* [OKF scripts](/systems/scripts-okf.md)
+* Manifest: `plugin/okf-builder/.claude-plugin/plugin.json` (semver version; `marketplace.json` at the repo root).
 
-# Operación
+# Operation
 
-* Runbooks: [Publicar una versión](/runbooks/release-version.md)
-* Validación: `claude plugin validate plugin/okf-builder/.claude-plugin/plugin.json`
+* Runbooks: [Publish a version](/runbooks/release-version.md)
+* Validation: `claude plugin validate plugin/okf-builder/.claude-plugin/plugin.json`

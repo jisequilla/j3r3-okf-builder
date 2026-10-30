@@ -1,13 +1,13 @@
 ---
 type: Reference
-title: Compatibilidad OKF v0.1 ↔ v0.2
-description: Matriz de diferencias, mapeo de campos y política de versiones; copia canónica en standard/OKF-COMPATIBILITY.md.
+title: OKF v0.1 ↔ v0.2 compatibility
+description: Difference matrix, field mapping and version policy; canonical copy in standard/OKF-COMPATIBILITY.md.
 resource: /standard/OKF-COMPATIBILITY.md
-tags: [referencia, compatibilidad]
+tags: [reference, compatibility]
 status: draft
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Resumen
+# Summary
 
-Dos cambios rompedores (`timestamp`→`generated`, `# Citations`→`sources`), el resto aditivo. Soporta la decisión [ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md).
+Two breaking changes (`timestamp`→`generated`, `# Citations`→`sources`); everything else is additive. It supports decision [ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md).

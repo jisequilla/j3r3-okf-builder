@@ -1,24 +1,31 @@
 ---
 type: Architecture Decision
-title: "ADR-0003: Directorios y tipos del perfil en español"
-description: Los directorios del perfil y los valores de type van en español, salvo references/ y Attested Computation que fija la spec.
-tags: [adr, estructura]
+title: "ADR-0003: Profile directories and types in Spanish"
+description: Profile directories and type values are in Spanish, except references/ and Attested Computation, which the spec fixes.
+tags: [adr, structure]
 status: deprecated
 adr_id: ADR-0003
 decision_status: superseded
 superseded_by: /decisions/ADR-0010-english-canonical-profile-2.md
-generated: { by: okf-builder/claude-fable-5-1, at: 2026-10-30T17:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 
-# Contexto
+# Context
 
-El usuario del estándar y sus equipos trabajan en español. La spec OKF no impone nombres de directorio ni registra tipos.
+The standard's user and their teams work in Spanish. The OKF spec neither imposes directory names nor registers types.
 
-# Decisión
+# Decision
 
-Directorios en español (`decisiones/`, `runbooks/`, `politicas/`…) y tipos en español (`Decisión de Arquitectura`, `Métrica`…). Se mantienen en inglés solo los nombres que la spec fija o usa como convención: `references/` (§6.3) y `type: Attested Computation` (§10).
+Directories and types in Spanish:
 
-# Consecuencias
+| Item | Spanish names |
+|---|---|
+| Directories | `decisiones/`, `runbooks/`, `politicas/`… |
+| Types | `Decisión de Arquitectura`, `Métrica`… |
 
-- Positivas: legibilidad para los equipos; los índices y descripciones son coherentes en un idioma.
-- Negativas: los ejemplos de la spec y los bundles de Google usan inglés; los consumidores deben tolerar tipos desconocidos (la spec lo exige, §11).
+Only the names that the spec fixes or uses as a convention stay in English: `references/` (§6.3) and `type: Attested Computation` (§10).
+
+# Consequences
+
+- Positive: readability for the teams; indexes and descriptions are consistent in one language.
+- Negative: the spec's examples and Google's bundles use English; consumers must tolerate unknown types (the spec requires it, §11).

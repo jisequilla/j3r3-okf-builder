@@ -1,8 +1,8 @@
-> Procedimientos operativos y de incidentes.
+> Operational and incident procedures.
 
 # Runbooks
 
-* [Construir un cambio por capas](build-in-layers.md) - Procedimiento para llevar un cambio multi-etapa del repo de la decisión al merge mediante tickets delegados, revisión con contexto fresco y verificación sobre main. _(draft)_
-* [Exportar y entregar proyecciones](export-projections.md) - Cómo generar y entregar el plugin de Cowork, el paquete M365 y el pack para otros repos. _(draft)_
-* [Publicar una versión del plugin](release-version.md) - Pasos para liberar una versión nueva de okf-builder en todas las plataformas. _(draft)_
-* [Actualizar la spec OKF desde el upstream de Google](update-upstream-spec.md) - Qué hacer cuando GoogleCloudPlatform/knowledge-catalog publica cambios en okf/SPEC.md. _(draft)_
+* [Build a change in layers](build-in-layers.md) - Procedure for taking a multi-stage change of the repo from decision to merge through delegated tickets, fresh-context review and verification on main. _(draft)_
+* [Export and deliver projections](export-projections.md) - How to generate and deliver the Cowork plugin, the M365 package and the pack for other repos. _(draft)_
+* [Publish a plugin version](release-version.md) - Steps to release a new version of okf-builder on every platform. _(draft)_
+* [Update the OKF spec from Google's upstream](update-upstream-spec.md) - What to do when GoogleCloudPlatform/knowledge-catalog publishes changes to okf/SPEC.md. _(draft)_
