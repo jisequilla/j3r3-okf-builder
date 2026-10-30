@@ -57,7 +57,7 @@ Skills disponibles en `{skills_dir}/` (estándar Agent Skills, también válidos
 
 | Skill | Uso |
 |---|---|
-| okf-standard | Estándar OKF v0.1/v0.2, perfil knowledge/1.0, plantillas y scripts |
+| okf-standard | Estándar OKF v0.1/v0.2, perfil knowledge/2.0, plantillas y scripts |
 | okf-init | Crear `knowledge/` |
 | okf-capture | Añadir ADR, runbook, sistema, API, tabla, métrica, término, política |
 | okf-lint | Validar conformidad (`python3 {skills_dir}/okf-standard/scripts/okf_lint.py knowledge`) |

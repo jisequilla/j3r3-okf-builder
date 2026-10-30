@@ -1,18 +1,18 @@
 ---
 type: Runbook
-title: {{titulo}}
-description: {{descripcion_una_frase}}
-resource: {{url_dashboard_o_alerta}}
+title: {{title}}
+description: {{one_sentence_description}}
+resource: {{dashboard_or_alert_url}}
 tags: [runbook, oncall, {{tags}}]
 status: draft
-owner: team:{{equipo}}
-stale_after: {{fecha_iso}}
-generated: { by: {{actor}}, at: {{ahora}} }
+owner: team:{{team}}
+stale_after: {{iso_date}}
+generated: { by: {{actor}}, at: {{now}} }
 ---
 
 # Disparador
 
-{{Alerta, síntoma o evento que activa este runbook. Enlaza al sistema: [X](/sistemas/x.md).}}
+{{Alerta, síntoma o evento que activa este runbook. Enlaza al sistema: [X](/systems/x.md).}}
 
 # Impacto
 

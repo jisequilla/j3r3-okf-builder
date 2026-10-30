@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""okf_lint.py — Valida un bundle OKF v0.2 y el perfil knowledge/1.0.
+"""okf_lint.py — Valida un bundle OKF v0.2 y el perfil knowledge/2.0.
 
 Uso:
     python3 okf_lint.py [ruta/al/bundle] [--json] [--strict] [--no-profile]
@@ -152,7 +152,7 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
         ts = fm.get("timestamp")
         if ts is None:
             if profile:
-                rep.error("PROFILE_NO_TIMESTAMP", doc.rel, "perfil knowledge/1.0 en modo 0.1 exige 'timestamp'")
+                rep.error("PROFILE_NO_TIMESTAMP", doc.rel, "perfil knowledge/2.0 en modo 0.1 exige 'timestamp'")
         elif not is_iso(ts):
             rep.warn("BAD_ISO", doc.rel, f"timestamp '{ts}' no es ISO 8601 con offset")
         if has_citations:
@@ -171,7 +171,7 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
             if "at" in gen and not is_iso(gen["at"]):
                 rep.warn("BAD_ISO", doc.rel, f"generated.at '{gen['at']}' no es ISO 8601 con offset")
     elif profile and version == "0.2":
-        rep.error("PROFILE_NO_GENERATED", doc.rel, "perfil knowledge/1.0 exige 'generated: { by, at }'")
+        rep.error("PROFILE_NO_GENERATED", doc.rel, "perfil knowledge/2.0 exige 'generated: { by, at }'")
 
     for v in as_list(fm.get("verified")):
         if not isinstance(v, dict) or not v.get("by"):
@@ -259,16 +259,16 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
             rep.error("PROFILE_NO_INDEX", "index.md", "falta knowledge/index.md (perfil §7.4)")
         if not (bundle / "log.md").exists():
             rep.error("PROFILE_NO_LOG", "log.md", "falta knowledge/log.md (perfil §7.4)")
-        proj = bundle / "proyecto.md"
+        proj = bundle / "project.md"
         if not proj.exists():
-            rep.error("PROFILE_NO_PROJECT", "proyecto.md", "falta knowledge/proyecto.md con type: Proyecto (perfil §7.4)")
+            rep.error("PROFILE_NO_PROJECT", "project.md", "falta knowledge/project.md con type: Project (perfil §7.4)")
         else:
             d = by_path.get(proj.resolve())
-            if d and d.frontmatter and d.frontmatter.get("type") != "Proyecto":
-                rep.error("PROFILE_PROJECT_TYPE", "proyecto.md", "proyecto.md debe tener type: Proyecto")
+            if d and d.frontmatter and d.frontmatter.get("type") != "Project":
+                rep.error("PROFILE_PROJECT_TYPE", "project.md", "project.md debe tener type: Project")
         types = [d.frontmatter.get("type") for d in docs if d.frontmatter and not d.is_reserved]
-        if types.count("Proyecto") > 1:
-            rep.error("PROFILE_MANY_PROJECTS", "proyecto.md", "más de un concepto con type: Proyecto")
+        if types.count("Project") > 1:
+            rep.error("PROFILE_MANY_PROJECTS", "project.md", "más de un concepto con type: Project")
 
     for d in docs:
         if d.path.name == "index.md":
@@ -287,7 +287,7 @@ def main(argv=None) -> int:
     ap.add_argument("bundle", nargs="?", help="ruta al bundle (por defecto busca knowledge/ hacia arriba)")
     ap.add_argument("--json", action="store_true", help="salida JSON")
     ap.add_argument("--strict", action="store_true", help="los avisos también provocan exit 1")
-    ap.add_argument("--no-profile", action="store_true", help="validar solo la spec OKF, no el perfil knowledge/1.0")
+    ap.add_argument("--no-profile", action="store_true", help="validar solo la spec OKF, no el perfil knowledge/2.0")
     ap.add_argument("--okf-version", default="auto", choices=("auto", *SUPPORTED_VERSIONS),
                     help="versión de la spec contra la que validar (auto: okf_version del index raíz o heurística)")
     args = ap.parse_args(argv)

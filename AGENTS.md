@@ -1,6 +1,6 @@
 # AGENTS.md — okf-builder
 
-Este repositorio define el **estándar OKF (perfil knowledge/1.0)** y el plugin `okf-builder` que lo aplica. El propio repo usa OKF: su conocimiento está en `knowledge/` (empieza por `knowledge/index.md`).
+Este repositorio define el **estándar OKF (perfil knowledge/2.0)** y el plugin `okf-builder` que lo aplica. El propio repo usa OKF: su conocimiento está en `knowledge/` (empieza por `knowledge/index.md`).
 
 ## Fuente única y proyecciones
 
@@ -11,7 +11,7 @@ Este repositorio define el **estándar OKF (perfil knowledge/1.0)** y el plugin 
 
 ## Reglas para cualquier agente
 
-1. Antes de cambiar el estándar, los skills o los scripts: leer `knowledge/decisiones/` (ADRs). Si la decisión cambia, nuevo ADR que sustituye al anterior (`okf-capture`), nunca editar la historia.
+1. Antes de cambiar el estándar, los skills o los scripts: leer `knowledge/decisions/` (ADRs). Si la decisión cambia, nuevo ADR que sustituye al anterior (`okf-capture`), nunca editar la historia.
 2. Todo cambio en `knowledge/` termina con `python3 plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py knowledge --strict` a 0 errores (`make lint`).
 3. Todo cambio en skills/scripts termina con `make test` (init 0.1/0.2, fixtures de Google v0.1/v0.2, migración round-trip).
 4. No añadir `verified: human:` a ningún concepto sin que una persona lo confirme explícitamente.

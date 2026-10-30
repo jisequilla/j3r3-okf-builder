@@ -24,8 +24,8 @@ Los skills viven una vez en `plugin/okf-builder/skills/`. Cada plataforma recibe
 
 | Ruta | Qué es |
 |---|---|
-| `standard/OKF-ESTANDAR.md` | El estándar: perfil `knowledge/1.0` (estructura, frontmatter, tipos, ciclo de vida, conformidad). |
-| `standard/OKF-COMPATIBILIDAD.md` | Diferencias OKF v0.1 ↔ v0.2, matriz de campos, reglas de mapeo y política de versiones. |
+| `standard/OKF-STANDARD.md` | El estándar: perfil `knowledge/2.0` (estructura, frontmatter, tipos, ciclo de vida, conformidad). |
+| `standard/OKF-COMPATIBILITY.md` | Diferencias OKF v0.1 ↔ v0.2, matriz de campos, reglas de mapeo y política de versiones. |
 | `templates/` | Plantillas de concepto (`{{marcadores}}`): ADR, runbook, sistema, API, tabla, métrica, término, política, vista, referencia, proyecto. |
 | `knowledge/` | Conocimiento del propio proyecto (bundle OKF conformante, 8 ADR). |
 | `tools/` | Exportadores de proyecciones (Copilot, M365). |
@@ -53,7 +53,7 @@ En Cowork: cargar el fichero `.plugin` generado con `make plugin` (o el entregad
 ## Uso en un proyecto
 
 ```
-okf-init        → crea knowledge/ (index.md, log.md, proyecto.md, subdirectorios)
+okf-init        → crea knowledge/ (index.md, log.md, project.md, subdirectorios)
 okf-capture     → "documenta esta decisión / crea un runbook / registra este servicio"
 okf-lint        → valida spec + perfil (apto para CI: python3 tools/okf/okf_lint.py knowledge --strict)
 okf-index       → regenera index.md desde el frontmatter
@@ -66,7 +66,7 @@ okf-migrate     → detecta versión y migra 0.1 ↔ 0.2 (siempre con --dry-run 
 ```bash
 python3 plugin/okf-builder/skills/okf-standard/scripts/okf_init.py  --root . --title "Mi proyecto" --description "…" --actor human:<id>
 python3 plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py  knowledge [--json] [--strict] [--no-profile]
-python3 plugin/okf-builder/skills/okf-standard/scripts/okf_index.py knowledge [--check] [--dir decisiones]
+python3 plugin/okf-builder/skills/okf-standard/scripts/okf_index.py knowledge [--check] [--dir decisions]
 python3 plugin/okf-builder/skills/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
 ```
 

@@ -1,17 +1,17 @@
 ---
 type: API
-title: {{nombre}}
-description: {{descripcion_una_frase}}
-resource: {{url_openapi_o_proto}}
+title: {{name}}
+description: {{one_sentence_description}}
+resource: {{openapi_or_proto_url}}
 tags: [api, {{tags}}]
 status: draft
-owner: team:{{equipo}}
-generated: { by: {{actor}}, at: {{ahora}} }
+owner: team:{{team}}
+generated: { by: {{actor}}, at: {{now}} }
 ---
 
 # Contrato
 
-Especificación canónica: `{{ruta_o_url}}`. Este concepto no duplica el contrato; resume semántica y uso.
+Especificación canónica: `{{path_or_url}}`. Este concepto no duplica el contrato; resume semántica y uso.
 
 # Operaciones principales
 
@@ -28,4 +28,4 @@ curl -H "Authorization: Bearer $TOKEN" https://.../v1/...
 
 # Expuesta por
 
-* [Sistema](/sistemas/....md)
+* [Sistema](/systems/....md)
