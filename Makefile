@@ -1,3 +1,7 @@
+# pipefail makes every `lint ... | tail -1` gate fail when lint fails.
+# The flags live in SHELL because GNU make 3.81 (macOS) ignores .SHELLFLAGS.
+SHELL := /bin/bash -eo pipefail
+.SHELLFLAGS := -c
 PLUGIN=plugin/okf-builder
 S=$(PLUGIN)/skills/okf-standard/scripts
 .PHONY: plugin lint test copilot m365 all check-links
@@ -38,6 +42,11 @@ test:
 	@echo "[6] parser reducido frente a PyYAML"
 	python3 tools/check_mini_yaml.py --self-test
 	python3 tools/check_mini_yaml.py knowledge examples
+	@echo "[7] control negativo: lint de tests/fixtures/broken-bundle (roto a propósito, un NO_TYPE) tiene que fallar"
+	! python3 $(S)/okf_lint.py tests/fixtures/broken-bundle/knowledge --strict | tail -1
+	! OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py tests/fixtures/broken-bundle/knowledge --strict | tail -1
+	(python3 $(S)/okf_lint.py tests/fixtures/broken-bundle/knowledge --strict || test $$? -eq 1) | grep '^ERROR NO_TYPE ' >/dev/null
+	(OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py tests/fixtures/broken-bundle/knowledge --strict || test $$? -eq 1) | grep '^ERROR NO_TYPE ' >/dev/null
 	@echo "OK"
 copilot:
 	python3 tools/export_copilot.py --zip
