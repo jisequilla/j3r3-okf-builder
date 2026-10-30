@@ -1,0 +1,18 @@
+{
+  "name": "j3r3-okf-builder",
+  "owner": {
+    "name": "Jeremías de Isequilla"
+  },
+  "metadata": {
+    "description": "Marketplace personal: plugin okf-builder (Open Knowledge Format)"
+  },
+  "plugins": [
+    {
+      "name": "okf-builder",
+      "source": "./plugin/okf-builder",
+      "description": "Gestiona el conocimiento de un proyecto como bundle OKF v0.2 en knowledge/.",
+      "version": "0.2.0",
+      "category": "productivity"
+    }
+  ]
+}
