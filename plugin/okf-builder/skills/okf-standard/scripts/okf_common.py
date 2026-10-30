@@ -42,8 +42,10 @@ def _scalar(tok: str) -> Any:
         return True
     if t in ("false", "False", "FALSE"):
         return False
-    if (t.startswith('"') and t.endswith('"')) or (t.startswith("'") and t.endswith("'")):
-        return t[1:-1]
+    if t[:1] in ('"', "'"):
+        if _closing_quote(t, t[0]) != len(t) - 1:
+            raise ValueError(f"comilla sin cerrar o texto tras la comilla de cierre: {t!r}")
+        return _unescape_double(t[1:-1]) if t[0] == '"' else t[1:-1].replace("''", "'")
     if re.fullmatch(r"-?\d+", t):
         return int(t)
     if re.fullmatch(r"-?\d+\.\d+", t):
@@ -55,12 +57,46 @@ def _scalar(tok: str) -> Any:
     return t
 
 
+_ESCAPES = {'"': '"', "\\": "\\", "/": "/", "n": "\n", "t": "\t", "r": "\r", "0": "\0"}
+
+
+def _unescape_double(s: str) -> str:
+    out, i = [], 0
+    while i < len(s):
+        ch = s[i]
+        if ch != "\\":
+            out.append(ch)
+            i += 1
+            continue
+        esc = s[i + 1 : i + 2]
+        if esc and esc in _ESCAPES:
+            out.append(_ESCAPES[esc])
+            i += 2
+            continue
+        if esc == "u":
+            hexa = s[i + 2 : i + 6]
+            if not re.fullmatch(r"[0-9A-Fa-f]{4}", hexa):
+                raise ValueError(f"escape \\u sin 4 dígitos hexadecimales: {s!r}")
+            code = int(hexa, 16)
+            if 0xD800 <= code <= 0xDFFF:
+                raise ValueError(f"escape \\u{hexa} (surrogate) no soportado: {s!r}")
+            out.append(chr(code))
+            i += 6
+            continue
+        raise ValueError(f"escape \\{esc} no soportado en comillas dobles: {s!r}")
+    return "".join(out)
+
+
 def _split_top(s: str, sep: str = ",") -> list[str]:
-    out, depth, cur, quote = [], 0, "", None
+    out, depth, cur, quote, escaped = [], 0, "", None, False
     for ch in s:
         if quote:
             cur += ch
-            if ch == quote:
+            if escaped:
+                escaped = False
+            elif quote == '"' and ch == "\\":
+                escaped = True
+            elif ch == quote:
                 quote = None
             continue
         if ch in "\"'":
@@ -97,11 +133,15 @@ def _flow_list(s: str) -> list:
 
 
 def _strip_comment(line: str) -> str:
-    out, quote = "", None
+    out, quote, escaped = "", None, False
     for i, ch in enumerate(line):
         if quote:
             out += ch
-            if ch == quote:
+            if escaped:
+                escaped = False
+            elif quote == '"' and ch == "\\":
+                escaped = True
+            elif ch == quote:
                 quote = None
         elif ch in "\"'":
             quote = ch
@@ -119,6 +159,11 @@ _CLOSERS = {'"': '"', "'": "'", "{": "}", "[": "]"}
 
 def _indent_of(line: str) -> int:
     return len(line) - len(line.lstrip())
+
+
+def _check_tab(line: str) -> None:
+    if "\t" in line[: _indent_of(line)]:
+        raise ValueError(f"tab en la indentación no soportado: {line!r}")
 
 
 def _closing_quote(text: str, q: str) -> int | None:
@@ -170,35 +215,50 @@ def _mini_yaml(text: str) -> dict:
 
     def block_scalar(idx: int, indent: int, header: str):
         # | |- > >- se leen de `raw` para conservar '#' y líneas vacías
+        # la indentación del cuerpo se cuenta solo en espacios
         start = end = pos[idx] + 1
         body_indent = None
         while end < len(raw):
             r = raw[end]
             if r.strip():
-                ind = _indent_of(r)
+                ind = len(r) - len(r.lstrip(" "))
                 if (body_indent is None and ind <= indent) or (body_indent is not None and ind < body_indent):
                     break
                 if body_indent is None:
                     body_indent = ind
             end += 1
-        content = [r[body_indent:] if r.strip() else "" for r in raw[start:end]] if body_indent else []
-        while content and content[-1] == "":
-            content.pop()
-        if header[0] == "|":
-            out = "\n".join(content)
-        else:
-            if any(c[:1] in (" ", "\t") for c in content):
-                raise ValueError(f"escalar plegado con líneas más indentadas no soportado: {raw[pos[idx]]!r}")
-            out, blanks = "", 0
-            for c in content:
-                if c == "":
-                    blanks += 1
-                    continue
-                if out:
-                    out += "\n" * blanks if blanks else " "
-                out += c
-                blanks = 0
-        if out and not header.endswith("-"):
+        if body_indent is None:
+            return "", first_line_from(end)
+        # como PyYAML: una línea más larga que la indentación del cuerpo es texto
+        # (aunque sean solo espacios); las demás líneas vacías son saltos
+        leading, segs, last = 0, [], start
+        for i in range(start, end):
+            r = raw[i]
+            spaces = len(r) - len(r.lstrip(" "))
+            if not r.strip() and spaces < body_indent and r[spaces:]:
+                raise ValueError(f"tab en la indentación de un escalar de bloque no soportado: {r!r}")
+            if len(r) > body_indent:
+                if not segs and not r.strip():
+                    raise ValueError(
+                        f"línea inicial de solo espacios más indentada que el escalar de bloque: {raw[pos[idx]]!r}"
+                    )
+                segs.append([r[body_indent:], 0])
+                last = i
+            elif segs:
+                segs[-1][1] += 1
+            else:
+                leading += 1
+        out = "\n" * leading
+        for n, (c, breaks) in enumerate(segs):
+            out += c
+            if n + 1 < len(segs):
+                nxt = segs[n + 1][0]
+                if header[0] == ">" and c[:1] not in " \t" and nxt[:1] not in " \t":
+                    out += "" if breaks else " "
+                else:
+                    out += "\n"
+                out += "\n" * breaks
+        if not header.endswith("-") and (last + 1 < len(raw) or text.endswith(("\n", "\r"))):
             out += "\n"
         return out, first_line_from(end)
 
@@ -220,17 +280,23 @@ def _mini_yaml(text: str) -> dict:
             if not r.strip():
                 blanks += 1
                 continue
-            text += ("\n" * blanks if blanks else " ") + r.strip()
+            _check_tab(r)
+            if q == '"' and (len(text) - len(text.rstrip("\\"))) % 2:
+                raise ValueError(f"salto de línea escapado (\\ al final de línea) no soportado: {raw[pos[idx]]!r}")
+            text +=("\n" * blanks if blanks else " ") + r.strip()
             blanks = 0
 
     def plain_scalar(idx: int, indent: int, v: str):
         # un escalar que sigue en líneas más indentadas se une con un espacio
         t = v.strip()
-        closed = len(t) > 1 and t[0] in _CLOSERS and t[-1] == _CLOSERS[t[0]]
-        if not closed and t[:1] in ('"', "'"):
+        if t[:1] in ('"', "'"):
             return quoted_scalar(idx, indent, t)
+        closed = len(t) > 1 and t[0] in _CLOSERS and t[-1] == _CLOSERS[t[0]]
         parts, nxt = [t], idx + 1
+        if not closed and t[:1] == "{" and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
+            raise ValueError(f"mapa en flujo {{ }} multilínea no soportado: {lines[idx]!r}")
         while not closed and nxt < len(lines) and _indent_of(lines[nxt]) > indent:
+            _check_tab(lines[nxt])
             c = lines[nxt].strip()
             if ": " in c or c.endswith(":"):
                 raise ValueError(f"indentación inesperada: {lines[nxt]!r}")
@@ -266,6 +332,7 @@ def _mini_yaml(text: str) -> dict:
         d: dict = {}
         while idx < len(lines):
             line = lines[idx]
+            _check_tab(line)
             ind = len(line) - len(line.lstrip())
             if ind < indent or line.strip().startswith("- "):
                 break
@@ -293,6 +360,7 @@ def _mini_yaml(text: str) -> dict:
         lst: list = []
         while idx < len(lines):
             line = lines[idx]
+            _check_tab(line)
             ind = len(line) - len(line.lstrip())
             if ind != indent or not line.strip().startswith("- "):
                 break

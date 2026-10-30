@@ -47,6 +47,40 @@ CASES: list[tuple[str, str, dict]] = [
     ("multi-line single-quoted with #", "a: 'one\n  two #x'\nb: 1\n", {"a": "one two #x", "b": 1}),
     ("quoted line that looks like a comment", "a: \"one\n  # two\"\n", {"a": "one # two"}),
     ("multi-line quoted list item", "items:\n- \"one\n  two #x\"\n- b\n", {"items": ["one two #x", "b"]}),
+    ("folded > keeps leading blank line", "a: >\n\n  x\n  y\n", {"a": "\nx y\n"}),
+    ("folded >- keeps leading blank lines", "a: >-\n\n\n  x\n", {"a": "\n\nx"}),
+    ("literal | keeps more-indented blank line", "a: |\n  x\n    \n  y\n", {"a": "x\n  \ny\n"}),
+    ("folded > keeps more-indented blank line", "a: >\n  x\n    \n  y\n", {"a": "x\n  \ny\n"}),
+    ("folded > around a more-indented line", "a: >\n  x\n   y\n  z\n  w\n", {"a": "x\n y\nz w\n"}),
+    ("block scalar at end of text", "a: |\n  x", {"a": "x"}),
+    ("tab after the block indent is content", "a: |\n  \tx\n", {"a": "\tx\n"}),
+    ("single-quoted ''", "a: 'it''s'\n", {"a": "it's"}),
+    ("multi-line single-quoted ''", "a: 'it''s\n  ok'\n", {"a": "it's ok"}),
+    ("double-quoted \\\"", "a: \"x\\\"y\"\n", {"a": "x\"y"}),
+    ("double-quoted \\t", "a: \"tab\\there\"\n", {"a": "tab\there"}),
+    ("double-quoted \\n", "a: \"nl\\nhere\"\n", {"a": "nl\nhere"}),
+    ("double-quoted \\\\", "a: \"back\\\\slash\"\n", {"a": "back\\slash"}),
+    ("double-quoted \\/ \\r \\0", "a: \"s\\/l\\rr\\0z\"\n", {"a": "s/l\rr\0z"}),
+    ("double-quoted \\uXXXX", "a: \"\\u00e9\"\n", {"a": "é"}),
+    ("double-quoted \\\" before a comment", "a: \"x\\\" # y\"  # c\n", {"a": "x\" # y"}),
+    ("literal tab inside double quotes", "a: \"x\ty\"\n", {"a": "x\ty"}),
+]
+
+# (text, substring the ValueError message must contain)
+UNSUPPORTED: list[tuple[str, str]] = [
+    ("a: |+\n  x\n", "bloque"), ("a: |2\n  x\n", "bloque"), ("a: >+\n  x\n", "bloque"),
+    ("a: >2\n  x\n", "bloque"), ("a: |-2\n  x\n", "bloque"),
+    ("---\na: 1\n", "multidocumento"), ("a: 1\n...\n", "multidocumento"),
+    ("a: &x 1\n", "anclas"), ("a: &x\n  b: 1\n", "anclas"), ("a: !!str 1\n", "tags"), ("a: *x\n", "alias"),
+    ("a: \"one\n  two\nb: 1\n", "sin cerrar"), ("a: 'one\n  two\n", "sin cerrar"), ("a: [1,\n  2\n", "sin cerrar"),
+    ("a: \"one\\\n  two\"\n", "salto de línea escapado"),
+    ("a: \"\\x41\"\n", "\\x"), ("a: \"\\e\"\n", "\\e"), ("a: \"\\U0001F600\"\n", "\\U"),
+    ("a: \"\\N\"\n", "\\N"), ("a: \"\\_\"\n", "\\_"), ("a: \"\\ud800\"\n", "surrogate"), ("a: \"\\u12\"\n", "\\u"),
+    ("a: one\n\ttwo\n", "tab"), ("a:\n\tb: 1\n", "tab"), ("a: \"one\n\ttwo\"\n", "tab"),
+    ("a: |\n  x\n\t\n  y\n", "tab"), ("a: |\n    \n  x\n", "solo espacios"),
+    ("a: {x: 1,\n  y: 2}\n", "flujo"),
+    ("a: \"x\" y\n  z\n", "comilla de cierre"), ("a: \"x\" y\n", "comilla de cierre"), ("a: 'x\n", "sin cerrar"),
+    ("a: ['x' y]\n", "comilla de cierre"),
 ]
 
 
@@ -92,18 +126,23 @@ def _diff(a: Any, b: Any, path: str = "") -> str | None:
             if d is not None:
                 return d
         return None
-    return None if a == b else (path.rstrip(".") or "<root>")
+    return None if type(a) is type(b) and a == b else (path.rstrip(".") or "<root>")
 
 
 def compare(text: str) -> tuple[str | None, Any, Any]:
-    ref = yaml.safe_load(text)
+    """Return (problem, mini, ref); problem is None when both parsers agree."""
+    try:
+        ref = yaml.safe_load(text)
+    except Exception as e:  # noqa: BLE001
+        return f"PyYAML error: {type(e).__name__}: {e}", None, None
     ref = ref if isinstance(ref, dict) else {}
     try:
         mini = _mini_yaml(text)
     except Exception as e:  # noqa: BLE001
-        return "<parse error>", f"{type(e).__name__}: {e}", ref
+        return f"{type(e).__name__}: {e}", None, ref
     mini, ref = _norm_mini(mini, ref), _norm(ref)
-    return _diff(mini, ref), mini, ref
+    key = _diff(mini, ref)
+    return (None if key is None else f"key {key}"), mini, ref
 
 
 def self_test() -> int:
@@ -112,21 +151,24 @@ def self_test() -> int:
             got = _mini_yaml(text)
         except Exception as e:  # noqa: BLE001
             got = f"{type(e).__name__}: {e}"
-        if got != expected:
+        if _diff(got, expected) is not None:
             print(f"FAIL self-test [{name}]: mini={got!r} expected={expected!r}")
             return 1
-        if yaml is not None and yaml.safe_load(text) != expected:
+        if yaml is not None and _diff(yaml.safe_load(text), expected) is not None:
             print(f"FAIL self-test [{name}]: PyYAML={yaml.safe_load(text)!r} expected={expected!r}")
             return 1
-    for text in ("a: |+\n  x\n", "a: |2\n  x\n", "a: &x 1\n", "a: !!str 1\n", "a: *x\n",
-                 "a: \"one\n  two\nb: 1\n", "a: 'one\n  two\n", "a: [1,\n  2\n"):
+    for text, needle in UNSUPPORTED:
         try:
-            _mini_yaml(text)
-        except ValueError:
-            continue
-        print(f"FAIL self-test [unsupported]: no ValueError for {text!r}")
+            got = _mini_yaml(text)
+        except ValueError as e:
+            if needle in str(e):
+                continue
+            print(f"FAIL self-test [unsupported]: {text!r} raised {e!r}, which does not name {needle!r}")
+            return 1
+        print(f"FAIL self-test [unsupported]: no ValueError for {text!r} (got {got!r})")
         return 1
-    print(f"self-test OK ({len(CASES)} cases{', checked against PyYAML' if yaml else ''})")
+    print(f"self-test OK ({len(CASES)} cases, {len(UNSUPPORTED)} unsupported"
+          f"{', checked against PyYAML' if yaml else ''})")
     return 0
 
 
@@ -146,10 +188,11 @@ def main(argv: list[str]) -> int:
             fm, _ = split_frontmatter(f.read_text(encoding="utf-8"))
             if fm is None:
                 continue
-            key, mini, ref = compare(fm)
+            problem, mini, ref = compare(fm)
             n += 1
-            if key is not None:
-                print(f"MISMATCH {f}: key {key}\n  mini:   {mini!r}\n  PyYAML: {ref!r}")
+            if problem is not None:
+                detail = f"\n  mini:   {mini!r}\n  PyYAML: {ref!r}" if problem.startswith("key ") else ""
+                print(f"MISMATCH {f}: {problem}{detail}")
                 return 1
     print(f"OK: {n} frontmatters match PyYAML")
     return 0
