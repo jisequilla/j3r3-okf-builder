@@ -2,7 +2,7 @@
 type: Attested Computation
 title: {{name}}
 description: {{one_sentence_description}}
-tags: [computacion, {{tags}}]
+tags: [computation, {{tags}}]
 status: draft
 runtime: {{bigquery|postgres|dbt|python}}
 parameters:
@@ -22,7 +22,7 @@ sources: []
 ```sql
 SELECT ...
 FROM ...
-WHERE campo = @{{param}}
+WHERE field = @{{param}}
 ```
 
-Usada por [la métrica](/metrics/{{slug}}.md).
+Used by [the metric](/metrics/{{slug}}.md).

@@ -9,16 +9,16 @@ owner: team:{{team}}
 generated: { by: {{actor}}, at: {{now}} }
 ---
 
-# Contrato
+# Contract
 
-Especificación canónica: `{{path_or_url}}`. Este concepto no duplica el contrato; resume semántica y uso.
+Canonical specification: `{{path_or_url}}`. This concept doesn't duplicate the contract; it summarizes semantics and usage.
 
-# Operaciones principales
+# Main operations
 
-| Operación | Método / ruta | Uso | Notas |
+| Operation | Method / path | Use | Notes |
 |---|---|---|---|
 
-# Autenticación y autorización
+# Authentication and authorization
 
 # Examples
 
@@ -26,6 +26,6 @@ Especificación canónica: `{{path_or_url}}`. Este concepto no duplica el contra
 curl -H "Authorization: Bearer $TOKEN" https://.../v1/...
 ```
 
-# Expuesta por
+# Exposed by
 
-* [Sistema](/systems/....md)
+* [System](/systems/....md)

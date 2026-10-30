@@ -8,35 +8,35 @@ status: draft
 generated: { by: {{actor}}, at: {{now}} }
 ---
 
-# Propósito
+# Purpose
 
-{{Qué problema resuelve el proyecto y para quién.}}
+{{What problem the project solves and for whom.}}
 
-# Alcance
+# Scope
 
-- Incluye: ...
-- Excluye: ...
+- In scope: ...
+- Out of scope: ...
 
-# Equipo y propiedad
+# Team and ownership
 
-| Rol | Persona / equipo | Contacto |
+| Role | Person / team | Contact |
 |---|---|---|
 | Owner | | |
 | Tech lead | | |
 
-# Enlaces clave
+# Key links
 
-| Recurso | URL |
+| Resource | URL |
 |---|---|
-| Repositorio | {{repo_url}} |
-| Tablero | |
-| Entornos | |
-| Observabilidad | |
+| Repository | {{repo_url}} |
+| Board | |
+| Environments | |
+| Observability | |
 
-# Mapa del conocimiento
+# Knowledge map
 
-* [Arquitectura](/architecture/index.md)
-* [Decisiones](/decisions/index.md)
-* [Dominio](/domain/index.md)
-* [Sistemas](/systems/index.md)
+* [Architecture](/architecture/index.md)
+* [Decisions](/decisions/index.md)
+* [Domain](/domain/index.md)
+* [Systems](/systems/index.md)
 * [Runbooks](/runbooks/index.md)

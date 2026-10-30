@@ -2,21 +2,21 @@
 type: Term
 title: {{term}}
 description: {{one_sentence_definition}}
-tags: [dominio, glosario]
+tags: [domain, glossary]
 status: draft
 generated: { by: {{actor}}, at: {{now}} }
 ---
 
-# Definición
+# Definition
 
-{{Definición completa, sin ambigüedad. Si hay acepciones distintas por área, listarlas.}}
+{{Complete, unambiguous definition. If it has different meanings per area, list them.}}
 
-# Sinónimos y términos relacionados
+# Synonyms and related terms
 
-- Sinónimos:
-- No confundir con: [otro término](/domain/otro-termino.md)
+- Synonyms:
+- Not to be confused with: [other term](/domain/other-term.md)
 
-# Dónde aparece
+# Where it appears
 
-* [Tabla](/data/....md) · columna `...`
-* [API](/apis/....md) · campo `...`
+* [Table](/data/....md) · column `...`
+* [API](/apis/....md) · field `...`

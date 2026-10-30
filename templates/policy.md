@@ -3,7 +3,7 @@ type: Policy
 title: {{title}}
 description: {{one_sentence_description}}
 resource: {{normative_document_url}}
-tags: [politica, {{tags}}]
+tags: [policy, {{tags}}]
 status: draft
 owner: team:{{team}}
 stale_after: {{iso_date}}
@@ -11,16 +11,16 @@ generated: { by: {{actor}}, at: {{now}} }
 sources: []
 ---
 
-# Ámbito
+# Scope
 
-# Norma
+# Rule
 
-- DEBE ...
-- NO DEBE ...
-- DEBERÍA ...
+- MUST ...
+- MUST NOT ...
+- SHOULD ...
 
-# Excepciones y proceso de excepción
+# Exceptions and exception process
 
-# Verificación / controles
+# Verification / controls
 
-# Relacionados
+# Related

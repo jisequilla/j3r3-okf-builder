@@ -1,41 +1,41 @@
 ---
 name: okf-init
-description: Crea la estructura estándar knowledge/ (bundle OKF v0.2, perfil knowledge/2.0) en el repositorio actual. Usar cuando el usuario diga "inicializa OKF", "crea la carpeta knowledge", "okf init", "scaffold de conocimiento", "prepara este repo para OKF".
+description: Creates the standard knowledge/ structure (OKF v0.2 bundle, knowledge/2.0 profile) in the current repository. Use when the user says "initialize OKF", "create the knowledge folder", "okf init", "scaffold knowledge", "prepare this repo for OKF".
 ---
 
 # okf-init
 
-> **Rutas.** `<skills>` es el directorio que contiene los skills `okf-*` (el padre de este skill): `${CLAUDE_PLUGIN_ROOT}/skills` en el plugin de Claude, `.claude/skills`, `.agents/skills`, `.github/skills` o `.gemini/skills` en un repo. Los scripts viven en `<skills>/okf-standard/scripts/` y las plantillas en `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
 
-Crea `knowledge/` con `index.md`, `log.md`, `project.md` y los subdirectorios del perfil, cada uno con su `index.md`.
+Creates `knowledge/` with `index.md`, `log.md`, `project.md` and the profile's subdirectories, each with its own `index.md`.
 
-## Pasos
+## Steps
 
-1. Localizar la raíz del repo (donde está `.git/` o el `CLAUDE.md`). Si ya existe `knowledge/index.md`, informar y preguntar si se quiere completar la estructura (el script es idempotente: no sobreescribe sin `--force`).
-2. Obtener del usuario, o inferir del repo (README, `package.json`, `pom.xml`, `pyproject.toml`, remoto git), estos datos; preguntar solo lo que no se pueda inferir:
-   - `title`: nombre del proyecto.
-   - `description`: una frase.
-   - `repo-url`: remoto git si existe.
-   - `actor`: `human:<id>` del usuario (derivar del `git config user.email` antes de la `@`; confirmar).
-   - `dirs`: por defecto todos los del perfil. Si el proyecto claramente no tiene datos ni métricas (p. ej. una librería), proponer omitir `data,metrics,computations`.
-3. Ejecutar:
+1. Find the repo root (where `.git/` or the `CLAUDE.md` is). If `knowledge/index.md` already exists, say so and ask whether to complete the structure (the script is idempotent: it doesn't overwrite without `--force`).
+2. Get the following from the user, or infer it from the repo (README, `package.json`, `pom.xml`, `pyproject.toml`, git remote); ask only for what can't be inferred:
+   - `title`: project name.
+   - `description`: one sentence.
+   - `repo-url`: the git remote, if there is one.
+   - `actor`: the user's `human:<id>` (derive it from `git config user.email` before the `@`; confirm).
+   - `dirs`: all of the profile's by default. If the project clearly has no data or metrics (e.g. a library), propose leaving out `data,metrics,computations`.
+3. Run:
    ```bash
-   python3 "<skills>/okf-standard/scripts/okf_init.py" --root <raíz> \
+   python3 "<skills>/okf-standard/scripts/okf_init.py" --root <root> \
      --title "<title>" --description "<description>" --actor <actor> \
      --repo-url "<url>" [--dirs a,b,c] [--okf-version 0.2|0.1]
    ```
-   `--okf-version 0.1` solo si el bundle debe ser consumido por herramientas que únicamente entienden 0.1; por defecto 0.2.
-4. Rellenar `knowledge/project.md`: sustituir todos los marcadores `{{...}}` con lo que se sepa del repo (propósito, alcance, enlaces). Lo que no se sepa, dejar como lista con `TODO` explícito, nunca marcadores sin sustituir.
-5. Añadir (o proponer añadir) al `CLAUDE.md` del repo:
+   `--okf-version 0.1` only if the bundle must be consumed by tools that understand only 0.1; 0.2 by default.
+4. Fill in `knowledge/project.md`: replace every `{{...}}` placeholder with what is known from the repo (purpose, scope, links). Whatever isn't known, leave as a list with an explicit `TODO`, never unreplaced placeholders.
+5. Add (or propose adding) to the repo's `CLAUDE.md`:
    ```
-   ## Conocimiento del proyecto
-   El conocimiento vive en `knowledge/` (formato OKF v0.2). Empieza por `knowledge/index.md`.
-   Para añadir conocimiento usa el skill okf-capture; para validar, okf-lint.
+   ## Project knowledge
+   The knowledge lives in `knowledge/` (OKF v0.2 format). Start with `knowledge/index.md`.
+   To add knowledge use the okf-capture skill; to validate it, okf-lint.
    ```
-6. Ejecutar `okf-lint` (`python3 "<skills>/okf-standard/scripts/okf_lint.py" <raíz>/knowledge`) y mostrar el resultado. Los avisos `INDEX_EMPTY` en directorios vacíos son esperables.
-7. Resumir en 3–5 líneas qué se creó y sugerir la primera captura (normalmente `okf-capture` con un ADR o la vista de arquitectura de contexto).
+6. Run `okf-lint` (`python3 "<skills>/okf-standard/scripts/okf_lint.py" <root>/knowledge`) and show the result. `INDEX_EMPTY` warnings in empty directories are expected.
+7. Summarize in 3–5 lines what was created and suggest the first capture (usually `okf-capture` with an ADR or the context architecture view).
 
-## No hacer
+## Don't
 
-- No crear conceptos de ejemplo ficticios: solo estructura y `project.md`.
-- No añadir `verified` a nada.
+- Don't create fictitious example concepts: only the structure and `project.md`.
+- Don't add `verified` to anything.

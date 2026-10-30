@@ -1,9 +1,9 @@
 ---
 type: Table
 title: {{name}}
-description: {{una_fila_por_...}}
+description: {{one_row_per_...}}
 resource: {{table_uri}}
-tags: [datos, {{tags}}]
+tags: [data, {{tags}}]
 status: draft
 owner: team:{{team}}
 generated: { by: {{actor}}, at: {{now}} }
@@ -12,18 +12,18 @@ sources: []
 
 # Schema
 
-| Columna | Tipo | Descripción |
+| Column | Type | Description |
 |---|---|---|
-| `id` | STRING | Identificador único. |
+| `id` | STRING | Unique identifier. |
 
 # Joins
 
-Se une con [otra tabla](/data/otra-tabla.md) por `clave`.
+Joins with [other table](/data/other-table.md) on `key`.
 
-# Particionado y frescura
+# Partitioning and freshness
 
-- Partición:
-- SLA de frescura:
+- Partition:
+- Freshness SLA:
 
 # Examples
 

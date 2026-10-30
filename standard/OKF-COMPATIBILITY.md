@@ -1,100 +1,100 @@
-# Compatibilidad OKF v0.1 ↔ v0.2
+# OKF v0.1 ↔ v0.2 compatibility
 
-**Fuentes:** `SPEC.md` v0.1 (commit `ee67a5c`, jun-2026) y v0.2 (commit `780fe9d`, jul-2026, + `62432a0` ago-2026 que exige offset explícito en todos los timestamps) del repo `GoogleCloudPlatform/knowledge-catalog`. Copias literales en `plugin/okf-builder/skills/okf-standard/references/`.
+**Sources:** `SPEC.md` v0.1 (commit `ee67a5c`, Jun 2026) and v0.2 (commit `780fe9d`, Jul 2026, + `62432a0`, Aug 2026, which requires an explicit offset on every timestamp) from the `GoogleCloudPlatform/knowledge-catalog` repo. Verbatim copies in `plugin/okf-builder/skills/okf-standard/references/`.
 
-Google declara v0.2 como *minor bump* salvo **dos cambios rompedores** (§13.1). En la práctica un consumidor v0.2 lee v0.1 con dos fallbacks, y un consumidor v0.1 lee v0.2 porque debe tolerar claves desconocidas. El perfil `knowledge/2.0` es **v0.2 por defecto** y soporta v0.1 en modo lectura, validación y migración en ambos sentidos.
+Google declares v0.2 a *minor bump* except for **two breaking changes** (§13.1). In practice a v0.2 consumer reads v0.1 with two fallbacks, and a v0.1 consumer reads v0.2 because it must tolerate unknown keys. The `knowledge/2.0` profile is **v0.2 by default** and supports v0.1 for reading, validation and migration in both directions.
 
 ---
 
-## 1. Lo que NO cambia (núcleo común)
+## 1. What does NOT change (common core)
 
-| Elemento | v0.1 | v0.2 |
+| Element | v0.1 | v0.2 |
 |---|---|---|
-| Bundle = árbol de markdown | ✓ | ✓ |
-| Ficheros reservados `index.md`, `log.md` | ✓ | ✓ |
-| `index.md` sin frontmatter salvo raíz con `okf_version` | ✓ | ✓ |
-| `log.md`: `## YYYY-MM-DD`, más reciente primero | ✓ | ✓ |
-| `type` único campo obligatorio | ✓ | ✓ |
-| `title`, `description`, `resource`, `tags` recomendados | ✓ | ✓ |
-| Enlaces absolutos al bundle `/dir/x.md` o relativos | ✓ | ✓ |
-| Enlaces rotos tolerados | ✓ | ✓ |
-| Encabezados `# Schema`, `# Examples` | ✓ | ✓ |
-| Tipos no registrados; claves desconocidas preservadas | ✓ | ✓ |
-| Conformidad: frontmatter parseable + `type` + reservados bien formados | ✓ (§9) | ✓ (§11) |
-| Convención `references/` | ✓ (en §8 Citations) | ✓ (§6.3) |
+| Bundle = markdown tree | ✓ | ✓ |
+| Reserved files `index.md`, `log.md` | ✓ | ✓ |
+| `index.md` without frontmatter except the root one with `okf_version` | ✓ | ✓ |
+| `log.md`: `## YYYY-MM-DD`, most recent first | ✓ | ✓ |
+| `type` the only required field | ✓ | ✓ |
+| `title`, `description`, `resource`, `tags` recommended | ✓ | ✓ |
+| Bundle-absolute links `/dir/x.md` or relative ones | ✓ | ✓ |
+| Broken links tolerated | ✓ | ✓ |
+| Headings `# Schema`, `# Examples` | ✓ | ✓ |
+| Types not registered; unknown keys preserved | ✓ | ✓ |
+| Conformance: parseable frontmatter + `type` + well-formed reserved files | ✓ (§9) | ✓ (§11) |
+| `references/` convention | ✓ (in §8 Citations) | ✓ (§6.3) |
 
-Cualquier herramienta que solo use el núcleo común trabaja con ambas versiones sin cambios.
+Any tool that only uses the common core works with both versions unchanged.
 
 ---
 
-## 2. Cambios rompedores (§13.1)
+## 2. Breaking changes (§13.1)
 
-| # | v0.1 | v0.2 | Mapeo 0.1→0.2 | Mapeo 0.2→0.1 |
+| # | v0.1 | v0.2 | 0.1→0.2 mapping | 0.2→0.1 mapping |
 |---|---|---|---|---|
-| B1 | `timestamp: <ISO>` (frontmatter) — última modificación | `generated: { by: <actor>, at: <ISO> }` | `generated.at = timestamp`; `generated.by` **no existe en 0.1** → se asigna un actor por defecto (`process:okf-migrate`) o el que indique el usuario | `timestamp = generated.at`; `generated.by` se pierde (opcionalmente conservar `generated` como extensión) |
-| B2 | Sección de cuerpo `# Citations` con lista `[n] [título](url)` (spec) o `- url` / `- [título](url)` (bundles reales) | Frontmatter `sources: [{ id, resource, title, author, usage_count, last_modified }]` + notas al pie `[^id]` | Cada cita → `sources[]` con `resource=url`, `title` si lo hay, `id=cit-n`; referencias `[n]` en el cuerpo → `[^cit-n]`; eliminar la sección `# Citations` | Cada `sources[]` → línea `[n] [title](resource)` bajo `# Citations`; `[^id]` → `[n]`; eliminar definiciones de nota al pie; señales (`author`, `usage_count`, `last_modified`) se pierden salvo que se conserven como extensión |
+| B1 | `timestamp: <ISO>` (frontmatter) — last modification | `generated: { by: <actor>, at: <ISO> }` | `generated.at = timestamp`; `generated.by` **doesn't exist in 0.1** → a default actor is assigned (`process:okf-migrate`) or the one the user gives | `timestamp = generated.at`; `generated.by` is lost (optionally keep `generated` as an extension) |
+| B2 | Body section `# Citations` with a list `[n] [title](url)` (spec) or `- url` / `- [title](url)` (real bundles) | Frontmatter `sources: [{ id, resource, title, author, usage_count, last_modified }]` + `[^id]` footnotes | Each citation → `sources[]` with `resource=url`, `title` if there is one, `id=cit-n`; `[n]` references in the body → `[^cit-n]`; remove the `# Citations` section | Each `sources[]` → a `[n] [title](resource)` line under `# Citations`; `[^id]` → `[n]`; remove the footnote definitions; signals (`author`, `usage_count`, `last_modified`) are lost unless kept as an extension |
 
-Fallbacks que la spec v0.2 autoriza al consumidor: leer `timestamp` si falta `generated` (MAY) y parsear `# Citations` (MAY). `okf-lint` en modo 0.2 los reporta como `LEGACY_TIMESTAMP` / `LEGACY_CITATIONS` (aviso, no error).
+Fallbacks the v0.2 spec allows the consumer: read `timestamp` if `generated` is missing (MAY) and parse `# Citations` (MAY). `okf-lint` in 0.2 mode reports them as `LEGACY_TIMESTAMP` / `LEGACY_CITATIONS` (warning, not error).
 
 ---
 
-## 3. Añadidos de v0.2 (solo opcionales; su ausencia ⇒ concepto v0.1 plano)
+## 3. v0.2 additions (optional only; their absence ⇒ a plain v0.1 concept)
 
-| Familia | Claves | Semántica | En un bundle v0.1 |
+| Family | Keys | Semantics | In a v0.1 bundle |
 |---|---|---|---|
-| Procedencia | `sources[]`, `usage_window` | De qué deriva el concepto; señales de credibilidad por fuente | Desconocidas → se preservan, no se interpretan |
-| Confianza | `generated`, `verified[]` | Quién escribió / quién confirmó. Niveles: unverified / machine-confirmed / human-reviewed | Ídem |
-| Ciclo de vida | `status` (`draft\|stable\|deprecated`), `stale_after` | Estado y caducidad absoluta | Ídem |
-| Actores | `human:<id>`, `process:<id>`, `<agente>/<versión>` | Convención para `generated.by`, `verified[].by`, `sources[].author` | No existe |
-| Computación atestada | `type: Attested Computation`, `runtime`, `parameters`, `computation`, `executor`, `attester`, heading `# Computation` | Cálculo sancionado y verificable | Tipo desconocido → concepto genérico |
-| Timestamps | Todo datetime con **offset explícito** (`Z` o `±hh:mm`) desde `62432a0` | — | v0.1 solo pedía ISO 8601 |
+| Provenance | `sources[]`, `usage_window` | What the concept derives from; credibility signals per source | Unknown → preserved, not interpreted |
+| Trust | `generated`, `verified[]` | Who wrote / who confirmed. Levels: unverified / machine-confirmed / human-reviewed | Same |
+| Lifecycle | `status` (`draft\|stable\|deprecated`), `stale_after` | State and absolute staleness | Same |
+| Actors | `human:<id>`, `process:<id>`, `<agent>/<version>` | Convention for `generated.by`, `verified[].by`, `sources[].author` | Doesn't exist |
+| Attested computation | `type: Attested Computation`, `runtime`, `parameters`, `computation`, `executor`, `attester`, heading `# Computation` | Sanctioned, verifiable computation | Unknown type → generic concept |
+| Timestamps | Every datetime with an **explicit offset** (`Z` or `±hh:mm`) since `62432a0` | — | v0.1 only asked for ISO 8601 |
 
-Diferencias menores de redacción: v0.1 dice que los consumidores *SHOULD NOT* rechazar claves desconocidas; v0.2 lo eleva a *MUST NOT*. v0.1 tenía una sección "Relationship to other formats" (eliminada en v0.2). v0.2 añade "Non-goal: empaquetado del código de executor/attester".
-
----
-
-## 4. Detección de versión
-
-Orden de precedencia que aplica `okf_common.detect_version()`:
-
-1. `okf_version` en el frontmatter del `index.md` raíz → autoritativo.
-2. Heurística sobre los conceptos:
-   - Algún concepto con `generated`, `verified`, `sources`, `status`, `stale_after` o `type: Attested Computation` ⇒ **0.2**.
-   - Si no, algún concepto con `timestamp` o sección `# Citations` ⇒ **0.1**.
-   - Si no hay señales (solo núcleo común) ⇒ **0.2** (indistinguible; se trata como la versión actual).
-3. Mezcla de señales 0.1 y 0.2 sin `okf_version` ⇒ **0.2 con aviso `MIXED_VERSIONS`** (bundle a medio migrar).
+Minor wording differences: v0.1 says consumers *SHOULD NOT* reject unknown keys; v0.2 raises it to *MUST NOT*. v0.1 had a "Relationship to other formats" section (removed in v0.2). v0.2 adds "Non-goal: packaging executor/attester code".
 
 ---
 
-## 5. Política del perfil `knowledge/2.0`
+## 4. Version detection
 
-| Situación | Comportamiento |
+Order of precedence applied by `okf_common.detect_version()`:
+
+1. `okf_version` in the frontmatter of the root `index.md` → authoritative.
+2. Heuristic over the concepts:
+   - Any concept with `generated`, `verified`, `sources`, `status`, `stale_after` or `type: Attested Computation` ⇒ **0.2**.
+   - Otherwise, any concept with `timestamp` or a `# Citations` section ⇒ **0.1**.
+   - If there are no signals (common core only) ⇒ **0.2** (indistinguishable; treated as the current version).
+3. A mix of 0.1 and 0.2 signals without `okf_version` ⇒ **0.2 with a `MIXED_VERSIONS` warning** (a half-migrated bundle).
+
+---
+
+## 5. `knowledge/2.0` profile policy
+
+| Situation | Behaviour |
 |---|---|
-| Bundle nuevo (`okf-init`) | v0.2. `--okf-version 0.1` genera la forma 0.1 (`timestamp`, sin `generated`) para proyectos que deban interoperar con consumidores antiguos. |
-| Validar (`okf-lint`) | `--okf-version auto\|0.1\|0.2`. En 0.1: `timestamp` y `# Citations` son correctos; claves v0.2 se reportan como `V02_FIELD_IN_V01` (aviso informativo). En 0.2: `timestamp`/`# Citations` ⇒ `LEGACY_*`. El perfil knowledge (exige `generated`) solo se aplica en 0.2; en 0.1 el equivalente exigido es `timestamp`. |
-| Consultar (`okf-ask`) | Transparente: la antigüedad se lee de `generated.at` o, en su defecto, `timestamp`; las fuentes de `sources[]` o, en su defecto, `# Citations`. Sin `verified` (siempre en 0.1) ⇒ "sin verificar". |
-| Capturar (`okf-capture`) | Escribe en la versión detectada del bundle. Nunca mezcla: si el bundle es 0.1, usa `timestamp` y `# Citations`. |
-| Migrar (`okf-migrate`) | `--to 0.2` (recomendado, sin pérdida) o `--to 0.1` (con pérdida: `generated.by`, `verified`, `status`, `stale_after`, señales de fuentes; con `--keep-extensions` se conservan como claves extra, legal en ambas specs). Siempre `--dry-run` disponible; actualiza `okf_version` y añade entrada en `log.md`. |
-| Intercambio con terceros | Publicar en 0.2. Si el consumidor es 0.1 estricto, exportar con `okf-migrate --to 0.1 --keep-extensions` a un directorio aparte; no degradar el bundle fuente. |
+| New bundle (`okf-init`) | v0.2. `--okf-version 0.1` generates the 0.1 form (`timestamp`, no `generated`) for projects that must interoperate with older consumers. |
+| Validate (`okf-lint`) | `--okf-version auto\|0.1\|0.2`. In 0.1: `timestamp` and `# Citations` are correct; v0.2 keys are reported as `V02_FIELD_IN_V01` (informational warning). In 0.2: `timestamp`/`# Citations` ⇒ `LEGACY_*`. The knowledge profile (which requires `generated`) only applies in 0.2; in 0.1 the required equivalent is `timestamp`. |
+| Query (`okf-ask`) | Transparent: age is read from `generated.at` or, failing that, `timestamp`; sources from `sources[]` or, failing that, `# Citations`. No `verified` (always the case in 0.1) ⇒ "unverified". |
+| Capture (`okf-capture`) | Writes in the bundle's detected version. Never mixes: if the bundle is 0.1, it uses `timestamp` and `# Citations`. |
+| Migrate (`okf-migrate`) | `--to 0.2` (recommended, lossless) or `--to 0.1` (lossy: `generated.by`, `verified`, `status`, `stale_after`, source signals; with `--keep-extensions` they are kept as extra keys, legal in both specs). `--dry-run` is always available; updates `okf_version` and adds an entry to `log.md`. |
+| Exchange with third parties | Publish in 0.2. If the consumer is strict 0.1, export with `okf-migrate --to 0.1 --keep-extensions` to a separate directory; don't downgrade the source bundle. |
 
 ---
 
-## 6. Matriz de campos (referencia rápida)
+## 6. Field matrix (quick reference)
 
-| Clave | 0.1 | 0.2 | Nota |
+| Key | 0.1 | 0.2 | Note |
 |---|---|---|---|
 | `type` | REQ | REQ | — |
 | `title` `description` `resource` `tags` | REC | REC | — |
 | `timestamp` | REC | ✗ (legacy) | → `generated.at` |
-| `generated.by` | ✗ | REQ dentro de `generated` | sin equivalente en 0.1 |
+| `generated.by` | ✗ | REQ inside `generated` | no 0.1 equivalent |
 | `generated.at` | ✗ | REC | ← `timestamp` |
-| `verified[]` | ✗ | OPT | se pierde al bajar |
-| `status` | ✗ | OPT (default `stable`) | se pierde al bajar |
-| `stale_after` | ✗ | OPT | se pierde al bajar |
+| `verified[]` | ✗ | OPT | lost when going down |
+| `status` | ✗ | OPT (default `stable`) | lost when going down |
+| `stale_after` | ✗ | OPT | lost when going down |
 | `sources[]` | ✗ | OPT | ↔ `# Citations` |
-| `usage_window` | ✗ | OPT | se pierde al bajar |
-| `runtime` `parameters` `computation` `executor` `attester` | ✗ | REQ/OPT en Attested Computation | tipo pasa a genérico en 0.1 |
-| `okf_version` (index raíz) | `"0.1"` | `"0.2"` | — |
-| `# Citations` (cuerpo) | REC | ✗ (legacy) | ↔ `sources[]` |
-| `# Computation` (cuerpo) | ✗ | CONV | — |
-| `[^id]` notas al pie | ✗ | CONV | ↔ `[n]` |
+| `usage_window` | ✗ | OPT | lost when going down |
+| `runtime` `parameters` `computation` `executor` `attester` | ✗ | REQ/OPT in Attested Computation | type becomes generic in 0.1 |
+| `okf_version` (root index) | `"0.1"` | `"0.2"` | — |
+| `# Citations` (body) | REC | ✗ (legacy) | ↔ `sources[]` |
+| `# Computation` (body) | ✗ | CONV | — |
+| `[^id]` footnotes | ✗ | CONV | ↔ `[n]` |

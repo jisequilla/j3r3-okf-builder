@@ -12,26 +12,26 @@ generated: { by: {{actor}}, at: {{now}} }
 sources: []
 ---
 
-# Contexto
+# Context
 
-{{Fuerzas en juego: requisitos, restricciones, situación actual. Enlaza a sistemas y vistas afectadas.}}
+{{Forces at play: requirements, constraints, current situation. Link to the affected systems and views.}}
 
-# Decisión
+# Decision
 
-{{Qué se decide, en voz activa. "Adoptamos X para Y."}}
+{{What is decided, in the active voice. "We adopt X for Y."}}
 
-# Alternativas consideradas
+# Alternatives considered
 
-| Alternativa | Pros | Contras | Motivo de descarte |
+| Alternative | Pros | Cons | Reason rejected |
 |---|---|---|---|
 | | | | |
 
-# Consecuencias
+# Consequences
 
-- Positivas:
-- Negativas / deuda asumida:
-- Acciones derivadas:
+- Positive:
+- Negative / accepted debt:
+- Follow-up actions:
 
-# Relacionados
+# Related
 
-* [Sistema afectado](/systems/...)
+* [Affected system](/systems/...)
