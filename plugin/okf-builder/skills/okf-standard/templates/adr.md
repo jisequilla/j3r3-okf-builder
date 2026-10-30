@@ -1,14 +1,14 @@
 ---
-type: Decisión de Arquitectura
-title: "ADR-{{nnnn}}: {{titulo}}"
-description: {{descripcion_una_frase}}
+type: Architecture Decision
+title: "ADR-{{nnnn}}: {{title}}"
+description: {{one_sentence_description}}
 tags: [adr, {{tags}}]
 status: draft
 adr_id: ADR-{{nnnn}}
-decision_status: propuesta        # propuesta | aceptada | sustituida | rechazada
-supersedes:                       # /decisiones/ADR-XXXX-....md
+decision_status: proposed        # proposed | accepted | superseded | rejected
+supersedes:                       # /decisions/ADR-XXXX-....md
 superseded_by:
-generated: { by: {{actor}}, at: {{ahora}} }
+generated: { by: {{actor}}, at: {{now}} }
 sources: []
 ---
 
@@ -34,4 +34,4 @@ sources: []
 
 # Relacionados
 
-* [Sistema afectado](/sistemas/...)
+* [Sistema afectado](/systems/...)

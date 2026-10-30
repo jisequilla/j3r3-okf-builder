@@ -21,47 +21,47 @@ sys.path.insert(0, str(Path(__file__).parent))
 from okf_common import RESERVED, find_bundle, load_doc, split_frontmatter  # noqa: E402
 
 DIR_DESCRIPTIONS = {
-    "arquitectura": "Vistas y principios de arquitectura.",
-    "decisiones": "Registro de decisiones de arquitectura (ADR).",
-    "dominio": "Glosario y conceptos de negocio.",
-    "sistemas": "Servicios, módulos y componentes desplegables.",
-    "apis": "Contratos de API y su semántica.",
-    "datos": "Datasets, tablas y esquemas.",
-    "metricas": "Definiciones de métricas y KPIs.",
-    "computaciones": "Computaciones sancionadas (Attested Computation).",
-    "runbooks": "Procedimientos operativos y de incidentes.",
-    "playbooks": "Procedimientos de equipo y negocio.",
-    "politicas": "Normas, estándares y compliance.",
-    "references": "Material externo espejado, skills de ejecución y attesters.",
-    "skills": "Instrucciones de ejecución (executors) para computaciones.",
-    "attesters": "Código determinista de verificación de recibos.",
+    "architecture": "Architecture views and principles.",
+    "decisions": "Architecture decision records (ADR).",
+    "domain": "Glossary and business concepts.",
+    "systems": "Services, modules and deployable components.",
+    "apis": "API contracts and their semantics.",
+    "data": "Datasets, tables and schemas.",
+    "metrics": "Metric and KPI definitions.",
+    "computations": "Sanctioned computations (Attested Computation).",
+    "runbooks": "Operational and incident procedures.",
+    "playbooks": "Team and business procedures.",
+    "policies": "Rules, standards and compliance.",
+    "references": "Mirrored external material, execution skills and attesters.",
+    "skills": "Execution instructions (executors) for computations.",
+    "attesters": "Deterministic receipt verification code.",
 }
 
 # Orden de secciones (tipos) en el índice; el resto alfabético después.
 TYPE_ORDER = [
-    "Proyecto", "Vista de Arquitectura", "Decisión de Arquitectura", "Término", "Glosario",
-    "Sistema", "API", "Dataset", "Tabla", "Métrica", "Attested Computation",
-    "Runbook", "Playbook", "Política", "Referencia",
+    "Project", "Architecture View", "Architecture Decision", "Term", "Glossary",
+    "System", "API", "Dataset", "Table", "Metric", "Attested Computation",
+    "Runbook", "Playbook", "Policy", "Reference",
 ]
 
 
 def plural_heading(t: str) -> str:
     table = {
-        "Proyecto": "Proyecto",
-        "Vista de Arquitectura": "Vistas de arquitectura",
-        "Decisión de Arquitectura": "Decisiones de arquitectura",
-        "Término": "Términos",
-        "Glosario": "Glosario",
-        "Sistema": "Sistemas",
+        "Project": "Project",
+        "Architecture View": "Architecture views",
+        "Architecture Decision": "Architecture decisions",
+        "Term": "Terms",
+        "Glossary": "Glossary",
+        "System": "Systems",
         "API": "APIs",
         "Dataset": "Datasets",
-        "Tabla": "Tablas",
-        "Métrica": "Métricas",
-        "Attested Computation": "Computaciones atestadas",
+        "Table": "Tables",
+        "Metric": "Metrics",
+        "Attested Computation": "Attested computations",
         "Runbook": "Runbooks",
         "Playbook": "Playbooks",
-        "Política": "Políticas",
-        "Referencia": "Referencias",
+        "Policy": "Policies",
+        "Reference": "References",
     }
     return table.get(t, t)
 
@@ -111,7 +111,7 @@ def build_index(bundle: Path, d: Path) -> str:
     if is_root:
         fm_prefix, notes = existing_root_fm_and_notes(d / "index.md")
         if not fm_prefix:
-            fm_prefix = '---\nokf_version: "0.2"\nokf_profile: "knowledge/1.0"\n---\n\n'
+            fm_prefix = '---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n'
     else:
         _, notes = existing_root_fm_and_notes(d / "index.md")
         out.append(f"> {dir_description(d)}\n")

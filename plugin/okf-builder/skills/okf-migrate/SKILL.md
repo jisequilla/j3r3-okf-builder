@@ -45,4 +45,4 @@ Elección del `--actor` en 0.1→0.2: si se sabe quién escribió los conceptos 
 
 ## Tabla de mapeo
 
-Ver `<skills>/okf-standard/references/OKF-COMPATIBILIDAD.md` §2 y §6.
+Ver `<skills>/okf-standard/references/OKF-COMPATIBILITY.md` §2 y §6.

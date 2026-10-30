@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""okf_init.py — Crea la estructura knowledge/ del perfil knowledge/1.0 (OKF v0.2).
+"""okf_init.py — Crea la estructura knowledge/ del perfil knowledge/2.0 (OKF v0.2).
 
 Uso:
     python3 okf_init.py --root /ruta/al/repo --title "Mi proyecto" \
         --description "Una frase" --actor human:jisequilla [--repo-url URL] \
-        [--dirs arquitectura,decisiones,...] [--force]
+        [--dirs architecture,decisions,...] [--force]
 
 No sobreescribe ficheros existentes salvo --force. Idempotente.
 """
@@ -20,21 +20,21 @@ from okf_common import now_iso  # noqa: E402
 
 _HERE = Path(__file__).resolve().parent
 TEMPLATES = _HERE.parent / "templates"   # okf-standard/scripts/ → okf-standard/templates/
-DEFAULT_DIRS = ["arquitectura", "decisiones", "dominio", "sistemas", "apis", "datos",
-                "metricas", "computaciones", "runbooks", "playbooks", "politicas", "references"]
+DEFAULT_DIRS = ["architecture", "decisions", "domain", "systems", "apis", "data",
+                "metrics", "computations", "runbooks", "playbooks", "policies", "references"]
 DIR_DESC = {
-    "arquitectura": "Vistas y principios de arquitectura.",
-    "decisiones": "Registro de decisiones de arquitectura (ADR).",
-    "dominio": "Glosario y conceptos de negocio.",
-    "sistemas": "Servicios, módulos y componentes desplegables.",
-    "apis": "Contratos de API y su semántica.",
-    "datos": "Datasets, tablas y esquemas.",
-    "metricas": "Definiciones de métricas y KPIs.",
-    "computaciones": "Computaciones sancionadas (Attested Computation).",
-    "runbooks": "Procedimientos operativos y de incidentes.",
-    "playbooks": "Procedimientos de equipo y negocio.",
-    "politicas": "Normas, estándares y compliance.",
-    "references": "Material externo espejado, skills de ejecución y attesters.",
+    "architecture": "Architecture views and principles.",
+    "decisions": "Architecture decision records (ADR).",
+    "domain": "Glossary and business concepts.",
+    "systems": "Services, modules and deployable components.",
+    "apis": "API contracts and their semantics.",
+    "data": "Datasets, tables and schemas.",
+    "metrics": "Metric and KPI definitions.",
+    "computations": "Sanctioned computations (Attested Computation).",
+    "runbooks": "Operational and incident procedures.",
+    "playbooks": "Team and business procedures.",
+    "policies": "Rules, standards and compliance.",
+    "references": "Mirrored external material, execution skills and attesters.",
 }
 
 
@@ -72,18 +72,18 @@ def main(argv=None) -> int:
     now = now_iso()
     log = []
 
-    log.append(write(k / "proyecto.md", render(
-        "proyecto.md", titulo=args.title, descripcion_una_frase=args.description,
-        url_repo=args.repo_url, tags=args.tags, actor=args.actor, ahora=now), args.force))
+    log.append(write(k / "project.md", render(
+        "project.md", title=args.title, one_sentence_description=args.description,
+        repo_url=args.repo_url, tags=args.tags, actor=args.actor, now=now), args.force))
 
-    root_idx = ['---', f'okf_version: "{args.okf_version}"', 'okf_profile: "knowledge/1.0"', '---', '',
-                '# Proyecto', '', f'* [{args.title}](proyecto.md) - {args.description}', '',
+    root_idx = ['---', f'okf_version: "{args.okf_version}"', 'okf_profile: "knowledge/2.0"', '---', '',
+                '# Project', '', f'* [{args.title}](project.md) - {args.description}', '',
                 '# Subdirectorios', '']
     for d in dirs:
         root_idx.append(f"* [{d}]({d}/index.md) - {DIR_DESC.get(d, f'Conceptos de {d}.')}")
     log.append(write(k / "index.md", "\n".join(root_idx) + "\n", args.force))
 
-    log.append(write(k / "log.md", render("log.md", fecha=date.today().isoformat()), args.force))
+    log.append(write(k / "log.md", render("log.md", date=date.today().isoformat()), args.force))
 
     for d in dirs:
         desc = DIR_DESC.get(d, f"Conceptos de {d}.")

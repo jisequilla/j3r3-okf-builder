@@ -11,6 +11,7 @@ test:
 	@echo "[1] init 0.2 + index + lint --strict"
 	rm -rf /tmp/okf-test && python3 $(S)/okf_init.py --root /tmp/okf-test --title T --description D --actor human:test >/dev/null
 	python3 $(S)/okf_index.py /tmp/okf-test/knowledge --check && python3 $(S)/okf_lint.py /tmp/okf-test/knowledge --strict | tail -1
+	test -f /tmp/okf-test/knowledge/project.md && test -d /tmp/okf-test/knowledge/decisions && test -d /tmp/okf-test/knowledge/policies && grep -q 'knowledge/2.0' /tmp/okf-test/knowledge/index.md
 	@echo "[2] init 0.1 + lint --strict"
 	rm -rf /tmp/okf-test1 && python3 $(S)/okf_init.py --root /tmp/okf-test1 --title T --description D --actor human:test --okf-version 0.1 >/dev/null
 	python3 $(S)/okf_lint.py /tmp/okf-test1/knowledge --strict | tail -1

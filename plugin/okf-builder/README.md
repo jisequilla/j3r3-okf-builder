@@ -6,7 +6,7 @@ Plugin de Claude Code / Cowork para gestionar el conocimiento de un proyecto com
 
 | Skill | Qué hace |
 |---|---|
-| `okf-standard` | Conocimiento del estándar y del perfil `knowledge/1.0`; plantillas de conceptos. |
+| `okf-standard` | Conocimiento del estándar y del perfil `knowledge/2.0`; plantillas de conceptos. |
 | `okf-init` | Crea la estructura `knowledge/` en el repo actual. |
 | `okf-capture` | Añade un concepto (ADR, runbook, sistema, API, tabla, métrica, término, política…) con plantilla, log e índice. |
 | `okf-lint` | Valida conformidad con la spec y el perfil. |
@@ -29,4 +29,4 @@ Copiables a `tools/okf/` de cualquier repo para CI.
 
 ## Estándar
 
-`skills/okf-standard/references/OKF-ESTANDAR.md` define el perfil; `OKF-COMPATIBILIDAD.md` la matriz v0.1↔v0.2. Specs originales en `references/OKF-SPEC-v0.1.md` y `OKF-SPEC-v0.2.md` (Apache-2.0, GoogleCloudPlatform/knowledge-catalog).
+`skills/okf-standard/references/OKF-STANDARD.md` define el perfil; `OKF-COMPATIBILITY.md` la matriz v0.1↔v0.2. Specs originales en `references/OKF-SPEC-v0.1.md` y `OKF-SPEC-v0.2.md` (Apache-2.0, GoogleCloudPlatform/knowledge-catalog).
