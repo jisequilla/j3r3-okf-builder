@@ -1,4 +1,4 @@
-> Procedimientos de equipo y negocio.
+> Team and business procedures.
 
 # playbooks
 

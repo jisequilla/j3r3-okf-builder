@@ -1,4 +1,4 @@
-> Normas, estándares y compliance.
+> Rules, standards and compliance.
 
 # policies
 

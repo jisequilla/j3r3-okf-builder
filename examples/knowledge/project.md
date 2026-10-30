@@ -1,42 +1,42 @@
 ---
 type: Project
-title: Demo Pagos
-description: Plataforma de pagos de demostración
+title: Demo Payments
+description: Demo payments platform
 resource: https://github.com/acme/demo-pagos
-tags: [pagos,demo]
+tags: [payments,demo]
 status: draft
-generated: { by: human:jisequilla, at: 2026-10-30T16:04:04Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:44Z }
 ---
 
-# Propósito
+# Purpose
 
-{{Qué problema resuelve el proyecto y para quién.}}
+{{What problem the project solves, and for whom.}}
 
-# Alcance
+# Scope
 
-- Incluye: ...
-- Excluye: ...
+- Includes: ...
+- Excludes: ...
 
-# Equipo y propiedad
+# Team and ownership
 
-| Rol | Persona / equipo | Contacto |
+| Role | Person / team | Contact |
 |---|---|---|
 | Owner | | |
 | Tech lead | | |
 
-# Enlaces clave
+# Key links
 
-| Recurso | URL |
+| Resource | URL |
 |---|---|
-| Repositorio | https://github.com/acme/demo-pagos |
-| Tablero | |
-| Entornos | |
-| Observabilidad | |
+| Repository | https://github.com/acme/demo-pagos |
+| Board | |
+| Environments | |
+| Observability | |
 
-# Mapa del conocimiento
+# Knowledge map
 
-* [Arquitectura](/architecture/index.md)
-* [Decisiones](/decisions/index.md)
-* [Dominio](/domain/index.md)
-* [Sistemas](/systems/index.md)
+* [Architecture](/architecture/index.md)
+* [Decisions](/decisions/index.md)
+* [Domain](/domain/index.md)
+* [Systems](/systems/index.md)
 * [Runbooks](/runbooks/index.md)

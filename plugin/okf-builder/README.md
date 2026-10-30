@@ -1,22 +1,22 @@
 # okf-builder
 
-Plugin de Claude Code / Cowork para gestionar el conocimiento de un proyecto como **bundle OKF** (Open Knowledge Format v0.2, Google) dentro de `knowledge/` en cada repositorio.
+A Claude Code / Cowork plugin that manages a project's knowledge as an **OKF bundle** (Open Knowledge Format v0.2, Google) inside `knowledge/` in each repository.
 
 ## Skills
 
-| Skill | Qué hace |
+| Skill | What it does |
 |---|---|
-| `okf-standard` | Conocimiento del estándar y del perfil `knowledge/2.0`; plantillas de conceptos. |
-| `okf-init` | Crea la estructura `knowledge/` en el repo actual. |
-| `okf-capture` | Añade un concepto (ADR, runbook, sistema, API, tabla, métrica, término, política…) con plantilla, log e índice. |
-| `okf-lint` | Valida conformidad con la spec y el perfil. |
-| `okf-index` | Regenera los `index.md` desde el frontmatter. |
-| `okf-ask` | Responde preguntas del proyecto navegando el bundle y citando fuentes y confianza. |
-| `okf-migrate` | Detecta la versión OKF y migra 0.1 ↔ 0.2 (con `--out` para exportar copias degradadas). |
+| `okf-standard` | Knowledge of the standard and the `knowledge/2.0` profile; concept templates. |
+| `okf-init` | Creates the `knowledge/` structure in the current repo. |
+| `okf-capture` | Adds a concept (ADR, runbook, system, API, table, metric, term, policy…) with its template, log and index. |
+| `okf-lint` | Validates conformance with the spec and the profile. |
+| `okf-index` | Regenerates the `index.md` files from the frontmatter. |
+| `okf-ask` | Answers questions about the project by navigating the bundle and citing sources and trust level. |
+| `okf-migrate` | Detects the OKF version and migrates 0.1 ↔ 0.2 (with `--out` to export downgraded copies). |
 
-## Scripts (sin dependencias; Python ≥ 3.9)
+## Scripts (no dependencies; Python ≥ 3.9)
 
-En `skills/okf-standard/scripts/` (los skills los referencian como `<skills>/okf-standard/scripts/`):
+In `skills/okf-standard/scripts/` (the skills reference them as `<skills>/okf-standard/scripts/`):
 
 ```
 okf_init.py   --root . --title "…" --description "…" --actor human:<id>
@@ -25,8 +25,8 @@ okf_index.py  [knowledge] [--check] [--dir sub]
 okf_migrate.py [knowledge] --to 0.2|0.1 [--actor A] [--keep-extensions] [--out DIR] [--dry-run] [--file rel.md]
 ```
 
-Copiables a `tools/okf/` de cualquier repo para CI.
+They can be copied into `tools/okf/` of any repo for CI.
 
-## Estándar
+## Standard
 
-`skills/okf-standard/references/OKF-STANDARD.md` define el perfil; `OKF-COMPATIBILITY.md` la matriz v0.1↔v0.2. Specs originales en `references/OKF-SPEC-v0.1.md` y `OKF-SPEC-v0.2.md` (Apache-2.0, GoogleCloudPlatform/knowledge-catalog).
+`skills/okf-standard/references/OKF-STANDARD.md` defines the profile; `OKF-COMPATIBILITY.md` holds the v0.1↔v0.2 matrix. Original specs in `references/OKF-SPEC-v0.1.md` and `OKF-SPEC-v0.2.md` (Apache-2.0, GoogleCloudPlatform/knowledge-catalog).

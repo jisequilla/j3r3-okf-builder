@@ -1,27 +1,27 @@
 ---
 type: Architecture Decision
-title: "ADR-0001: Adoptar Kafka para eventos de pago"
-description: Kafka sustituye a RabbitMQ como bus de eventos de pago.
-tags: [adr, mensajeria]
+title: "ADR-0001: Adopt Kafka for payment events"
+description: Kafka supersedes RabbitMQ as the payment event bus.
+tags: [adr, messaging]
 status: stable
 adr_id: ADR-0001
 decision_status: accepted
-generated: { by: human:jisequilla, at: 2026-10-30T15:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:44Z }
 verified: { by: human:jisequilla, at: 2026-10-30T15:30:00Z }
 sources:
   - id: bench
     resource: docs/benchmarks/kafka-vs-rabbit.md
-    title: Benchmark interno
+    title: Internal benchmark
     author: team:platform
     last_modified: 2026-09-15T00:00:00Z
 ---
 
-# Contexto
+# Context
 
-El [servicio de pagos](/systems/pagos-api.md) necesita retención de 7 días.[^bench]
+The [payments service](/systems/pagos-api.md) needs 7-day retention.[^bench]
 
-# Decisión
+# Decision
 
-Adoptamos Kafka.
+We adopt Kafka.
 
-[^bench]: Benchmark interno
+[^bench]: Internal benchmark

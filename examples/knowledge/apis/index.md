@@ -1,4 +1,4 @@
-> Contratos de API y su semántica.
+> API contracts and their semantics.
 
 # apis
 

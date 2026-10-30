@@ -1,7 +1,7 @@
 {
   "name": "okf-builder",
   "version": "0.2.0",
-  "description": "Gestiona el conocimiento de un proyecto como bundle OKF (Open Knowledge Format v0.1/v0.2) en knowledge/: scaffold, captura con plantillas, validación, índices, consulta y migración entre versiones.",
+  "description": "Manages a project's knowledge as an OKF bundle (Open Knowledge Format v0.1/v0.2) in knowledge/: scaffolding, template-based capture, validation, indexes, querying and migration between versions.",
   "author": {
     "name": "Jeremías de Isequilla"
   },

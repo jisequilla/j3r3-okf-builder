@@ -4,13 +4,13 @@
     "name": "Jeremías de Isequilla"
   },
   "metadata": {
-    "description": "Marketplace personal: plugin okf-builder (Open Knowledge Format)"
+    "description": "Personal marketplace: the okf-builder plugin (Open Knowledge Format)"
   },
   "plugins": [
     {
       "name": "okf-builder",
       "source": "./plugin/okf-builder",
-      "description": "Gestiona el conocimiento de un proyecto como bundle OKF v0.2 en knowledge/.",
+      "description": "Manages a project's knowledge as an OKF v0.2 bundle in knowledge/.",
       "version": "0.2.0",
       "category": "productivity"
     }

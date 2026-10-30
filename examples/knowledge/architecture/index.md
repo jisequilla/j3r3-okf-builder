@@ -1,4 +1,4 @@
-> Vistas y principios de arquitectura.
+> Architecture views and principles.
 
 # architecture
 

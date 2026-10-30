@@ -1,5 +1,5 @@
-> Registro de decisiones de arquitectura (ADR).
+> Architecture decision records (ADRs).
 
 # Architecture decisions
 
-* [ADR-0001: Adoptar Kafka para eventos de pago](ADR-0001-adopt-kafka.md) - Kafka sustituye a RabbitMQ como bus de eventos de pago.
+* [ADR-0001: Adopt Kafka for payment events](ADR-0001-adopt-kafka.md) - Kafka supersedes RabbitMQ as the payment event bus.

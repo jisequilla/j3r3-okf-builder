@@ -1,4 +1,4 @@
-> Material externo espejado, skills de ejecución y attesters.
+> Mirrored external material, execution skills and attesters.
 
 # Subdirectories
 
