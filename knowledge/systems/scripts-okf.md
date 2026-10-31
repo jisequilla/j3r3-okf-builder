@@ -1,13 +1,13 @@
 ---
 type: System
 title: OKF scripts
-description: okf_init, okf_lint, okf_index and okf_migrate (Python ≥ 3.9, no dependencies) in okf-standard/scripts.
+description: okf_init, okf_lint, okf_index and okf_migrate (Python ≥ 3.9 and PyYAML, run with uv) in okf-standard/scripts.
 resource: /plugin/okf-builder/skills/okf-standard/scripts
 tags: [system, scripts, python]
 status: draft
 owner: human:jisequilla
-runtime: python3
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+runtime: uv
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T03:28:57Z }
 ---
 
 # Responsibility
@@ -18,16 +18,19 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 | okf_lint.py | Spec conformance (§11) + profile; version detection | ERROR/WARN findings, `--json`, exit code |
 | okf_index.py | Regenerates `index.md` per directory from frontmatter | `--check` for CI |
 | okf_migrate.py | 0.1 ↔ 0.2, `--dry-run`, `--out`, `--keep-extensions`, `--file` | files + entry in log.md |
-| okf_common.py | Reduced YAML parser, Doc model, version detection | library |
+| okf_common.py | Frontmatter parsing with PyYAML, Doc model, version detection | library |
 
 # Examples
 
 ```bash
-python3 <skills>/okf-standard/scripts/okf_lint.py knowledge --strict
-python3 <skills>/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
+uv run <skills>/okf-standard/scripts/okf_lint.py knowledge --strict
+uv run <skills>/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
+uv run --with pytest <skills>/okf-standard/scripts/okf_lint.py --test
 ```
+
+Without uv, `python3` works if PyYAML is installed; with neither, the scripts exit 2 with a message naming both fixes.
 
 # Operation
 
-* Tests: `make test` (init 0.1/0.2, Google fixtures v0.1 and v0.2, migration round-trip).
-* Decisions: [ADR-0006](/decisions/ADR-0006-dependency-free-scripts.md), [ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md).
+* Tests: each script carries its own, run with `--test`; `make test` runs them and then the cross-script runs (init 0.1/0.2, Google fixtures v0.1 and v0.2, migration round-trip).
+* Decisions: [ADR-0011](/decisions/ADR-0011-uv-pep723-scripts.md) (supersedes ADR-0006), [ADR-0004](/decisions/ADR-0004-dual-support-v01-v02.md).

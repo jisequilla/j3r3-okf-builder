@@ -1,8 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
 """okf_index.py — Regenerate the index.md files of an OKF bundle from the frontmatter.
 
 Usage:
-    python3 okf_index.py [path/to/bundle] [--check] [--dir SUBDIR]
+    uv run okf_index.py [path/to/bundle] [--check] [--dir SUBDIR]
 
 - Groups concepts by `type` inside each directory.
 - Lists subdirectories with the first sentence of their own index.md, or their name.
@@ -175,5 +179,51 @@ def main(argv=None) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------
+# Tests (uv run --with pytest okf_index.py --test)
+# --------------------------------------------------------------------------
+def _bundle(tmp: Path) -> Path:
+    k = tmp / "knowledge"
+    (k / "decisions").mkdir(parents=True)
+    (k / "policies").mkdir()
+    (k / "index.md").write_text('---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n'
+                                "# Project\n\n_(empty)_\n\n# Notes\n\nKept by hand.\n", encoding="utf-8")
+    (k / "decisions" / "index.md").write_text("# decisions\n\n> Decisions.\n\n# Notas\n\nGuardado a mano.\n",
+                                              encoding="utf-8")
+    (k / "decisions" / "ADR-0001-x.md").write_text(
+        "---\ntype: Architecture Decision\ntitle: X\ndescription: The X decision.\n---\n\n# Context\n", encoding="utf-8")
+    (k / "policies" / "index.md").write_text(">\nNext line, not a description.\n", encoding="utf-8")
+    return k
+
+
+def test_notes_sections_survive(tmp_path):
+    k = _bundle(tmp_path)
+    assert main([str(k)]) == 0
+    assert "Kept by hand." in (k / "index.md").read_text(encoding="utf-8").splitlines()
+    decisions = (k / "decisions" / "index.md").read_text(encoding="utf-8")
+    assert "Guardado a mano." in decisions.splitlines()
+    assert "* [X](ADR-0001-x.md) - The X decision." in decisions
+
+
+def test_empty_blockquote_does_not_pull_next_line(tmp_path):
+    k = _bundle(tmp_path)
+    main([str(k)])
+    root = (k / "index.md").read_text(encoding="utf-8")
+    assert "Next line, not a description." not in root
+    assert "* [policies](policies/index.md) - Rules, standards and compliance." in root
+
+
+def test_check_reports_then_clears(tmp_path):
+    k = _bundle(tmp_path)
+    assert main([str(k), "--check"]) == 1
+    main([str(k)])
+    assert main([str(k), "--check"]) == 0
+
+
 if __name__ == "__main__":
+    if "--test" in sys.argv[1:]:
+        import pytest  # test-time only: uv run --with pytest <script>.py --test
+
+        sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider",
+                              *[a for a in sys.argv[1:] if a != "--test"]]))
     sys.exit(main())

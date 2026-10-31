@@ -12,8 +12,8 @@ This repository defines the **OKF standard (knowledge/2.0 profile)** and the `ok
 ## Rules for any agent
 
 1. Before changing the standard, the skills or the scripts: read `knowledge/decisions/` (ADRs). If the decision changes, write a new ADR that supersedes the previous one (`okf-capture`); never edit history.
-2. Every change in `knowledge/` ends with `python3 plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py knowledge --strict` at 0 errors (`make lint`).
-3. Every change in skills/scripts ends with `make test` (init 0.1/0.2, Google fixtures v0.1/v0.2, round-trip migration).
+2. Every change in `knowledge/` ends with `uv run plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py knowledge --strict` at 0 errors (`make lint`).
+3. Every change in skills/scripts ends with `make test` (each script's `--test`, init 0.1/0.2, Google fixtures v0.1/v0.2, round-trip migration).
 4. Do not add `verified: human:` to any concept unless a person explicitly confirms it.
 5. Skills must not depend on vendor variables (`${CLAUDE_PLUGIN_ROOT}` appears only in the paths note); use the `<skills>/...` convention.
 6. Google's specs in `references/` are verbatim copies (Apache-2.0): they are not edited; they are updated from upstream and the update is recorded in `log.md`.

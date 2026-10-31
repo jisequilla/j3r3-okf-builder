@@ -5,13 +5,13 @@ description: Validates that knowledge/ complies with the OKF v0.2 spec and the k
 
 # okf-lint
 
-> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`. Without uv, `python3` works if PyYAML is installed.
 
 ## Steps
 
 1. Run:
    ```bash
-   python3 "<skills>/okf-standard/scripts/okf_lint.py" [<bundle>] [--json] [--strict] [--no-profile] [--okf-version auto|0.1|0.2]
+   uv run "<skills>/okf-standard/scripts/okf_lint.py" [<bundle>] [--json] [--strict] [--no-profile] [--okf-version auto|0.1|0.2]
    ```
    Without an argument it searches for `knowledge/` upwards from the cwd. `--no-profile` validates only the spec (useful for external bundles). `--okf-version auto` (the default) uses `okf_version` from the root `index.md` or infers it; the last line of output reads `OKF <version> (<origin>)`.
 2. Interpret the output:
@@ -23,6 +23,6 @@ description: Validates that knowledge/ complies with the OKF v0.2 spec and the k
 5. To add it to CI, propose:
    ```yaml
    # .github/workflows/okf-lint.yml
-   - run: python3 tools/okf/okf_lint.py knowledge --strict
+   - run: uv run tools/okf/okf_lint.py knowledge --strict
    ```
    copying `scripts/okf_common.py` and `okf_lint.py` into the repo's `tools/okf/` (no dependencies).

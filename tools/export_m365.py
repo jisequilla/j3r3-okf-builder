@@ -74,8 +74,9 @@ M365_NOTE = """
 This skill runs in Microsoft 365 Copilot, not in a terminal on the repository. The `knowledge/`
 bundle arrives as a OneDrive/SharePoint folder synced from the repo (or as attached files).
 Ask the user for the path or the folder if it is not obvious. The `scripts/*.py` scripts run
-from the base directory of this skill with `python3` and take the bundle path as an argument;
-if the environment cannot run scripts, apply the same rules by hand from `references/` and the
+from the base directory of this skill with `uv run`, which installs PyYAML, and take the bundle
+path as an argument; without uv, `python3` works if PyYAML is installed. If the environment
+cannot run scripts, apply the same rules by hand from `references/` and the
 templates, and say so explicitly.
 """
 

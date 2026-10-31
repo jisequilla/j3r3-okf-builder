@@ -5,7 +5,7 @@ description: Creates the standard knowledge/ structure (OKF v0.2 bundle, knowled
 
 # okf-init
 
-> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`. Without uv, `python3` works if PyYAML is installed.
 
 Creates `knowledge/` with `index.md`, `log.md`, `project.md` and the profile's subdirectories, each with its own `index.md`.
 
@@ -20,7 +20,7 @@ Creates `knowledge/` with `index.md`, `log.md`, `project.md` and the profile's s
    - `dirs`: all of the profile's by default. If the project clearly has no data or metrics (e.g. a library), propose leaving out `data,metrics,computations`.
 3. Run:
    ```bash
-   python3 "<skills>/okf-standard/scripts/okf_init.py" --root <root> \
+   uv run "<skills>/okf-standard/scripts/okf_init.py" --root <root> \
      --title "<title>" --description "<description>" --actor <actor> \
      --repo-url "<url>" [--dirs a,b,c] [--okf-version 0.2|0.1]
    ```
@@ -32,7 +32,7 @@ Creates `knowledge/` with `index.md`, `log.md`, `project.md` and the profile's s
    The knowledge lives in `knowledge/` (OKF v0.2 format). Start with `knowledge/index.md`.
    To add knowledge use the okf-capture skill; to validate it, okf-lint.
    ```
-6. Run `okf-lint` (`python3 "<skills>/okf-standard/scripts/okf_lint.py" <root>/knowledge`) and show the result. `INDEX_EMPTY` warnings in empty directories are expected.
+6. Run `okf-lint` (`uv run "<skills>/okf-standard/scripts/okf_lint.py" <root>/knowledge`) and show the result. `INDEX_EMPTY` warnings in empty directories are expected.
 7. Summarize in 3–5 lines what was created and suggest the first capture (usually `okf-capture` with an ADR or the context architecture view).
 
 ## Don't
