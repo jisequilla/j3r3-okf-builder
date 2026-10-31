@@ -1,7 +1,7 @@
 ---
 type: Architecture Decision
-title: "ADR-0014: Git is the source of a knowledge repository; SharePoint, Drive and Obsidian read it"
-description: A team's knowledge bundle lives in one Git repository, its only editable copy; Microsoft 365, Google Drive and Obsidian get read access or published copies, and the bundle starts as one monorepo with a stated rule for splitting by domain.
+title: "ADR-0014: A knowledge repository has one source, Git or SharePoint; other tools read it"
+description: A team's knowledge bundle has exactly one editable copy, a Git repository by default or a SharePoint library for teams without Git; Microsoft 365, Google Drive and Obsidian read it, and the bundle starts as one monorepo with a stated rule for splitting by domain.
 tags: [adr, storage, projections]
 status: draft
 adr_id: ADR-0014
@@ -37,33 +37,36 @@ Two things follow. Only Git gives review of a change as a diff, which the distil
 
 # Decision
 
-1. **Git is the source.** A team's bundle lives in one Git repository, private or public by the team's choice. It is the only copy that is edited, through branches and pull requests, and `okf_lint` runs on it.
-2. **Every other backend reads it, and none is edited:**
-   - *Microsoft 365 Copilot*: the GitHub Cloud Knowledge connector on the repository, added as a knowledge source of the agent. Publishing to a SharePoint library is the fallback, only once a tenant test shows Copilot uses `.md` files there.
-   - *Google Drive*: a CI job copies `knowledge/` to a Drive folder with `rclone` for Gemini Notebook and Drive users.
-   - *Obsidian*: a person opens the Git working copy as a vault to read, browse and edit it, and commits through Git, not Obsidian Sync. The vault uses Markdown links, relative link format and automatic link updates (`.obsidian/app.json`: `useMarkdownLinks`, `newLinkFormat: relative`, `alwaysUpdateLinks`), so a rename leaves valid relative links.
+1. **Each bundle has exactly one source, the only copy that is edited.** It is one of two kinds:
+   - *A Git repository*, the default. Changes go through branches and pull requests, and `okf_lint` runs on the repository.
+   - *A SharePoint document library*, for teams that work in Microsoft 365 without Git. The library holds the `knowledge/` folder as `.md` files. People and agents work on it through the OneDrive sync client, which makes it a local folder, so `okf_lint`, Claude Code and Cowork run on it unchanged. History is the library's version history. Because there is no diff review, each change set that `okf-distill` (ADR-0012) applies is approved in the conversation and recorded in `log.md`, which becomes the review trail.
+2. **Every other tool reads the source, and none is edited:**
+   - *Microsoft 365 Copilot*: for a Git source, the GitHub Cloud Knowledge connector on the repository; for a SharePoint source, the library itself, once a tenant test shows Copilot uses `.md` files there.
+   - *Google Drive*: a scheduled job copies `knowledge/` to a Drive folder with `rclone`, for Gemini Notebook and Drive users.
+   - *Obsidian*: a person opens the Git working copy or the OneDrive-synced folder as a vault, with the relative link format, so a rename leaves valid links (`.obsidian/app.json`: `useMarkdownLinks`, `newLinkFormat: relative`, `alwaysUpdateLinks`).
 3. **Start with one knowledge monorepo.** Split into one repository per business domain when two domains define the same term differently, or when a domain needs its own access rules. Each domain repository then owns its concepts, and the others link to them by URL; how changes propagate between them is a later ADR.
+4. **A bundle can move between kinds** by copying the folder: the files are the same in both.
 
 # Alternatives considered
 
 | Alternative | Pros | Cons | Reason rejected |
 |---|---|---|---|
-| SharePoint as the source | Where M365 users already work; no Git skills needed | No diff review; `.md` not a documented knowledge type; `okf_lint` needs a sync to run | Loses the review that distillation needs |
-| Google Drive as the source | Simple sharing; Gemini Notebook reads `.md` | No review; binary-file history expires | Same as SharePoint, weaker history |
-| Obsidian Sync as the source | Good editor and graph view | No review, no read-only role, up to 20 users; link-prefix bug | A reading tool, not a source |
-| Edit in each backend, sync both ways | Each team uses its own tool | Two-way sync of text conflicts silently | Makes the bundle's history unreliable |
+| Git only | One review flow (pull requests) for everyone | Teams without Git, such as Microsoft 365 shops, cannot keep a bundle | Excludes a real user's setup |
+| Google Drive as a source | Simple sharing; Gemini Notebook reads `.md` | No review; binary-file history expires; no team in view needs it | Not needed yet; Drive stays a read copy |
+| Obsidian Sync as a source | Good editor and graph view | No review, no read-only role, up to 20 users | A reading and editing tool on top of a source, not a source |
+| Edit in several places, sync both ways | Each person uses their own tool | Two-way sync of text conflicts silently | Makes the bundle's history unreliable |
 | One repository per domain from the start | Clear ownership | Cross-domain links and conflicts before anyone needs them | Premature; the split rule covers it |
 
 # Consequences
 
-- Positive: one history and one review flow for every change; agents on every platform read the same files; the M365 path no longer depends on an undocumented file type.
-- Negative / accepted debt: people who do not use Git need help editing (the agents, or a web editor on GitHub); the M365 connector needs a Copilot licence or metered use and a GitHub-to-Entra identity mapping, and permission changes apply only at the next full crawl; Drive and SharePoint copies lag behind the repository by the sync interval.
-- Follow-up actions: correct the SharePoint note in `tools/export_m365.py`; test the GitHub connector and SharePoint `.md` in a tenant (with the M365 probe); once accepted, a runbook for the Drive copy job.
+- Positive: a team keeps its bundle where it already works; every bundle still has one history and one editable copy; agents on every platform read the same files.
+- Negative / accepted debt: a SharePoint source has no diff review, only version history and the `log.md` trail; whether M365 Copilot reads `.md` from SharePoint is undocumented, so until a tenant test passes, a SharePoint bundle serves Claude and Cowork through the synced folder but may not serve M365 Copilot; the GitHub connector needs a Copilot licence or metered use and a GitHub-to-Entra identity mapping, and permission changes apply only at the next full crawl; Drive copies lag behind the source by the job's interval.
+- Follow-up actions: run the tenant test with the M365 probe (does Copilot use `.md` in a SharePoint library; does the GitHub connector work); correct the SharePoint note in `tools/export_m365.py`; once accepted, runbooks for a SharePoint-source bundle and for the Drive copy job.
 
 # Not verified
 
 - Whether M365 Copilot uses `.md` files stored in SharePoint in practice.
-- Whether the SharePoint and Drive Markdown viewers show, hide or break YAML frontmatter.
+- Whether the SharePoint and Drive Markdown viewers show, hide or break YAML frontmatter, and whether SharePoint's editor rewrites it.
 - Whether Gemini Enterprise and the Gemini app read `.md` from Drive.
 
 # Related

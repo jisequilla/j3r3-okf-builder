@@ -21,7 +21,7 @@ The OKF spec gives two constraints. Every `.md` file other than `index.md` and `
 
 # Decision
 
-1. **A fragment is a concept of the new profile type `Fragment`**, stored in `fragments/` as `fragments/YYYY-MM-DD-slug.md`. Its frontmatter carries the usual required fields plus `occurred_at` (when the event happened), `participants` (actors, §7) and `medium` (meeting, chat, document, transcript). Its body holds the record as it happened under `# Record`, edited only to remove secrets and personal data the participants did not agree to keep.
+1. **A fragment is a concept of the new profile type `Fragment`**, stored in `fragments/` as `fragments/YYYY-MM-DD-slug.md`. Its frontmatter carries the usual required fields plus `occurred_at` (when the event happened), `participants` (actors, §7) and `medium` (meeting, chat, document, transcript). Its body holds the record as it happened under `# Record`, edited only to remove secrets and personal data the participants did not agree to keep. A transcript keeps its speaker labels and timestamps, so a reader can tell who said what and find the moment in the recording. A record that already exists elsewhere, such as a meeting transcript in the same tenant, is copied into the fragment, and its original location is kept as the fragment's `sources` entry.
 2. **The record is immutable.** After capture only the `# Distillation` section below it changes. A wrong record is deprecated and replaced, never edited.
 3. **Distillation is a separate step**, a new skill `okf-distill`, run on one fragment at a time. It reads the fragment and the concepts it touches, then proposes a change set in three groups:
    - *additions*: new concepts, created through `okf-capture`;
@@ -51,12 +51,6 @@ The `# Distillation` section lists each proposed item with its outcome (applied,
 - Positive: any distilled claim can be traced to the event it came from; contradictions surface as explicit conflicts instead of silent overwrites; meetings and discussions become a regular input to the bundle.
 - Negative / accepted debt: the bundle grows with raw records, so `okf-ask` must rank distilled concepts above fragments; records can hold personal or confidential content, so capture must redact, and a record that cannot be published with the bundle stays outside it and is cited by URL; one more profile type, one more directory and one more log label.
 - Follow-up actions: once accepted, a layered build ([Build a change in layers](/runbooks/build-in-layers.md)) adding the `Fragment` type and `**Conflict**` label to `OKF-STANDARD.md` (both copies) and `okf_lint`, a `fragment.md` template, the `okf-distill` skill, the `okf-ask` ranking rule and the fragment step in `okf-capture`; check that `okf_migrate` maps the new fields for v0.1 bundles. The fragment format is also the contract with the functional-architect agent.
-
-# Open questions for the owner
-
-- Is `fragments/` the right name, or `records/` / `events/`?
-- Should the record keep speaker labels and timestamps when the source is a transcript?
-- Where does a fragment live when the knowledge repository is SharePoint or Drive (decided in the storage ADR)?
 
 # Related
 

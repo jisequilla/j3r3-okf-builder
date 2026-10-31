@@ -1,7 +1,7 @@
 ---
 type: Architecture Decision
-title: "ADR-0013: One knowledge-architect agent source, projected to each platform's agent format"
-description: The knowledge-architect agent is written once as a Claude plugin agent with only portable fields, and generated into the agent formats of GitHub Copilot, Gemini CLI, Microsoft 365 Copilot and OpenAI Codex; ChatGPT gets the skills only.
+title: "ADR-0013: One knowledge-architect agent for Claude and Microsoft 365 Copilot"
+description: The knowledge-architect agent is written once as a Claude plugin agent and generated into a Microsoft 365 Copilot declarative agent; other platforms keep using the skills until there is a need for their agent formats.
 tags: [adr, projections, agents]
 status: draft
 adr_id: ADR-0013
@@ -37,40 +37,32 @@ Claude Cowork loads plugin agents; claude.ai Chat ignores them[^cowork-support].
 
 # Decision
 
-1. **The source is one Claude plugin agent**, `plugin/okf-builder/agents/knowledge-architect.md`. Claude's format is the richest of the Markdown ones, is GA, and VS Code reads it directly.
-2. **The source uses only portable content**: `name`, `description`, a body written without platform-specific tool names, a list of the okf skills it works with, and a tool intent of read, write and execute. Any Claude-only field is kept out of the source.
-3. **The body fits the smallest limit**: 8,000 characters, the M365 instructions cap, and at most 8 skills, the M365 `agent_skills` cap. The plugin has 7 skills today and `okf-distill` (ADR-0012) would make 8.
-4. **Each projection is generated** by the existing exporters and `make` targets:
-   - Claude Code and Cowork: shipped as is in the plugin.
-   - GitHub Copilot: `make copilot` writes `.github/agents/knowledge-architect.agent.md`, mapping the tool intent to Copilot's aliases.
-   - Gemini CLI: written to `.gemini/agents/` in the same pack.
-   - Microsoft 365 Copilot: `make m365` adds a declarative agent JSON and `copilotAgents` to the package, with the body as `instructions` and the skills as `agent_skills`.
-   - OpenAI Codex: a TOML file for `.codex/agents/`, with the body as `developer_instructions`; Codex becomes a new projection target of ADR-0007.
-   - ChatGPT: no agent; it uses the skills.
-5. **`skills:` is mapped per platform, not copied**: Claude preloads the listed skills; Codex and Copilot ignore the list, because the agent already sees every installed skill; M365 uses it as `agent_skills`.
+1. **Two platforms get the agent: Claude (Code and Cowork) and Microsoft 365 Copilot.** They are the platforms in use today. GitHub Copilot, Gemini CLI and OpenAI Codex are not implemented and stay open for a later ADR when someone needs them; their users keep the skills. ChatGPT has no agent format.
+2. **The source is one Claude plugin agent**, `plugin/okf-builder/agents/knowledge-architect.md`, shipped as is in the plugin for Claude Code and Cowork.
+3. **The source keeps to what M365 can carry**: `name`, `description`, a body without Claude tool names, and the list of okf skills it works with. The body stays within 8,000 characters and the list within 8 skills, the M365 caps. The plugin has 7 skills today and `okf-distill` (ADR-0012) would make 8.
+4. **`make m365` generates the M365 agent** from the source: a declarative agent JSON referenced from `copilotAgents` in the package, with the body as `instructions` and the skill list as `agent_skills`.
+5. **`skills:` means preload in Claude and `agent_skills` in M365.**
 
 # Alternatives considered
 
 | Alternative | Pros | Cons | Reason rejected |
 |---|---|---|---|
 | No agent; skills only (today) | Nothing new to project | The role and its judgment live nowhere; each platform improvises | The role is the point of the knowledge architect |
-| Claude-only agent | One file, no generators | Copilot, Gemini, M365 and Codex users get no role | Contradicts the single-source, every-platform goal of ADR-0007 |
+| Claude-only agent | One file, no generators | M365 users, the other platform in use, get no role | Leaves out a platform in use today |
+| Every platform with an agent format (Copilot, Gemini, Codex too) | Same role everywhere | Three more generators and formats nobody uses yet; Gemini CLI is being replaced by Antigravity CLI | Not needed yet (YAGNI); the source format leaves the door open |
 | A neutral canonical format (own YAML) generated into every platform, Claude included | No platform favoured | One more format to define and maintain; Claude loses direct editing and testing | Claude's format already covers the portable fields |
 | Context-forked skills (`context: fork`) instead of an agent | No new file type | Gives isolation, not a role; Claude-only | Solves a different problem |
 
 # Consequences
 
-- Positive: one role definition reaches every platform that has agents; the persona cannot drift between copies; Codex joins the supported platforms.
-- Negative / accepted debt: tool restriction is approximate outside Claude (Codex has none, M365 has capabilities, not tools); M365 forces the 8,000-character and 8-skill limits on every platform; Gemini CLI is a strategic risk, since the research found it replaced by Antigravity CLI for unpaid and Google One users from 2026-06-18, and whether Antigravity reads `.gemini/agents` is unverified.
-- Follow-up actions: write the knowledge-architect profile in `knowledge/` first; once accepted, a layered build adding the agent source, the four generators and a `make test` check that every projection respects the limits; verify the items below.
+- Positive: one role definition for the two platforms in use; the persona cannot drift between them; one generator instead of four.
+- Negative / accepted debt: M365 limits behaviour through capabilities, not tool names, so its agent is less restricted than Claude's; the M365 caps bind the Claude agent too; Copilot, Gemini and Codex users get no agent until a later ADR adds one.
+- Follow-up actions: write the knowledge-architect profile in `knowledge/` first; once accepted, a layered build adding the agent source, the M365 generator and a `make test` check of the 8,000-character and 8-skill limits; verify the items below.
 
 # Not verified
 
 - Whether the M365 package used for Cowork can carry a declarative agent alongside `agentSkills`.
 - Whether Cowork honours `skills` and `model` in agent frontmatter.
-- Whether Copilot's cloud agent and CLI honour `skills:`, and how VS Code maps Claude tool names.
-- Whether Codex custom agents work in Codex cloud.
-- Whether Antigravity CLI reads Gemini CLI's agent files.
 
 # Related
 
