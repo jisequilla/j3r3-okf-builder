@@ -138,7 +138,11 @@ def test_does_not_overwrite_without_force(tmp_path):
 
 def test_okf_version_01(tmp_path):
     main(["--root", str(tmp_path), *_ARGS, "--okf-version", "0.1"])
-    assert 'okf_version: "0.1"' in (tmp_path / "knowledge" / "index.md").read_text(encoding="utf-8")
+    k = tmp_path / "knowledge"
+    assert 'okf_version: "0.1"' in (k / "index.md").read_text(encoding="utf-8")
+    raw, _ = split_frontmatter((k / "project.md").read_text(encoding="utf-8"))
+    fm = parse_yaml(raw)
+    assert "timestamp" in fm and "generated" not in fm
 
 
 if __name__ == "__main__":

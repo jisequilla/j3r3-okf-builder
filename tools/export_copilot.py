@@ -126,8 +126,8 @@ Copy the contents of this directory to the root of your repository:
 - `.github/agents/okf.agent.md` — custom agent `@okf` that orchestrates the skills.
 - `AGENTS.okf.md` — snippet to paste into your `AGENTS.md` (or `.github/copilot-instructions.md`).
 
-The scripts (`okf_init/lint/index/migrate.py`) are in `{skills_dir}/okf-standard/scripts/` and have no dependencies
-(Python ≥ 3.9). In Copilot, running scripts asks for confirmation unless you add `allowed-tools` to the SKILL.md.
+The scripts (`okf_init/lint/index/migrate.py`) are in `{skills_dir}/okf-standard/scripts/` and need Python ≥ 3.9
+and PyYAML: `uv run` installs it, or plain `python3` works where it is installed. In Copilot, running scripts asks for confirmation unless you add `allowed-tools` to the SKILL.md.
 
 Generated from the okf-builder plugin with `tools/export_copilot.py`; do not edit here: edit the plugin and export again.
 """, encoding="utf-8")

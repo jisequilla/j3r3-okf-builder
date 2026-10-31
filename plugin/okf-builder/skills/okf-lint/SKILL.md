@@ -23,6 +23,7 @@ description: Validates that knowledge/ complies with the OKF v0.2 spec and the k
 5. To add it to CI, propose:
    ```yaml
    # .github/workflows/okf-lint.yml
+   - uses: astral-sh/setup-uv@v6
    - run: uv run tools/okf/okf_lint.py knowledge --strict
    ```
-   copying `scripts/okf_common.py` and `okf_lint.py` into the repo's `tools/okf/` (no dependencies).
+   copying `scripts/okf_common.py` and `okf_lint.py` into the repo's `tools/okf/` (`uv run` installs PyYAML).
