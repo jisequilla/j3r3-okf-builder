@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0012: Knowledge fragments are captured as they happened and distilled into the bundle"
 description: A meeting, discussion or transcript is stored as an immutable Fragment concept, and a distillation step proposes the additions, updates and conflicts it brings to the bundle for a person to resolve.
 tags: [adr, standard, capture]
-status: draft
+status: deprecated
 adr_id: ADR-0012
-decision_status: accepted
+decision_status: superseded
+superseded_by: /decisions/ADR-0015-fragment-format-and-conflict-log.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T11:45:57Z }
 sources:
   - { id: spec-terms, resource: /references/okf-spec-google.md, title: "OKF v0.2 §2 and §3: every .md other than index.md and log.md is a concept" }
