@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-10-31
+* **Update**: [Build a change in layers](/runbooks/build-in-layers.md): blocking bar in each ticket, `make test` concurrency and the GNU Make 3.81 shell-flags trap.
 * **Update**: Bundle prose translated to English (ADR-0010).
 * **Update**: ADR-0010 glossary extended with the Migration and Verification log labels.
 

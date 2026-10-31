@@ -6,7 +6,7 @@ tags: [runbook, process, agents]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T02:47:27Z }
 ---
 
 # Trigger
@@ -22,12 +22,13 @@ A change that touches several layers (standard, scripts, skills, `knowledge/`) o
    - pattern to copy as `file:line`;
    - acceptance criteria, each with the test (or check) that fails if the change is reverted;
    - "builds on": what must already exist on main; if it does not exist, the builder stops;
-   - exact verification commands (`make test`, `make lint`, the layer's grep).
+   - exact verification commands (`make test`, `make lint`, the layer's grep);
+   - the blocking bar: which failures block the merge (for example, a criterion not met or a regression in an existing check) and which do not (edge cases outside the ticket's input table). Without a bar written in advance, each review round finds new exotic cases and the fixes do not converge.
 4. **Open one record per ticket** in whichever tracker is used and store the ticket text in it.
 5. **Run each ticket:**
    1. *Pre-flight*: an agent reads the ticket against the code and flags false premises, ambiguities and decisions that belong to the owner.
    2. *Builder*: works in a worktree, proves each criterion (revert → red → restore), pastes the output into the PR body and opens the PR as a draft.
-   3. *Review*: one or two reviewers with fresh context, without the builder's report. Use two lenses (correctness, tests) if the standard, the linter or a skill is touched. Findings are classified as blocking, to fix or nit; only blocking findings force a round of fixes.
+   3. *Review*: one or two reviewers with fresh context, without the builder's report. Use two lenses (correctness, tests) if the standard, the linter or a skill is touched. Findings are classified against the ticket's blocking bar as blocking, to fix or nit; only blocking findings force a round of fixes.
    4. *Fixes*: at most two rounds; if that is not enough, the ticket goes back to the owner.
 6. **Verify and merge from the main session:** run `make test` and `make lint` on main with the branch merged, merge the PR and close the record citing the PR. Pending nits go to a single follow-up record.
 7. **Push main before the next layer.** The agents' worktrees branch off `origin/main`, not the local main: a layer merged only locally is invisible to the next one.
@@ -37,6 +38,8 @@ A change that touches several layers (standard, scripts, skills, `knowledge/`) o
 - An agent's report is a claim: the state is read from the PR and from the output of the checks, not from the answer (which may arrive truncated).
 - Launching an agent workflow requires a written message from the owner that names the tickets; an approval given through a question dialog is not enough.
 - An agent only stops processes it started itself, never by process name.
+- `make test` writes to fixed `/tmp/okf-*` paths, so two runs at once collide. With tickets in parallel, only the builder runs `make test`; reviewers read the output pasted in the PR, and the main session runs it only after the agents finish.
+- macOS ships GNU Make 3.81, which ignores `.SHELLFLAGS`. Shell flags such as `-eo pipefail` go in `SHELL` itself (`SHELL := /bin/bash -eo pipefail`), or a failure inside a pipe passes unnoticed.
 - Resuming a workflow reruns the agents after the first change: to continue a half-finished run, pass its state (PR, branch, stage) as the starting point.
 
 # Rollback
