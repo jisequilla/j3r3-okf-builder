@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-10-31
+* **Update**: [Export and deliver projections](/runbooks/export-projections.md) and the [projections view](/architecture/single-source-projections.md): M365 Copilot reads the bundle through the GitHub connector or from a SharePoint source (ADR-0014); the claim that SharePoint indexes `.md` as is is gone.
 * **Creation**: [ADR-0012](/decisions/ADR-0012-knowledge-fragments-and-distillation.md): knowledge fragments are captured as they happened and distilled into the bundle, with conflicts resolved by a person.
 * **Creation**: [ADR-0013](/decisions/ADR-0013-agent-projections.md): one knowledge-architect agent for Claude and Microsoft 365 Copilot.
 * **Creation**: [ADR-0014](/decisions/ADR-0014-knowledge-repository-storage.md): a knowledge repository has one source, Git or SharePoint; other tools read it.
