@@ -31,7 +31,7 @@ A team needs one place where its knowledge bundle lives. Four candidates came up
 | Git (GitHub) | Claude Code, Copilot and Gemini read the files; M365 Copilot through the GitHub Cloud Knowledge connector, which indexes `.md` up to 30 MB and keeps GitHub permissions[^github-connector] | native | pull requests with required reviews; on private repos, protected branches need a paid plan[^gh-plans] | the spec's recommended distribution[^spec-git] |
 | SharePoint | Copilot Studio, Agent Builder and the tenant index | rendered since 2026[^sp-markdown], but `.md` is not a documented type of SharePoint knowledge sources (DOCX, PPTX, PDF; Agent Builder adds TXT)[^cs-quotas][^semantic-index][^agent-builder] | version history; approval of whole files, no diff[^sp-approval] | |
 | Google Drive | Gemini Notebook reads `.md` and resyncs Drive sources | rendered since October 2026[^drive-markdown] | revisions, no review | binary-file revisions expire after 30 days unless kept |
-| Obsidian | no agent read path of its own; a vault is a folder | native, but nested YAML (`generated: { by, at }`) is not shown as properties[^obsidian-properties] | none without a git plugin | a reported bug drops the leading `/` of links on rename[^obsidian-links] |
+| Obsidian | no agent read path of its own; a vault is a folder | native; nested YAML (`generated: { by, at }`) shows as raw JSON rather than an editable property[^obsidian-properties], though Bases views can read it | none without a git plugin | resolves `/` links from the vault root; on rename it rewrites them without the leading `/`, breaking them, unless links are set to relative[^obsidian-links] |
 
 Two things follow. Only Git gives review of a change as a diff, which the distillation step of [ADR-0012](/decisions/ADR-0012-knowledge-fragments-and-distillation.md) and the human-verification rule of [ADR-0005](/decisions/ADR-0005-required-generated-human-verified.md) rely on. And the M365 path the project assumed (publish `knowledge/` to a SharePoint library and it "is indexed as is"[^m365-export]) is not documented.
 
@@ -41,7 +41,7 @@ Two things follow. Only Git gives review of a change as a diff, which the distil
 2. **Every other backend reads it, and none is edited:**
    - *Microsoft 365 Copilot*: the GitHub Cloud Knowledge connector on the repository, added as a knowledge source of the agent. Publishing to a SharePoint library is the fallback, only once a tenant test shows Copilot uses `.md` files there.
    - *Google Drive*: a CI job copies `knowledge/` to a Drive folder with `rclone` for Gemini Notebook and Drive users.
-   - *Obsidian*: a person opens the Git working copy as a vault to read and browse it, and edits through Git, not Obsidian Sync.
+   - *Obsidian*: a person opens the Git working copy as a vault to read, browse and edit it, and commits through Git, not Obsidian Sync. The vault uses Markdown links, relative link format and automatic link updates (`.obsidian/app.json`: `useMarkdownLinks`, `newLinkFormat: relative`, `alwaysUpdateLinks`), so a rename leaves valid relative links.
 3. **Start with one knowledge monorepo.** Split into one repository per business domain when two domains define the same term differently, or when a domain needs its own access rules. Each domain repository then owns its concepts, and the others link to them by URL; how changes propagate between them is a later ADR.
 
 # Alternatives considered
@@ -58,14 +58,13 @@ Two things follow. Only Git gives review of a change as a diff, which the distil
 
 - Positive: one history and one review flow for every change; agents on every platform read the same files; the M365 path no longer depends on an undocumented file type.
 - Negative / accepted debt: people who do not use Git need help editing (the agents, or a web editor on GitHub); the M365 connector needs a Copilot licence or metered use and a GitHub-to-Entra identity mapping, and permission changes apply only at the next full crawl; Drive and SharePoint copies lag behind the repository by the sync interval.
-- Follow-up actions: correct the SharePoint note in `tools/export_m365.py`; test the GitHub connector and SharePoint `.md` in a tenant (with the M365 probe); check Obsidian's link handling against this repo's bundle; once accepted, a runbook for the Drive copy job.
+- Follow-up actions: correct the SharePoint note in `tools/export_m365.py`; test the GitHub connector and SharePoint `.md` in a tenant (with the M365 probe); once accepted, a runbook for the Drive copy job.
 
 # Not verified
 
 - Whether M365 Copilot uses `.md` files stored in SharePoint in practice.
 - Whether the SharePoint and Drive Markdown viewers show, hide or break YAML frontmatter.
 - Whether Gemini Enterprise and the Gemini app read `.md` from Drive.
-- Whether Obsidian resolves `/`-prefixed links from the vault root (only forum reports).
 
 # Related
 
@@ -84,5 +83,5 @@ Two things follow. Only Git gives review of a change as a diff, which the distil
 [^sp-approval]: SharePoint content approval.
 [^drive-markdown]: Google Workspace Updates, 2026-10-05.
 [^obsidian-properties]: Obsidian help, Properties.
-[^obsidian-links]: Obsidian community forum, June 2026.
+[^obsidian-links]: Obsidian community forum, June 2026; reproduced on 2026-10-31 by opening this repository's `knowledge/` as a vault and renaming an ADR: the default and `absolute` link formats left 2 and 5 broken links, the `relative` format none.
 [^m365-export]: The SharePoint note near the end of `tools/export_m365.py`.
