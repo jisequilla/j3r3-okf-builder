@@ -19,7 +19,7 @@ flowchart LR
   SRC -->|make m365 → zip manifest v1.28| M365[Microsoft 365 Copilot]
   SRC -->|make copilot → .github/skills| OTR[Other repos]
   K[(project knowledge/)] --- CC & GH & GM & CW
-  K -->|sync SharePoint/OneDrive| M365
+  K -->|GitHub connector or SharePoint source| M365
 ```
 
 # Elements

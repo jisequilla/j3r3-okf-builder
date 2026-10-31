@@ -72,7 +72,7 @@ M365_NOTE = """
 ## Environment note (Microsoft 365 Copilot)
 
 This skill runs in Microsoft 365 Copilot, not in a terminal on the repository. The `knowledge/`
-bundle arrives as a OneDrive/SharePoint folder synced from the repo (or as attached files).
+bundle arrives as a SharePoint folder synced with OneDrive, read-only through the GitHub connector, or as attached files.
 Ask the user for the path or the folder if it is not obvious. The `scripts/*.py` scripts run
 from the base directory of this skill with `uv run`, which installs PyYAML, and take the bundle
 path as an argument; without uv, `python3` works if PyYAML is installed. If the environment
@@ -206,10 +206,13 @@ M365 package (manifest v1.28 + {len(skills)} Agent Skills). Requires Microsoft 3
 For Copilot Studio (new agent experience) or Agent Builder: Build → Skills → Upload a skill → drag each zip. Upload at least `okf-standard`, `okf-ask` and `okf-capture`.
 
 ## Knowledge
-M365 Copilot does not read the git repository. Sync the `knowledge/` folder to SharePoint/OneDrive (OneDrive sync of the clone,
-or a CI job that publishes `knowledge/` to a document library) and add it as a knowledge source of the agent.
-OKF is plain markdown: it is indexed as is. The repo stays the source of truth; in M365 it is read and changes are proposed
-that go back to the repo by PR (or are edited in the synced folder if that flow is accepted).
+A bundle has one source, a Git repository or a SharePoint document library, and M365 Copilot reads it there:
+- Git source: connect the repository with the GitHub Cloud Knowledge connector, which indexes `.md` files and keeps
+  GitHub permissions. It needs a Copilot licence or metered use and a GitHub-to-Entra identity mapping. M365 only reads;
+  changes go back to the repository by PR.
+- SharePoint source, for teams without Git: the `knowledge/` folder lives in the library and is edited through the
+  OneDrive sync client; add the library as a knowledge source of the agent. Microsoft does not document `.md` as a
+  SharePoint knowledge file type, so check in the tenant that Copilot answers from those files before relying on it.
 
 Generated with `tools/export_m365.py`; do not edit here.
 """, encoding="utf-8")

@@ -89,7 +89,7 @@ M365 Copilot (Cowork, Copilot Studio, Agent Builder) accepts Agent Skills in the
 - `dist/m365/okf-builder-m365.zip` — an **M365 Copilot Cowork** plugin (manifest v1.28 + 7 self-contained skills). Uploaded by an admin (Manage apps → Upload custom app) or personally with `atk install --file-path … --scope Personal`. Cowork currently requires the Frontier program.
 - `dist/m365/skills/okf-*.zip` — one zip per skill for **Copilot Studio / Agent Builder** → Build → Skills → Upload a skill (GA).
 
-M365 Copilot cannot reach the knowledge (`knowledge/`) through git: sync it to SharePoint/OneDrive and add it as a knowledge source for the agent. It is plain markdown and is indexed as is.
+M365 Copilot reads the knowledge (`knowledge/`) from its one source ([ADR-0014](knowledge/decisions/ADR-0014-knowledge-repository-storage.md)): a Git repository through the GitHub Cloud Knowledge connector, which indexes `.md`, or a SharePoint library for teams without Git. Microsoft does not document `.md` as a SharePoint knowledge file type, so check it in your tenant.
 
 ## References
 

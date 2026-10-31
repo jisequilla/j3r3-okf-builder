@@ -28,4 +28,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 
 # Knowledge in M365
 
-`knowledge/` is not reachable through git from M365: sync it to SharePoint/OneDrive and add it as a knowledge source of the agent. The source of truth stays in the repo.
+M365 Copilot reads `knowledge/` from its one source ([ADR-0014](/decisions/ADR-0014-knowledge-repository-storage.md)):
+
+- Git source: connect the repository with the GitHub Cloud Knowledge connector, which indexes `.md` and keeps GitHub permissions. M365 only reads; changes go back by PR.
+- SharePoint source: add the library as a knowledge source of the agent. `.md` is not a documented SharePoint knowledge file type, so check in the tenant that Copilot answers from it.
