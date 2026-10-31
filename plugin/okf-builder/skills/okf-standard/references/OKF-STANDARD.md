@@ -25,6 +25,7 @@ knowledge/
 ├── index.md                 # Bundle root. The only index.md with frontmatter (okf_version).
 ├── log.md                   # Chronological history of the bundle (most recent first).
 ├── project.md               # type: Project — project overview: purpose, scope, team, key links.
+├── conflict-log.md          # type: Conflict Log — the bundle's conflict register; created with the first conflict.
 ├── architecture/            # Views, C4 context, diagrams, principles.
 │   ├── index.md
 │   └── overview.md
@@ -49,6 +50,8 @@ knowledge/
 ├── playbooks/               # Business/team procedures (onboarding, releases).
 │   └── index.md
 ├── policies/                # Rules, standards, compliance, security.
+│   └── index.md
+├── fragments/               # type: Knowledge Fragment — records of events (YYYY-MM-DD-slug.md), distilled into concepts.
 │   └── index.md
 └── references/              # OKF convention §6.3: mirrored external material, execution skills, attesters.
     ├── index.md
@@ -148,6 +151,8 @@ The headings of the other templates (§5) are recommendations of the profile, no
 | `Playbook` | `playbooks/` | Team/business procedure. |
 | `Policy` | `policies/` | Rule or standard; usually carries `stale_after` and a human `verified`. |
 | `Reference` | `references/` | Mirrored external material or execution instructions. |
+| `Knowledge Fragment` | `fragments/` | Record of an event (meeting, chat, slides, transcript), named `YYYY-MM-DD-slug.md` with the date of the event. Extra fields: `occurred_at` (when it happened: `YYYY-MM-DD` or ISO 8601 with an offset), `origin` (where it happened), `participants` (list of actors, §3.1), `distillation_status` (`pending` / `distilled` / `conflict`). Body: `# Record` (immutable after capture) and `# Distillation`; bundles written in Spanish may title them «Contenido capturado» and «Destilado en». |
+| `Conflict Log` | root (`conflict-log.md`) | The bundle's conflict register. Zero or one per bundle; created with the first conflict. Body: a table with the columns ID (`C-NNN`), source fragment, description, kind, resolution, state (`open` / `proposed` / `resolved` / `dismissed`) and who decided. |
 | `Log` | — | Only for `log.md` if frontmatter is added to it (optional, tolerated by consumers). |
 
 Types are not registered centrally; consumers must tolerate unknown types.
@@ -181,7 +186,7 @@ okf_profile: "knowledge/2.0"
 ### 5.2 `log.md`
 
 - At least at the root. A flat list grouped by ISO date `YYYY-MM-DD`, **most recent first**.
-- Each entry starts with a bold word: `**Creation**`, `**Update**`, `**Verification**`, `**Deprecation**`, `**Initialization**`.
+- Each entry starts with a bold word: `**Creation**`, `**Update**`, `**Verification**`, `**Deprecation**`, `**Initialization**`, `**Conflict**` (opening or resolving a conflict of the Conflict Log).
 
 ```markdown
 # Bundle history
@@ -201,6 +206,9 @@ okf_profile: "knowledge/2.0"
 | Content change | Edit | Update `generated.at`; `verified` is **not** touched (it can end up older than `generated.at`; that gap is information) |
 | Reconfirm without changes | Periodic review | Add a new entry to `verified` |
 | Staleness | `now >= stale_after` | `okf-lint` warns; review and renew `stale_after` or deprecate |
+| Capture a fragment | `okf-fragment` records an event in `fragments/` | `type: Knowledge Fragment`, `status: draft`, `distillation_status: pending`, `generated` |
+| Distill a fragment | `okf-distill` proposes a change set (additions, confirmations, updates, conflicts); a person approves it before anything is applied | Touched concepts cite the fragment in `sources`; the fragment gets `distillation_status: distilled` (or `conflict` while one of its conflicts is open). Distillation never sets `verified` |
+| Resolve a conflict | A person decides: the knowledge changed (new ADR that supersedes, or an **Update** citing the fragment) or it was a misunderstanding (dismissed with the reason) | The row of the Conflict Log changes its state and records who decided; the fragment returns to `distilled` when no conflict of it is open; a **Conflict** entry in `log.md` |
 | Supersession | New concept | Old one: `status: deprecated` + a link to the new one. Never delete: that breaks the graph and the history |
 | Any of the above | Log | An entry in the `log.md` of the affected directory and/or the root |
 
@@ -218,12 +226,14 @@ It is **conformant with this profile** if, in addition:
 
 4. `knowledge/index.md` (with `okf_version`), `knowledge/log.md` and `knowledge/project.md` (`type: Project`) exist.
 5. Every concept carries `generated.by` following the actor convention.
-6. Timestamps are ISO 8601 with an explicit offset.
+6. Timestamps are ISO 8601 with an explicit offset; the exception is a Knowledge Fragment's `occurred_at`, which also accepts a date `YYYY-MM-DD`.
 7. `status`, if present, is `draft | stable | deprecated`.
 8. `Attested Computation` concepts carry `runtime` and either `computation` or a `# Computation` block with a single fence.
 9. File names are ASCII kebab-case.
+10. A Knowledge Fragment's `distillation_status`, if present, is `pending | distilled | conflict`.
+11. At most one concept per bundle has `type: Conflict Log`.
 
-`okf-lint` separates **errors** (1–5, 7, 8) from **warnings** (6, 9, broken links, expired `stale_after`, concepts without `description`, out-of-date `index.md`).
+`okf-lint` separates **errors** (1–5, 7, 8, 10, 11) from **warnings** (6, 9, broken links, expired `stale_after`, concepts without `description`, out-of-date `index.md`, Knowledge Fragments missing `occurred_at`, `origin`, `participants` or `distillation_status`, `participants` not following the actor convention, `occurred_at` that is neither a date nor an ISO 8601 datetime with an offset).
 
 ---
 

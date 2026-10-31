@@ -25,7 +25,7 @@ from okf_common import now_iso, parse_yaml, split_frontmatter  # noqa: E402
 _HERE = Path(__file__).resolve().parent
 TEMPLATES = _HERE.parent / "templates"   # okf-standard/scripts/ → okf-standard/templates/
 DEFAULT_DIRS = ["architecture", "decisions", "domain", "systems", "apis", "data",
-                "metrics", "computations", "runbooks", "playbooks", "policies", "references"]
+                "metrics", "computations", "runbooks", "playbooks", "policies", "references", "fragments"]
 DIR_DESC = {
     "architecture": "Architecture views and principles.",
     "decisions": "Architecture decision records (ADR).",
@@ -39,6 +39,7 @@ DIR_DESC = {
     "playbooks": "Team and business procedures.",
     "policies": "Rules, standards and compliance.",
     "references": "Mirrored external material, execution skills and attesters.",
+    "fragments": "Knowledge fragments: records of events, before and after distillation.",
     "skills": "Execution instructions (executors) for computations.",
     "attesters": "Deterministic receipt verification code.",
 }
@@ -126,6 +127,13 @@ def test_creates_profile_structure(tmp_path):
     fm = parse_yaml(raw)
     assert (fm["type"], fm["title"], fm["description"]) == ("Project", "T", "D")
     assert fm["generated"]["by"] == "human:test"
+
+
+def test_creates_empty_fragments_without_conflict_log(tmp_path):
+    assert main(["--root", str(tmp_path), *_ARGS]) == 0
+    k = tmp_path / "knowledge"
+    assert (k / "fragments" / "index.md").is_file()
+    assert not (k / "conflict-log.md").exists()
 
 
 def test_does_not_overwrite_without_force(tmp_path):

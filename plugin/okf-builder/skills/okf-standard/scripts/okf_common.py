@@ -9,7 +9,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,10 +26,12 @@ RESERVED = {"index.md", "log.md"}
 ISO_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$"
 )
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ACTOR_RE = re.compile(r"^(human:[^\s/]+|process:[^\s/]+|[^\s/:]+/[^\s/]+)$")
 KEBAB_RE = re.compile(r"^(ADR-\d{4}-)?[a-z0-9]+(-[a-z0-9]+)*\.md$")
 LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 VALID_STATUS = {"draft", "stable", "deprecated"}
+VALID_DISTILLATION = ("pending", "distilled", "conflict")
 
 
 def run_tests(script: str, argv: list[str]) -> int:
@@ -127,6 +129,21 @@ def is_iso(ts: Any) -> bool:
     if isinstance(ts, datetime):
         return ts.tzinfo is not None
     return isinstance(ts, str) and bool(ISO_RE.match(ts))
+
+
+def is_iso_date_or_datetime(v: Any) -> bool:
+    """A calendar date (YYYY-MM-DD) or an ISO 8601 datetime with an explicit offset."""
+    if isinstance(v, datetime):
+        return v.tzinfo is not None
+    if isinstance(v, date):
+        return True
+    if isinstance(v, str) and DATE_RE.match(v):
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            return False
+        return True
+    return isinstance(v, str) and bool(ISO_RE.match(v))
 
 
 def to_dt(ts: Any) -> datetime | None:

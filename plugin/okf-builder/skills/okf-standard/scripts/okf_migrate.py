@@ -383,6 +383,32 @@ def test_round_trip_02_01_02():
     assert "# kept comment" in again
 
 
+_FRAGMENT_02 = """---
+type: Knowledge Fragment
+title: Weekly meeting
+status: draft
+occurred_at: 2026-10-31
+origin: Weekly meeting
+participants: [human:alice, okf-builder/claude-opus-5-5]
+distillation_status: pending
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T18:00:00Z }
+---
+
+# Record
+
+Text.
+"""
+_FRAGMENT_KEYS = ("occurred_at", "origin", "participants", "distillation_status")
+
+
+def test_fragment_fields_survive_round_trip_02_01_02():
+    want = {k: _parse(_FRAGMENT_02)[0][k] for k in _FRAGMENT_KEYS}
+    down = migrate_concept(_FRAGMENT_02, "0.1", "process:okf-migrate", False, [], "fragments/f.md")
+    assert {k: _parse(down)[0].get(k) for k in _FRAGMENT_KEYS} == want
+    again = migrate_concept(down, "0.2", "process:okf-migrate", False, [], "fragments/f.md")
+    assert {k: _parse(again)[0].get(k) for k in _FRAGMENT_KEYS} == want
+
+
 def test_main_out_leaves_source_untouched(tmp_path):
     src = tmp_path / "src"
     src.mkdir()
