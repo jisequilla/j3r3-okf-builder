@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0006: Python scripts without external dependencies"
 description: The tools (init, lint, index, migrate) are Python ≥ 3.9 without pip; PyYAML is used only if present.
 tags: [adr, tooling]
-status: stable
+status: deprecated
 adr_id: ADR-0006
-decision_status: accepted
+decision_status: superseded
+superseded_by: /decisions/ADR-0011-uv-pep723-scripts.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 

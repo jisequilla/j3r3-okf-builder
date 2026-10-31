@@ -1,6 +1,8 @@
 # Bundle history
 
 ## 2026-10-31
+* **Creation**: [ADR-0011](/decisions/ADR-0011-uv-pep723-scripts.md): scripts run with uv and declare PyYAML inline (PEP 723); the reduced YAML parser is removed.
+* **Deprecation**: [ADR-0006](/decisions/ADR-0006-dependency-free-scripts.md), superseded by ADR-0011.
 * **Update**: [Build a change in layers](/runbooks/build-in-layers.md): blocking bar in each ticket, `make test` concurrency and the GNU Make 3.81 shell-flags trap.
 * **Update**: Bundle prose translated to English (ADR-0010).
 * **Update**: ADR-0010 glossary extended with the Migration and Verification log labels.
