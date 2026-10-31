@@ -1,8 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
 """okf_init.py — Create the knowledge/ structure of the knowledge/2.0 profile (OKF v0.2).
 
 Usage:
-    python3 okf_init.py --root /path/to/repo --title "My project" \
+    uv run okf_init.py --root /path/to/repo --title "My project" \
         --description "One sentence" --actor human:jisequilla [--repo-url URL] \
         [--dirs architecture,decisions,...] [--force]
 
@@ -16,7 +20,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from okf_common import now_iso  # noqa: E402
+from okf_common import now_iso, parse_yaml, split_frontmatter  # noqa: E402
 
 _HERE = Path(__file__).resolve().parent
 TEMPLATES = _HERE.parent / "templates"   # okf-standard/scripts/ → okf-standard/templates/
@@ -105,5 +109,46 @@ def main(argv=None) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------
+# Tests (uv run --with pytest okf_init.py --test)
+# --------------------------------------------------------------------------
+_ARGS = ["--title", "T", "--description", "D", "--actor", "human:test"]
+
+
+def test_creates_profile_structure(tmp_path):
+    assert main(["--root", str(tmp_path), *_ARGS]) == 0
+    k = tmp_path / "knowledge"
+    assert (k / "project.md").is_file()
+    for d in ("decisions", "policies", "references/skills", "references/attesters"):
+        assert (k / d / "index.md").is_file(), d
+    assert 'okf_profile: "knowledge/2.0"' in (k / "index.md").read_text(encoding="utf-8")
+    raw, _ = split_frontmatter((k / "project.md").read_text(encoding="utf-8"))
+    fm = parse_yaml(raw)
+    assert (fm["type"], fm["title"], fm["description"]) == ("Project", "T", "D")
+    assert fm["generated"]["by"] == "human:test"
+
+
+def test_does_not_overwrite_without_force(tmp_path):
+    main(["--root", str(tmp_path), *_ARGS])
+    project = tmp_path / "knowledge" / "project.md"
+    project.write_text("edited by hand\n", encoding="utf-8")
+    main(["--root", str(tmp_path), *_ARGS])
+    assert project.read_text(encoding="utf-8") == "edited by hand\n"
+
+
+def test_okf_version_01(tmp_path):
+    main(["--root", str(tmp_path), *_ARGS, "--okf-version", "0.1"])
+    k = tmp_path / "knowledge"
+    assert 'okf_version: "0.1"' in (k / "index.md").read_text(encoding="utf-8")
+    raw, _ = split_frontmatter((k / "project.md").read_text(encoding="utf-8"))
+    fm = parse_yaml(raw)
+    assert "timestamp" in fm and "generated" not in fm
+
+
 if __name__ == "__main__":
+    if "--test" in sys.argv[1:]:
+        import pytest  # test-time only: uv run --with pytest <script>.py --test
+
+        sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider",
+                              *[a for a in sys.argv[1:] if a != "--test"]]))
     sys.exit(main())

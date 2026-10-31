@@ -67,7 +67,7 @@ The templates use `{{name}}` placeholders; replace all of them before saving. If
 <skills>/okf-standard/references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
 ```
 
-Python ≥ 3.9, no dependencies (uses PyYAML if it is installed; `OKF_NO_PYYAML=1` forces the reduced YAML parser). If the environment doesn't allow running scripts (e.g. some M365 agents), apply the rules by hand from `references/` and say so.
+Python ≥ 3.9 and PyYAML; run with `uv run`, which installs PyYAML, or with `python3` where PyYAML is installed. If the environment cannot run scripts (for example some M365 agents), apply the rules by hand from `references/` and say so.
 
 ## When to read the references
 

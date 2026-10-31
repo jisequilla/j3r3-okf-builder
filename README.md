@@ -31,7 +31,7 @@ The skills live once, in `plugin/okf-builder/skills/`. Each platform gets a proj
 | `templates/` | Concept templates (`{{placeholders}}`): ADR, runbook, system, API, table, metric, term, policy, view, reference, project. |
 | `knowledge/` | The project's own knowledge (a conformant OKF bundle, 8 ADRs). |
 | `tools/` | Projection exporters (Copilot, M365). |
-| `plugin/okf-builder/` | Plugin / single source: the skills `okf-standard`, `okf-init`, `okf-capture`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate` + dependency-free Python scripts. |
+| `plugin/okf-builder/` | Plugin / single source: the skills `okf-standard`, `okf-init`, `okf-capture`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate` + Python scripts run with uv (PEP 723). |
 | `examples/knowledge/` | A conformant example bundle. |
 | `.claude-plugin/marketplace.json` | This repo acts as a plugin marketplace. |
 
@@ -57,7 +57,7 @@ In Cowork: load the `.plugin` file built by `make plugin` (or the one delivered 
 ```
 okf-init        → creates knowledge/ (index.md, log.md, project.md, subdirectories)
 okf-capture     → "document this decision / create a runbook / register this service"
-okf-lint        → validates spec + profile (CI-ready: python3 tools/okf/okf_lint.py knowledge --strict)
+okf-lint        → validates spec + profile (CI-ready: uv run tools/okf/okf_lint.py knowledge --strict)
 okf-index       → regenerates index.md from the frontmatter
 okf-ask         → "why did we decide X?" by navigating the bundle and citing trust level
 okf-migrate     → detects the version and migrates 0.1 ↔ 0.2 (always --dry-run first)
@@ -66,10 +66,10 @@ okf-migrate     → detects the version and migrates 0.1 ↔ 0.2 (always --dry-r
 ## Running the scripts directly
 
 ```bash
-python3 plugin/okf-builder/skills/okf-standard/scripts/okf_init.py  --root . --title "My project" --description "…" --actor human:<id>
-python3 plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py  knowledge [--json] [--strict] [--no-profile]
-python3 plugin/okf-builder/skills/okf-standard/scripts/okf_index.py knowledge [--check] [--dir decisions]
-python3 plugin/okf-builder/skills/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
+uv run plugin/okf-builder/skills/okf-standard/scripts/okf_init.py  --root . --title "My project" --description "…" --actor human:<id>
+uv run plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py  knowledge [--json] [--strict] [--no-profile]
+uv run plugin/okf-builder/skills/okf-standard/scripts/okf_index.py knowledge [--check] [--dir decisions]
+uv run plugin/okf-builder/skills/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
 ```
 
 ## Using it with GitHub Copilot (and other agents)

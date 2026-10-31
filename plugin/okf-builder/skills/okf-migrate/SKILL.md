@@ -5,12 +5,12 @@ description: 'Migrates an OKF bundle between v0.1 and v0.2 in both directions (t
 
 # okf-migrate
 
-> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`. Without uv, `python3` works if PyYAML is installed.
 
 ## Detect the version
 
 ```bash
-python3 "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --no-profile --json | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['okf_version'],d['version_origin'])"
+uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --no-profile --json | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['okf_version'],d['version_origin'])"
 ```
 `declared` = `okf_version` in the root `index.md`; `heuristic` = inferred from the fields; `mixed` = 0.1 and 0.2 forms mixed; `default` = no signals (treated as 0.2).
 
@@ -20,14 +20,14 @@ Always `--dry-run` first; show the user the list of affected concepts and the lo
 
 ```bash
 # 0.1 → 0.2 (lossless). --actor: who to attribute generated.by to for the old concepts
-python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.2 --actor <actor> --dry-run
-python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.2 --actor <actor>
+uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.2 --actor <actor> --dry-run
+uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.2 --actor <actor>
 
 # 0.2 → 0.1: ALWAYS to a copy (--out); the source bundle stays at 0.2
-python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --keep-extensions --out <export-dir>
+uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --keep-extensions --out <export-dir>
 
 # A single concept (e.g. after okf-capture in a 0.1 bundle with a 0.2 template)
-python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file runbooks/x.md
+uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file runbooks/x.md
 ```
 
 Choosing `--actor` for 0.1→0.2: if you know who wrote the concepts (e.g. Google's agent), `reference_agent/<model>`; if people wrote them, `human:<id>` only if the user confirms it; when in doubt, `process:okf-migrate` (the default, and honest: nobody knows).

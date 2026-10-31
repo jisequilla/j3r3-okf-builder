@@ -1,8 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
 """okf_lint.py — Validate an OKF v0.2 bundle and the knowledge/2.0 profile.
 
 Usage:
-    python3 okf_lint.py [path/to/bundle] [--json] [--strict] [--no-profile]
+    uv run okf_lint.py [path/to/bundle] [--json] [--strict] [--no-profile]
 
 Output: a list of findings with level ERROR / WARN and a code. Exit 1 if there
 are errors (or warnings with --strict).
@@ -312,5 +316,59 @@ def main(argv=None) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------
+# Tests (uv run --with pytest okf_lint.py --test); they also cover okf_common
+# --------------------------------------------------------------------------
+def _broken_bundle() -> Path | None:
+    for parent in Path(__file__).resolve().parents:
+        cand = parent / "tests" / "fixtures" / "broken-bundle" / "knowledge"
+        if cand.is_dir():
+            return cand
+    return None
+
+
+def test_split_frontmatter():
+    from okf_common import split_frontmatter
+
+    assert split_frontmatter("---\na: 1\n---\nbody\n") == ("a: 1", "body")
+    assert split_frontmatter("no frontmatter\n") == (None, "no frontmatter\n")
+    assert split_frontmatter("---\nunclosed: 1\n") == (None, "---\nunclosed: 1\n")
+    assert split_frontmatter("----\na: 1\n---\n")[0] is None
+
+
+def test_parse_yaml_non_dict_is_empty():
+    from okf_common import parse_yaml
+
+    assert parse_yaml("- a\n- b\n") == {}
+    assert parse_yaml("just a string") == {}
+    assert parse_yaml("") == {}
+    assert parse_yaml("a: { b: [1, 2] }\n") == {"a": {"b": [1, 2]}}
+
+
+def test_broken_bundle_fails_with_no_type(capsys):
+    import pytest
+
+    bundle = _broken_bundle()
+    if bundle is None:
+        pytest.skip("tests/fixtures/broken-bundle not present (script copied outside the repo)")
+    rep, _, _ = lint(bundle)
+    assert [e["code"] for e in rep.errors] == ["NO_TYPE"]
+    assert main([str(bundle), "--strict"]) == 1
+    assert any(line.startswith("ERROR NO_TYPE ") for line in capsys.readouterr().out.splitlines())
+
+
+def test_typed_concept_passes(tmp_path):
+    (tmp_path / "index.md").write_text("# Terms\n\n* [A](a.md) - An A.\n", encoding="utf-8")
+    (tmp_path / "a.md").write_text("---\ntype: Term\ntitle: A\ndescription: An A.\n---\n\nText.\n",
+                                   encoding="utf-8")
+    rep, _, _ = lint(tmp_path, profile=False)
+    assert rep.errors == []
+
+
 if __name__ == "__main__":
+    if "--test" in sys.argv[1:]:
+        import pytest  # test-time only: uv run --with pytest <script>.py --test
+
+        sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider",
+                              *[a for a in sys.argv[1:] if a != "--test"]]))
     sys.exit(main())

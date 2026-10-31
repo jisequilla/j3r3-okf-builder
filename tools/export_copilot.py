@@ -42,7 +42,7 @@ Rules:
 2. To create or change knowledge use okf-capture: template, `log.md`, index and lint.
    Never add `verified` with `human:` without the person's explicit confirmation.
 3. Before finishing any change in `knowledge/`, run
-   `python3 {skills_dir}/okf-standard/scripts/okf_lint.py knowledge` and fix every ERROR.
+   `uv run {skills_dir}/okf-standard/scripts/okf_lint.py knowledge` and fix every ERROR.
 4. Respect the OKF version of the bundle (`okf_version` in `knowledge/index.md`); do not mix
    0.1 and 0.2 forms. To change version use okf-migrate with `--dry-run` first.
 5. If `knowledge/` does not exist, propose okf-init and wait for confirmation.
@@ -60,7 +60,7 @@ Skills available in `{skills_dir}/` (Agent Skills standard, also valid for Claud
 | okf-standard | OKF v0.1/v0.2 standard, knowledge/2.0 profile, templates and scripts |
 | okf-init | Create `knowledge/` |
 | okf-capture | Add an ADR, runbook, system, API, table, metric, term, policy |
-| okf-lint | Check conformance (`python3 {skills_dir}/okf-standard/scripts/okf_lint.py knowledge`) |
+| okf-lint | Check conformance (`uv run {skills_dir}/okf-standard/scripts/okf_lint.py knowledge`) |
 | okf-index | Regenerate `index.md` |
 | okf-ask | Answer questions citing concepts and confidence |
 | okf-migrate | Migrate between OKF 0.1 and 0.2 |
@@ -74,7 +74,8 @@ PATHS_NOTE_RE = re.compile(r"^> \*\*(?:Rutas|Paths)\.\*\*.*$\n?", re.M)
 
 
 def rewrite(text: str, skills_dir: str) -> str:
-    text = PATHS_NOTE_RE.sub(f"> **Paths.** Relative to the repository root; the `okf-*` skills are in `{skills_dir}/`.\n", text)
+    text = PATHS_NOTE_RE.sub(f"> **Paths.** Relative to the repository root; the `okf-*` skills are in `{skills_dir}/`."
+                           " Without uv, `python3` works if PyYAML is installed.\n", text)
     # The source skills use the <skills> convention; here it becomes the target repo path.
     return text.replace("<skills>/", f"{skills_dir}/").replace("${CLAUDE_PLUGIN_ROOT}/skills", skills_dir)
 
@@ -125,8 +126,8 @@ Copy the contents of this directory to the root of your repository:
 - `.github/agents/okf.agent.md` — custom agent `@okf` that orchestrates the skills.
 - `AGENTS.okf.md` — snippet to paste into your `AGENTS.md` (or `.github/copilot-instructions.md`).
 
-The scripts (`okf_init/lint/index/migrate.py`) are in `{skills_dir}/okf-standard/scripts/` and have no dependencies
-(Python ≥ 3.9). In Copilot, running scripts asks for confirmation unless you add `allowed-tools` to the SKILL.md.
+The scripts (`okf_init/lint/index/migrate.py`) are in `{skills_dir}/okf-standard/scripts/` and need Python ≥ 3.9
+and PyYAML: `uv run` installs it, or plain `python3` works where it is installed. In Copilot, running scripts asks for confirmation unless you add `allowed-tools` to the SKILL.md.
 
 Generated from the okf-builder plugin with `tools/export_copilot.py`; do not edit here: edit the plugin and export again.
 """, encoding="utf-8")

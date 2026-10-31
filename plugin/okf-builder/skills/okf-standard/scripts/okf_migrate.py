@@ -1,9 +1,13 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["pyyaml"]
+# ///
 """okf_migrate.py — Migrate an OKF bundle between v0.1 and v0.2 (both directions).
 
 Usage:
-    python3 okf_migrate.py [bundle] --to 0.2 [--actor process:okf-migrate] [--dry-run] [--out DIR]
-    python3 okf_migrate.py [bundle] --to 0.1 [--keep-extensions] [--dry-run] [--out DIR]
+    uv run okf_migrate.py [bundle] --to 0.2 [--actor process:okf-migrate] [--dry-run] [--out DIR]
+    uv run okf_migrate.py [bundle] --to 0.1 [--keep-extensions] [--dry-run] [--out DIR]
 
 0.1 → 0.2 (lossless):
   - timestamp            → generated: { by: <actor>, at: <timestamp> }
@@ -333,5 +337,68 @@ def main(argv=None) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------
+# Tests (uv run --with pytest okf_migrate.py --test)
+# --------------------------------------------------------------------------
+_V01 = """---
+type: Table
+title: Orders
+# kept comment
+timestamp: 2024-05-01T10:00:00Z
+owner: data-team
+---
+
+Orders, see [1].
+
+# Citations
+
+[1] [Schema](https://example.com/schema)
+"""
+
+
+def _parse(text: str) -> tuple[dict, str]:
+    raw, body = split_frontmatter(text)
+    return parse_yaml(raw), body
+
+
+def test_upgrade_01_to_02():
+    notes: list[str] = []
+    fm, body = _parse(migrate_concept(_V01, "0.2", "process:okf-migrate", False, notes, "orders.md"))
+    assert "timestamp" not in fm
+    assert fm["generated"]["by"] == "process:okf-migrate"
+    assert str(fm["generated"]["at"]).startswith("2024-05-01")
+    assert fm["sources"] == [{"id": "cit-1", "resource": "https://example.com/schema", "title": "Schema"}]
+    assert fm["owner"] == "data-team"
+    assert "[^cit-1]" in body and "# Citations" not in body
+
+
+def test_round_trip_02_01_02():
+    up = migrate_concept(_V01, "0.2", "process:okf-migrate", False, [], "orders.md")
+    down = migrate_concept(up, "0.1", "process:okf-migrate", True, [], "orders.md")
+    fm_down, body_down = _parse(down)
+    assert "timestamp" in fm_down and "# Citations" in body_down and "[1]" in body_down
+    again = migrate_concept(down, "0.2", "process:okf-migrate", False, [], "orders.md", )
+    assert _parse(again)[0] == _parse(up)[0]
+    assert "# kept comment" in again
+
+
+def test_main_out_leaves_source_untouched(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "index.md").write_text('---\nokf_version: "0.1"\n---\n\n# Tables\n\n* [Orders](orders.md) - x\n',
+                                  encoding="utf-8")
+    (src / "orders.md").write_text(_V01, encoding="utf-8")
+    out = tmp_path / "out"
+    assert main([str(src), "--to", "0.2", "--out", str(out)]) == 0
+    assert (src / "orders.md").read_text(encoding="utf-8") == _V01
+    assert "generated:" in (out / "orders.md").read_text(encoding="utf-8")
+    assert 'okf_version: "0.2"' in (out / "index.md").read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
+    if "--test" in sys.argv[1:]:
+        import pytest  # test-time only: uv run --with pytest <script>.py --test
+
+        sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider",
+                              *[a for a in sys.argv[1:] if a != "--test"]]))
     sys.exit(main())

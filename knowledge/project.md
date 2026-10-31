@@ -5,7 +5,7 @@ description: OKF standard (profile knowledge/2.0) and the okf-builder plugin for
 resource: https://github.com/jisequilla/j3r3-okf-builder
 tags: [okf, knowledge, plugin]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T03:28:57Z }
 ---
 
 # Purpose
@@ -14,7 +14,7 @@ Define a standard per-repository knowledge structure (`knowledge/`) based on Goo
 
 # Scope
 
-- Includes: the standard (profile), templates, dependency-free scripts, Agent Skills, projections for Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI and Microsoft 365 Copilot, OKF v0.1 and v0.2 support.
+- Includes: the standard (profile), templates, scripts run with uv (PEP 723), Agent Skills, projections for Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI and Microsoft 365 Copilot, OKF v0.1 and v0.2 support.
 - Excludes: serving or indexing bundles (consumers do that: Knowledge Catalog, SharePoint, search engines); running attested computations.
 
 # Team and ownership

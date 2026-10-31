@@ -5,7 +5,7 @@ description: Captures a unit of knowledge in knowledge/ using the matching OKF t
 
 # okf-capture
 
-> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`.
+> **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`. Without uv, `python3` works if PyYAML is installed.
 
 Turns knowledge (a decision, procedure, component or definition) into an OKF concept that is correctly typed, linked and logged.
 
@@ -26,13 +26,13 @@ Turns knowledge (a decision, procedure, component or definition) into an OKF con
    - Bundle-absolute links (`/systems/x.md`). Link even if the target doesn't exist yet; list the pending links at the end.
    - If the content derives from sources (docs, tickets, URLs, repo files): `sources[]` with `resource` and `id`, and `[^id]` footnotes on the claims that need them. For repo files use repo-relative paths as `resource`.
    - Empty template sections: remove them or leave an explicit `TODO`, never placeholders.
-   - **0.1 bundle**: after saving, run `python3 "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file <relative-path>` to convert `generated`→`timestamp` and `sources`→`# Citations`; never leave 0.2 keys in a 0.1 bundle.
+   - **0.1 bundle**: after saving, run `uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file <relative-path>` to convert `generated`→`timestamp` and `sources`→`# Citations`; never leave 0.2 keys in a 0.1 bundle.
 5. **Log**: add an entry to `knowledge/log.md` under today's date (create the section if it doesn't exist, above the earlier ones): `* **Creation**: ...` / `* **Update**: ...` / `* **Deprecation**: ...`, with a link to the concept. If the directory has its own `log.md`, add it there too.
 6. **Index and validate**:
    ```bash
-   python3 "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir <directory>
-   python3 "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir .
-   python3 "<skills>/okf-standard/scripts/okf_lint.py" <bundle>
+   uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir <directory>
+   uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir .
+   uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle>
    ```
    Fix any ERROR before finishing.
 7. **Close**: show the concept's path, its `type` and the pending links, and remind the user that it stays `draft` until a person adds `verified: { by: human:<id>, at: ... }` and moves it to `stable` (offer to do it if the user confirms they have reviewed it: only then use the user's `human:<id>`).
