@@ -147,8 +147,7 @@ def test_okf_version_01(tmp_path):
 
 if __name__ == "__main__":
     if "--test" in sys.argv[1:]:
-        import pytest  # test-time only: uv run --with pytest <script>.py --test
+        from okf_common import run_tests
 
-        sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider",
-                              *[a for a in sys.argv[1:] if a != "--test"]]))
+        sys.exit(run_tests(__file__, [a for a in sys.argv[1:] if a != "--test"]))
     sys.exit(main())

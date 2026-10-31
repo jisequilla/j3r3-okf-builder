@@ -32,6 +32,16 @@ LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 VALID_STATUS = {"draft", "stable", "deprecated"}
 
 
+def run_tests(script: str, argv: list[str]) -> int:
+    """Run the pytest functions in `script`; `argv` holds extra pytest arguments."""
+    try:
+        import pytest
+    except ImportError:
+        sys.stderr.write("okf: pytest is missing; run the tests with `uv run --with pytest <script>.py --test`\n")
+        return 2
+    return pytest.main([script, "-q", "-p", "no:cacheprovider", *argv])
+
+
 def parse_yaml(text: str) -> dict:
     data = yaml.safe_load(text)
     return data if isinstance(data, dict) else {}
