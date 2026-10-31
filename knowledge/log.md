@@ -2,6 +2,10 @@
 
 ## 2026-10-31
 * **Update**: [Export and deliver projections](/runbooks/export-projections.md) and the [projections view](/architecture/single-source-projections.md): M365 Copilot reads the bundle through the GitHub connector or from a SharePoint source (ADR-0014); the claim that SharePoint indexes `.md` as is is gone.
+* **Creation**: fragment [Review of the KDD profiles bundle](/fragments/2026-10-31-kdd-bundle-review.md), distilled into ADR-0015 and the conflict log.
+* **Creation**: [ADR-0015](/decisions/ADR-0015-fragment-format-and-conflict-log.md): fragments follow the KDD bundle format plus `participants`, one conflict register per bundle, and `okf-fragment`, `okf-distill` and `okf-review` as separate skills.
+* **Deprecation**: [ADR-0012](/decisions/ADR-0012-knowledge-fragments-and-distillation.md), superseded by ADR-0015.
+* **Conflict**: C-001 to C-003 in the [conflict log](/conflict-log.md), opened and resolved by human:jisequilla.
 * **Creation**: [ADR-0012](/decisions/ADR-0012-knowledge-fragments-and-distillation.md): knowledge fragments are captured as they happened and distilled into the bundle, with conflicts resolved by a person.
 * **Creation**: [ADR-0013](/decisions/ADR-0013-agent-projections.md): one knowledge-architect agent for Claude and Microsoft 365 Copilot.
 * **Creation**: [ADR-0014](/decisions/ADR-0014-knowledge-repository-storage.md): a knowledge repository has one source, Git or SharePoint; other tools read it.
