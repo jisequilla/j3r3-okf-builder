@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-10-31
+* **Update**: [Publish a plugin version](/runbooks/release-version.md): a GitHub Release with the built files is part of each release; okf-builder 0.3.0 released.
 * **Update**: [OKF scripts](/systems/scripts-okf.md) and the [project page](/project.md): the scripts run with uv (PEP 723), the reduced YAML parser is gone and each script carries its own tests (ADR-0011).
 * **Creation**: [ADR-0011](/decisions/ADR-0011-uv-pep723-scripts.md): scripts run with uv and declare PyYAML inline (PEP 723); the reduced YAML parser is removed.
 * **Deprecation**: [ADR-0006](/decisions/ADR-0006-dependency-free-scripts.md), superseded by ADR-0011.
