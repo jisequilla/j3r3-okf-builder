@@ -377,8 +377,9 @@ def test_round_trip_02_01_02():
     down = migrate_concept(up, "0.1", "process:okf-migrate", True, [], "orders.md")
     fm_down, body_down = _parse(down)
     assert "timestamp" in fm_down and "# Citations" in body_down and "[1]" in body_down
-    again = migrate_concept(down, "0.2", "process:okf-migrate", False, [], "orders.md", )
-    assert _parse(again)[0] == _parse(up)[0]
+    again = migrate_concept(down, "0.2", "process:okf-migrate", False, [], "orders.md")
+    assert _parse(again) == _parse(up)
+    assert "[^cit-1]" in _parse(again)[1]
     assert "# kept comment" in again
 
 
@@ -397,8 +398,7 @@ def test_main_out_leaves_source_untouched(tmp_path):
 
 if __name__ == "__main__":
     if "--test" in sys.argv[1:]:
-        import pytest  # test-time only: uv run --with pytest <script>.py --test
+        from okf_common import run_tests
 
-        sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider",
-                              *[a for a in sys.argv[1:] if a != "--test"]]))
+        sys.exit(run_tests(__file__, [a for a in sys.argv[1:] if a != "--test"]))
     sys.exit(main())
