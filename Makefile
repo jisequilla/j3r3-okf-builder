@@ -20,7 +20,7 @@ test:
 	@echo "[2] init 0.2 + index + lint --strict"
 	rm -rf /tmp/okf-test && uv run -q $(S)/okf_init.py --root /tmp/okf-test --title T --description D --actor human:test >/dev/null
 	uv run -q $(S)/okf_index.py /tmp/okf-test/knowledge --check && uv run -q $(S)/okf_lint.py /tmp/okf-test/knowledge --strict | tail -1
-	test -f /tmp/okf-test/knowledge/project.md && test -d /tmp/okf-test/knowledge/decisions && test -d /tmp/okf-test/knowledge/policies && grep -q 'knowledge/2.0' /tmp/okf-test/knowledge/index.md
+	test -f /tmp/okf-test/knowledge/project.md && test -d /tmp/okf-test/knowledge/decisions && test -d /tmp/okf-test/knowledge/policies && grep -q 'knowledge/2.0' /tmp/okf-test/knowledge/index.md && test -d /tmp/okf-test/knowledge/fragments
 	@echo "[3] init 0.1 + lint --strict"
 	rm -rf /tmp/okf-test1 && uv run -q $(S)/okf_init.py --root /tmp/okf-test1 --title T --description D --actor human:test --okf-version 0.1 >/dev/null
 	uv run -q $(S)/okf_lint.py /tmp/okf-test1/knowledge --strict | tail -1

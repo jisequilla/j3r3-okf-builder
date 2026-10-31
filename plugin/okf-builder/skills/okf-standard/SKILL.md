@@ -46,6 +46,8 @@ All subdirectories are optional; each one has its own `index.md`.
 | Playbook | playbooks/ | `<skills>/okf-standard/templates/playbook.md` |
 | Policy | policies/ | `<skills>/okf-standard/templates/policy.md` |
 | Reference | references/ | `<skills>/okf-standard/templates/reference.md` |
+| Knowledge Fragment | fragments/ (`YYYY-MM-DD-slug.md`) | `<skills>/okf-standard/templates/fragment.md` |
+| Conflict Log | root (`conflict-log.md`, created with the first conflict) | `<skills>/okf-standard/templates/conflict-log.md` |
 
 The templates use `{{name}}` placeholders; replace all of them before saving. If a placeholder doesn't apply, remove the line rather than leaving it empty.
 

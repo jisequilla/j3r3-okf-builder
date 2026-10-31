@@ -28,12 +28,14 @@ from okf_common import (  # noqa: E402
     V02_KEYS,
     detect_version,
     KEBAB_RE,
+    VALID_DISTILLATION,
     VALID_STATUS,
     Doc,
     as_list,
     extract_links,
     find_bundle,
     is_iso,
+    is_iso_date_or_datetime,
     resolve_link,
     to_dt,
     walk_bundle,
@@ -226,6 +228,9 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
             if not isinstance(p, dict) or not p.get("name") or not p.get("type"):
                 rep.error("AC_BAD_PARAM", doc.rel, "parameters[] requires { name, type, required } (§10.2)")
 
+    if profile and str(t) == "Knowledge Fragment":
+        check_fragment(doc, fm, rep)
+
     if profile and not KEBAB_RE.match(doc.path.name):
         rep.warn("NAME_KEBAB", doc.rel, "file name is not ASCII kebab-case (profile §2)")
 
@@ -240,6 +245,26 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
             continue
         if not target.exists():
             rep.warn("BROKEN_LINK", doc.rel, f"broken link (tolerated by §6.1): {link}")
+
+
+def _blank(v) -> bool:
+    return v is None or (isinstance(v, (str, list, dict)) and not (v.strip() if isinstance(v, str) else v))
+
+
+def check_fragment(doc: Doc, fm: dict, rep: Report) -> None:
+    """Frontmatter of a Knowledge Fragment (ADR-0015); the body sections are not checked."""
+    for key in ("occurred_at", "origin", "participants", "distillation_status"):
+        if _blank(fm.get(key)):
+            rep.warn("FRAGMENT_NO_FIELD", doc.rel, f"Knowledge Fragment has no '{key}' (§4)")
+    oa = fm.get("occurred_at")
+    if not _blank(oa) and not is_iso_date_or_datetime(oa):
+        rep.warn("BAD_ISO", doc.rel, f"occurred_at '{oa}' is neither YYYY-MM-DD nor ISO 8601 with an offset")
+    for p in as_list(fm.get("participants")):
+        if not ACTOR_RE.match(str(p)):
+            rep.warn("BAD_ACTOR", doc.rel, f"participant '{p}' does not follow the actor convention (§7)")
+    ds = fm.get("distillation_status")
+    if not _blank(ds) and str(ds) not in VALID_DISTILLATION:
+        rep.error("BAD_DISTILLATION_STATUS", doc.rel, f"distillation_status '{ds}' is not pending|distilled|conflict (§7)")
 
 
 def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Report, str, str]:
@@ -273,6 +298,10 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
         types = [d.frontmatter.get("type") for d in docs if d.frontmatter and not d.is_reserved]
         if types.count("Project") > 1:
             rep.error("PROFILE_MANY_PROJECTS", "project.md", "more than one concept has type: Project")
+        if types.count("Conflict Log") > 1:
+            logs = ", ".join(d.rel for d in docs if d.frontmatter and not d.is_reserved
+                             and d.frontmatter.get("type") == "Conflict Log")
+            rep.error("PROFILE_MANY_CONFLICT_LOGS", "conflict-log.md", f"more than one concept has type: Conflict Log ({logs})")
 
     for d in docs:
         if d.path.name == "index.md":
@@ -363,6 +392,123 @@ def test_typed_concept_passes(tmp_path):
                                    encoding="utf-8")
     rep, _, _ = lint(tmp_path, profile=False)
     assert rep.errors == []
+
+
+_GEN = "generated: { by: okf-builder/test, at: 2026-10-31T18:00:00Z }\n"
+_FRAGMENT = "fragments/2026-10-31-meeting.md"
+_FRAGMENT_FIELDS = ("occurred_at: 2026-10-31\norigin: Weekly meeting\n"
+                    "participants: [human:alice, okf-builder/claude-opus-5-5]\ndistillation_status: pending\n")
+_CONFLICT_LOG = ("---\ntype: Conflict Log\ntitle: Conflict log\ndescription: Conflicts.\nstatus: draft\n" + _GEN +
+                 "---\n\n# How it is used\n\nText.\n\n# Conflicts\n\n"
+                 "| ID | Source | Description | Kind | Resolution | State | Decided |\n|---|---|---|---|---|---|---|\n")
+
+
+def _fragment_bundle(tmp_path, fields: str, body: str = "# Record\n\nText.\n\n# Distillation\n\nNone yet.\n",
+                     conflict_logs: tuple[str, ...] = ("conflict-log.md",)) -> Path:
+    """A complete 0.2 profile bundle with one Knowledge Fragment and the given Conflict Logs."""
+    root_entries = "".join(f"* [Conflicts]({c}) - Conflicts.\n" for c in conflict_logs)
+    (tmp_path / "index.md").write_text(
+        '---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n# Project\n\n* [P](project.md) - P.\n'
+        + root_entries + "\n# Subdirectories\n\n* [fragments](fragments/index.md) - Fragments.\n", encoding="utf-8")
+    (tmp_path / "log.md").write_text("# Bundle history\n\n## 2026-10-31\n* **Creation**: test.\n", encoding="utf-8")
+    (tmp_path / "project.md").write_text("---\ntype: Project\ntitle: P\ndescription: P.\n" + _GEN + "---\n\nText.\n",
+                                         encoding="utf-8")
+    for c in conflict_logs:
+        (tmp_path / c).write_text(_CONFLICT_LOG, encoding="utf-8")
+    (tmp_path / "fragments").mkdir()
+    (tmp_path / "fragments" / "index.md").write_text("# fragments\n\n* [M](2026-10-31-meeting.md) - M.\n",
+                                                    encoding="utf-8")
+    (tmp_path / _FRAGMENT).write_text("---\ntype: Knowledge Fragment\ntitle: M\ndescription: M.\nstatus: draft\n"
+                                      + fields + _GEN + "---\n\n" + body, encoding="utf-8")
+    return tmp_path
+
+
+def _codes(rep: Report, path: str = _FRAGMENT) -> list[tuple[str, str]]:
+    return sorted((i["level"], i["code"]) for i in rep.items if i["path"] == path)
+
+
+def test_is_iso_date_or_datetime():
+    from datetime import date
+    from okf_common import is_iso_date_or_datetime as ok
+
+    assert ok(date(2026, 10, 31)) and ok("2026-10-31") and ok("2026-10-31T18:28:00+01:00")
+    assert ok(datetime(2026, 10, 31, 18, 28, tzinfo=timezone.utc))
+    assert not ok(datetime(2026, 10, 31, 18, 28)) and not ok("2026-10-31T18:28:00")
+    assert not ok("31/10/2026") and not ok("2026-02-30") and not ok(20261031) and not ok(None)
+
+
+def test_fragment_with_all_fields_passes(tmp_path):
+    rep, _, _ = lint(_fragment_bundle(tmp_path, _FRAGMENT_FIELDS))
+    assert rep.items == []
+
+
+def test_fragment_missing_fields_warn_one_each(tmp_path):
+    rep, _, _ = lint(_fragment_bundle(tmp_path, "distillation_status: pending\n"))
+    found = [i for i in rep.items if i["path"] == _FRAGMENT]
+    assert [(i["level"], i["code"]) for i in found] == [("WARN", "FRAGMENT_NO_FIELD")] * 3
+    assert all(any(k in i["message"] for i in found) for k in ("occurred_at", "origin", "participants"))
+    assert rep.errors == []
+
+
+def test_fragment_missing_distillation_status_warns(tmp_path):
+    fields = _FRAGMENT_FIELDS.replace("distillation_status: pending\n", "")
+    rep, _, _ = lint(_fragment_bundle(tmp_path, fields))
+    assert _codes(rep) == [("WARN", "FRAGMENT_NO_FIELD")]
+
+
+def test_fragment_occurred_at_date_passes(tmp_path):
+    rep, _, _ = lint(_fragment_bundle(tmp_path, _FRAGMENT_FIELDS))
+    assert _codes(rep) == []
+
+
+def test_fragment_occurred_at_datetime_with_offset_passes(tmp_path):
+    fields = _FRAGMENT_FIELDS.replace("occurred_at: 2026-10-31", "occurred_at: 2026-10-31T18:28:00+01:00")
+    rep, _, _ = lint(_fragment_bundle(tmp_path, fields))
+    assert _codes(rep) == []
+
+
+def test_fragment_occurred_at_bad_format_warns(tmp_path):
+    for value in ("31/10/2026", "2026-10-31T18:28:00"):
+        bundle = tmp_path / value.replace("/", "-").replace(":", "-")
+        bundle.mkdir()
+        fields = _FRAGMENT_FIELDS.replace("occurred_at: 2026-10-31", f"occurred_at: {value}")
+        rep, _, _ = lint(_fragment_bundle(bundle, fields))
+        assert _codes(rep) == [("WARN", "BAD_ISO")], value
+
+
+def test_fragment_participant_not_an_actor_warns(tmp_path):
+    fields = _FRAGMENT_FIELDS.replace("[human:alice, ", "[Alice Smith, ")
+    rep, _, _ = lint(_fragment_bundle(tmp_path, fields))
+    assert _codes(rep) == [("WARN", "BAD_ACTOR")]
+
+
+def test_fragment_bad_distillation_status_errors(tmp_path):
+    fields = _FRAGMENT_FIELDS.replace("distillation_status: pending", "distillation_status: done")
+    rep, _, _ = lint(_fragment_bundle(tmp_path, fields))
+    assert _codes(rep) == [("ERROR", "BAD_DISTILLATION_STATUS")]
+
+
+def test_two_conflict_logs_error(tmp_path):
+    rep, _, _ = lint(_fragment_bundle(tmp_path, _FRAGMENT_FIELDS, conflict_logs=("conflict-log.md", "conflicts-2.md")))
+    assert [i["code"] for i in rep.errors] == ["PROFILE_MANY_CONFLICT_LOGS"]
+
+
+def test_no_profile_skips_fragment_and_conflict_log_checks(tmp_path):
+    fields = "occurred_at: 31/10/2026\nparticipants: [Alice Smith]\ndistillation_status: done\n"
+    bundle = _fragment_bundle(tmp_path, fields, conflict_logs=("conflict-log.md", "conflicts-2.md"))
+    rep, _, _ = lint(bundle, profile=False)
+    assert rep.items == []
+    assert main([str(bundle), "--no-profile", "--strict"]) == 0
+
+
+def test_kdd_style_fragment_warns_only_for_participants(tmp_path):
+    fields = ("occurred_at: 2025-04-25T00:00:00+02:00\norigin: \"Presentación AFTI, diapositivas 3-5\"\n"
+              "distillation_status: distilled\n")
+    body = ("# Contexto de captura\n\n| Campo | Valor |\n|---|---|\n| Fuente | Presentación |\n\n"
+            "# Contenido capturado\n\n> Texto tal como aparece.\n\n# Destilado en\n\n* Nada.\n")
+    rep, _, _ = lint(_fragment_bundle(tmp_path, fields, body))
+    assert [(i["level"], i["code"], i["path"]) for i in rep.items] == [("WARN", "FRAGMENT_NO_FIELD", _FRAGMENT)]
+    assert "participants" in rep.items[0]["message"]
 
 
 if __name__ == "__main__":
