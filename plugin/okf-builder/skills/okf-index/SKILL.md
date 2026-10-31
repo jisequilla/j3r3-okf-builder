@@ -20,5 +20,5 @@ description: Regenerates the index.md files of knowledge/ from the concepts' fro
 3. Rules the generator applies (don't duplicate them by hand):
    - Sections by `type` in the profile's order; entries `* [title](file.md) - description`, with a `_(draft)_` / `_(deprecated)_` suffix.
    - A `# Subdirectories` section with the description from the `> ...` blockquote of the child `index.md`, or the profile's.
-   - Root: keeps the frontmatter (`okf_version`, `okf_profile`) and any hand-written section starting with `# Notas`. In subdirectories it also keeps `# Notas...`.
+   - Root: keeps the frontmatter (`okf_version`, `okf_profile`) and any hand-written section starting with `# Notes` (or `# Notas`). In subdirectories it also keeps that section.
 4. Show the summarized diff (which indexes changed) and log it in `log.md` only if the change is significant (e.g. a reorganization), not for every routine regeneration.

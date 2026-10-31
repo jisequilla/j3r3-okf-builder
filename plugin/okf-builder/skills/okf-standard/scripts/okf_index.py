@@ -7,7 +7,7 @@ Usage:
 - Groups concepts by `type` inside each directory.
 - Lists subdirectories with the first sentence of their own index.md, or their name.
 - Keeps the root frontmatter (okf_version, okf_profile) and any section whose
-  heading starts with "# Notas".
+  heading starts with "# Notes" (or "# Notas").
 - --check: writes nothing; exit 1 if any index.md would change.
 """
 from __future__ import annotations
@@ -70,7 +70,7 @@ def dir_description(d: Path) -> str:
     idx = d / "index.md"
     if idx.exists():
         _, body = split_frontmatter(idx.read_text(encoding="utf-8"))
-        m = re.search(r"^>\s*(.+)$", body, re.M)  # optional descriptive blockquote
+        m = re.search(r"^>[ \t]*(.+)$", body, re.M)  # optional descriptive blockquote
         if m:
             return m.group(1).strip()
     return DIR_DESCRIPTIONS.get(d.name, f"Concepts in {d.name}.")
@@ -83,7 +83,7 @@ def existing_root_fm_and_notes(idx: Path) -> tuple[str, str]:
     raw, body = split_frontmatter(text)
     fm = f"---\n{raw}\n---\n\n" if raw is not None else ""
     notes = ""
-    m = re.search(r"^(#\s+Notas.*)", body, re.M | re.S)
+    m = re.search(r"^(#[ \t]+(?:Notes|Notas).*)", body, re.M | re.S)
     if m:
         notes = m.group(1).rstrip() + "\n"
     return fm, notes

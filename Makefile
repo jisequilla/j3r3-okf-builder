@@ -49,6 +49,15 @@ test:
 	! OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py tests/fixtures/broken-bundle/knowledge --strict | tail -1
 	(python3 $(S)/okf_lint.py tests/fixtures/broken-bundle/knowledge --strict || test $$? -eq 1) | grep '^ERROR NO_TYPE ' >/dev/null
 	(OKF_NO_PYYAML=1 python3 $(S)/okf_lint.py tests/fixtures/broken-bundle/knowledge --strict || test $$? -eq 1) | grep '^ERROR NO_TYPE ' >/dev/null
+	@echo "[8] okf_index: a '# Notes' section survives and an empty blockquote does not pull in the next line"
+	rm -rf /tmp/okf-idx && python3 $(S)/okf_init.py --root /tmp/okf-idx --title T --description D --actor human:test >/dev/null
+	printf '\n# Notes\n\nKept by hand.\n' >> /tmp/okf-idx/knowledge/index.md
+	printf '\n# Notas\n\nGuardado a mano.\n' >> /tmp/okf-idx/knowledge/decisions/index.md
+	printf '>\nNext line, not a description.\n' > /tmp/okf-idx/knowledge/policies/index.md
+	python3 $(S)/okf_index.py /tmp/okf-idx/knowledge >/dev/null
+	grep -qx 'Kept by hand.' /tmp/okf-idx/knowledge/index.md
+	grep -qx 'Guardado a mano.' /tmp/okf-idx/knowledge/decisions/index.md
+	! grep -q 'Next line, not a description.' /tmp/okf-idx/knowledge/index.md
 	@echo "OK"
 copilot:
 	python3 tools/export_copilot.py --zip

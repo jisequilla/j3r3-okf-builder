@@ -160,7 +160,7 @@ Types are not registered centrally; consumers must tolerate unknown types.
 
 - One per directory. No frontmatter, **except** the root one, which carries `okf_version: "0.2"` and, in this profile, `okf_profile: "knowledge/2.0"`.
 - Body: sections with a `#` heading and a list of links `* [Title](path) - description`. The description is copied from the concept's `description`.
-- The root `index.md` lists subdirectories and root concepts. `okf-index` regenerates it; hand-written sections starting with `# Notas` are kept.
+- The root `index.md` lists subdirectories and root concepts. `okf-index` regenerates it; hand-written sections starting with `# Notes` (or `# Notas`) are kept.
 
 ```markdown
 ---
