@@ -5,7 +5,7 @@ description: The knowledge-architect agent is written once as a Claude plugin ag
 tags: [adr, projections, agents]
 status: draft
 adr_id: ADR-0013
-decision_status: proposed
+decision_status: accepted
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T12:05:00Z }
 sources:
   - { id: claude-agents, resource: "https://code.claude.com/docs/en/sub-agents", title: "Claude Code subagents" }

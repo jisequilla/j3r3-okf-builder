@@ -5,7 +5,7 @@ description: A team's knowledge bundle has exactly one editable copy, a Git repo
 tags: [adr, storage, projections]
 status: draft
 adr_id: ADR-0014
-decision_status: proposed
+decision_status: accepted
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T12:20:00Z }
 sources:
   - { id: spec-git, resource: /references/okf-spec-google.md, title: "OKF v0.2 §3: a git repository is the recommended distribution" }

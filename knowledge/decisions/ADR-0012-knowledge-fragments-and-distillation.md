@@ -5,7 +5,7 @@ description: A meeting, discussion or transcript is stored as an immutable Fragm
 tags: [adr, standard, capture]
 status: draft
 adr_id: ADR-0012
-decision_status: proposed
+decision_status: accepted
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T11:45:57Z }
 sources:
   - { id: spec-terms, resource: /references/okf-spec-google.md, title: "OKF v0.2 §2 and §3: every .md other than index.md and log.md is a concept" }

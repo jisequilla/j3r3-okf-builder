@@ -1,9 +1,9 @@
 # Bundle history
 
 ## 2026-10-31
-* **Creation**: [ADR-0012](/decisions/ADR-0012-knowledge-fragments-and-distillation.md) (proposed): knowledge fragments are captured as they happened and distilled into the bundle, with conflicts resolved by a person.
-* **Creation**: [ADR-0013](/decisions/ADR-0013-agent-projections.md) (proposed): one knowledge-architect agent for Claude and Microsoft 365 Copilot.
-* **Creation**: [ADR-0014](/decisions/ADR-0014-knowledge-repository-storage.md) (proposed): a knowledge repository has one source, Git or SharePoint; other tools read it.
+* **Creation**: [ADR-0012](/decisions/ADR-0012-knowledge-fragments-and-distillation.md): knowledge fragments are captured as they happened and distilled into the bundle, with conflicts resolved by a person.
+* **Creation**: [ADR-0013](/decisions/ADR-0013-agent-projections.md): one knowledge-architect agent for Claude and Microsoft 365 Copilot.
+* **Creation**: [ADR-0014](/decisions/ADR-0014-knowledge-repository-storage.md): a knowledge repository has one source, Git or SharePoint; other tools read it.
 * **Update**: [Publish a plugin version](/runbooks/release-version.md): a GitHub Release with the built files is part of each release; okf-builder 0.3.0 released.
 * **Update**: [OKF scripts](/systems/scripts-okf.md) and the [project page](/project.md): the scripts run with uv (PEP 723), the reduced YAML parser is gone and each script carries its own tests (ADR-0011).
 * **Creation**: [ADR-0011](/decisions/ADR-0011-uv-pep723-scripts.md): scripts run with uv and declare PyYAML inline (PEP 723); the reduced YAML parser is removed.
