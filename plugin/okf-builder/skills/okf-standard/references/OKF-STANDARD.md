@@ -194,7 +194,6 @@ okf_profile: "knowledge/3.0"
 
 * [fragments](fragments/index.md) - Records of events, distilled into the base.
 * [base](base/index.md) - The project's knowledge, in typed directories.
-* projections/ - Deliverables derived from the base for a reader (not OKF).
 ```
 
 ### 5.2 `log.md`
@@ -280,7 +279,7 @@ Operating rules:
 
 Operating rules:
 
-- Migrate a 2.0 bundle with `okf_migrate.py --profile knowledge/3.0`: it moves the typed directories (and any directory the project added) under `base/`, rewrites the bundle-path links and `sources` that point into them (`/decisions/...` → `/base/decisions/...`), sets `okf_profile: "knowledge/3.0"` and logs a **Migration** entry. `--dry-run` is always available.
+- Migrate a 2.0 bundle with `okf_migrate.py --profile knowledge/3.0`: it moves the typed directories (and any directory the project added) under `base/`, rewrites the bundle-path links and `sources` that point into them (`/decisions/...` → `/base/decisions/...`) and the relative links that cross the layer boundary (from the root files and `fragments/` into the moved directories, and back), sets `okf_profile: "knowledge/3.0"` and logs a **Migration** entry. `--dry-run` is always available.
 - Links into a bundle from outside it break when it migrates; update them after the migration.
 
 ## 10. References

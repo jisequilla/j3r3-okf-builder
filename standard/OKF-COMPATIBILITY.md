@@ -73,12 +73,12 @@ Order of precedence applied by `okf_common.detect_version()`:
 | | `knowledge/2.0` (older) | `knowledge/3.0` (default) |
 |---|---|---|
 | Root `index.md` | `okf_profile: "knowledge/2.0"` | `okf_profile: "knowledge/3.0"` |
-| Layout | Typed directories (`decisions/`, `systems/`, `references/`…) and `fragments/` at the root | Root holds `index.md`, `log.md`, `project.md`, `conflict-log.md` and the layers `fragments/`, `base/` (the typed directories, `references/` included) and `projections/` (not OKF, skipped by OKF tools) |
+| Layout | Typed directories (`decisions/`, `systems/`, `references/`…) and `fragments/` at the root | Root holds `index.md`, `log.md`, `project.md`, `conflict-log.md` and the layers `fragments/`, `base/` (the typed directories, `references/` included) and `projections/` (not OKF: `okf-lint`, `okf-index` and `okf-ask` do not treat it as concepts; `okf-distill` reads only the `refs` of each `projection.yaml`) |
 | Where concepts live | Anywhere in the bundle | Only in `base/` (any depth) and `fragments/`, besides `project.md` and `conflict-log.md` at the root |
 | Bundle paths | `/decisions/ADR-0001-x.md` | `/base/decisions/ADR-0001-x.md` |
 | `okf-init` | Not written any more | Always |
-| `okf-lint` | Validated by the 2.0 layout, with a notice "profile knowledge/2.0 is outdated: run okf_migrate.py --profile knowledge/3.0" that is neither a warning nor an error (`--strict` does not fail; `"profile_outdated": true` in `--json`) | Validated by the 3.0 layout; a concept outside `base/` and `fragments/` is an error |
-| Migration | `okf_migrate.py --profile knowledge/3.0`: moves the typed directories under `base/`, rewrites the bundle-path links and `sources` that point into them, sets `okf_profile` and logs a **Migration** entry | — |
+| `okf-lint` | Validated by the 2.0 layout, with a notice "profile knowledge/2.0 is outdated: run okf_migrate.py --profile knowledge/3.0" that is neither a warning nor an error (`--strict` does not fail; `"profile_outdated": true` in `--json`) | Validated by the 3.0 layout; a concept outside `base/` and `fragments/` (other than `project.md` and `conflict-log.md` at the root) is an error |
+| Migration | `okf_migrate.py --profile knowledge/3.0`: moves the typed directories under `base/`, rewrites the bundle-path links and `sources` that point into them and the relative links that cross the layer boundary, sets `okf_profile` and logs a **Migration** entry | — |
 
 `--profile` is separate from `--to`: one migrates the profile, the other the OKF version, and at least one of them is required. Migrating the profile leaves `okf_version` as it is.
 
