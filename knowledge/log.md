@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-01
+* **Update**: [okf-builder plugin](/systems/plugin-okf-builder.md), [OKF scripts](/systems/scripts-okf.md) and [Exporters](/systems/exporters.md), plus the READMEs: the plugin has 10 skills with `okf-fragment`, `okf-distill` and `okf-review`, and the M365 exporter gives each skill only the templates it uses.
 * **Update**: [Exporters](/systems/exporters.md) and [Export and deliver projections](/runbooks/export-projections.md): the M365 okf-standard keeps only its references, its templates ship in okf-capture, and `make test` runs the M365 exporter.
 * **Creation**: [ADR-0016](/decisions/ADR-0016-refutation-as-a-distillation-kind.md): distillation adds refutation, which deprecates an outdated concept and links its replacement without opening a conflict; the standard's distillation and conflict rows say so.
 * **Deprecation**: [ADR-0015](/decisions/ADR-0015-fragment-format-and-conflict-log.md), superseded by ADR-0016.

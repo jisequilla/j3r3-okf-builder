@@ -7,7 +7,7 @@ tags: [system, scripts, python]
 status: draft
 owner: human:jisequilla
 runtime: uv
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T03:28:57Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T16:00:00Z }
 ---
 
 # Responsibility
@@ -19,6 +19,8 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T03:28:57Z }
 | okf_index.py | Regenerates `index.md` per directory from frontmatter | `--check` for CI |
 | okf_migrate.py | 0.1 ↔ 0.2, `--dry-run`, `--out`, `--keep-extensions`, `--file` | files + entry in log.md |
 | okf_common.py | Frontmatter parsing with PyYAML, Doc model, version detection | library |
+
+Used by every skill that writes or checks a bundle, the fragment skills included: `okf-fragment` and `okf-distill` run `okf_index.py` and `okf_lint.py` (and `okf_migrate.py --file` in a 0.1 bundle), `okf-review` runs `okf_index.py` and `okf_lint.py`; see the [plugin](/systems/plugin-okf-builder.md).
 
 # Examples
 
