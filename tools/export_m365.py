@@ -66,9 +66,35 @@ MAX_COMPANIONS = 20
 PATHS_NOTE_RE = re.compile(r"^> \*\*(?:Rutas|Paths)\.\*\*.*$\n?", re.M)
 
 
+# The source okf-standard's inventory of where scripts, templates and references live
+INVENTORY_RE = re.compile(r"^## Where everything is .*?^```\n.*?^```\n", re.M | re.S)
+M365_INVENTORY = """## Where everything is
+
+In this package each skill carries the scripts and templates it uses, in its own `scripts/` and `templates/`. This skill carries only the references:
+
+```
+references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
+```
+"""
+
+
+def ships(skill: str) -> list[str]:
+    """What the skill's M365 copy carries besides SKILL.md, as prose fragments."""
+    parts = []
+    if NEEDS[skill]["scripts"]:
+        parts.append("scripts in `scripts/`")
+    if NEEDS[skill]["templates"]:
+        parts.append("templates in `templates/`")
+    return parts
+
+
 def rewrite(text: str, skill: str) -> str:
-    text = PATHS_NOTE_RE.sub("> **Paths.** This skill is self-contained: scripts in `scripts/` and templates in `templates/` of its own base directory.\n"
-                        if NEEDS[skill]["templates"] or NEEDS[skill]["scripts"] else "", text)
+    parts = ships(skill)
+    text = PATHS_NOTE_RE.sub(f"> **Paths.** This skill is self-contained: {' and '.join(parts)} of its own base directory.\n"
+                             if parts else "", text)
+    if skill == "okf-standard":
+        text = INVENTORY_RE.sub(M365_INVENTORY, text)
+        text = text.replace("<skills>/okf-standard/references/", "references/")
     # Each M365 skill is self-contained: <skills>/okf-standard/scripts → the skill's own scripts/
     text = text.replace("<skills>/okf-standard/scripts/", "scripts/")
     if NEEDS[skill]["templates"]:
@@ -81,18 +107,19 @@ def rewrite(text: str, skill: str) -> str:
     return text
 
 
-M365_NOTE = """
-
-## Environment note (Microsoft 365 Copilot)
-
-This skill runs in Microsoft 365 Copilot, not in a terminal on the repository. The `knowledge/`
-bundle arrives as a SharePoint folder synced with OneDrive, read-only through the GitHub connector, or as attached files.
-Ask the user for the path or the folder if it is not obvious. The `scripts/*.py` scripts run
-from the base directory of this skill with `uv run`, which installs PyYAML, and take the bundle
-path as an argument; without uv, `python3` works if PyYAML is installed. If the environment
-cannot run scripts, apply the same rules by hand from `references/` and the
-templates, and say so explicitly.
-"""
+def m365_note(skill: str) -> str:
+    """Environment note appended to each M365 skill, matching what that skill ships."""
+    if NEEDS[skill]["scripts"]:
+        run = ("The `scripts/*.py` scripts run\nfrom the base directory of this skill with `uv run`, which installs PyYAML, and take the bundle\n"
+               "path as an argument; without uv, `python3` works if PyYAML is installed. If the environment\n"
+               "cannot run scripts, apply the same rules by hand from the standard and the\ntemplates, and say so explicitly.")
+    else:
+        run = ("This skill ships no scripts: the skills that write or check a bundle carry their own.\n"
+               "If they cannot run in this environment, apply the rules by hand from the standard and say so explicitly.")
+    return ("\n\n## Environment note (Microsoft 365 Copilot)\n\n"
+            "This skill runs in Microsoft 365 Copilot, not in a terminal on the repository. The `knowledge/`\n"
+            "bundle arrives as a SharePoint folder synced with OneDrive, read-only through the GitHub connector, or as attached files.\n"
+            f"Ask the user for the path or the folder if it is not obvious. {run}\n")
 
 
 def ensure_frontmatter(text: str, skill: str, author: str) -> str:
@@ -128,14 +155,33 @@ def build_skill(skill_src: Path, dst: Path, author: str) -> int:
     for md in dst.rglob("*.md"):
         md.write_text(rewrite(md.read_text(encoding="utf-8"), skill), encoding="utf-8")
     sk = dst / "SKILL.md"
-    sk.write_text(ensure_frontmatter(sk.read_text(encoding="utf-8"), skill, author).rstrip() + M365_NOTE, encoding="utf-8")
+    sk.write_text(ensure_frontmatter(sk.read_text(encoding="utf-8"), skill, author).rstrip() + m365_note(skill), encoding="utf-8")
     companions = [p for p in dst.rglob("*") if p.is_file() and p.name != "SKILL.md"]
     if len(companions) > MAX_COMPANIONS:
         raise SystemExit(f"{skill}: {len(companions)} companion files > {MAX_COMPANIONS}")
     for p in companions:
         if p.stat().st_size > 5 * 1024 * 1024 or p.name.startswith("."):
             raise SystemExit(f"{skill}: file not valid for M365: {p}")
+    missing = unshipped_paths(dst)
+    if missing:
+        raise SystemExit(f"{skill}: SKILL.md names files its M365 copy does not ship: {', '.join(missing)}")
     return len(companions)
+
+
+# A path the skill points to in its own folder; a "(... skill)" or "(template carried ...)" prefix means another skill holds it
+OWN_PATH_RE = re.compile(r"(?<![\w/])((?:scripts|templates|references)/[A-Za-z0-9_.-]+\.(?:py|md))")
+
+
+def unshipped_paths(dst: Path) -> list[str]:
+    """Paths named in the M365 SKILL.md as the skill's own that are not in its folder."""
+    text = (dst / "SKILL.md").read_text(encoding="utf-8")
+    named = set()
+    for m in OWN_PATH_RE.finditer(text):
+        before = text[max(0, m.start() - 2):m.start()]
+        if before.endswith(") "):
+            continue
+        named.add(m.group(1))
+    return sorted(n for n in named if not (dst / n).exists())
 
 
 def make_icons(out: Path) -> None:
