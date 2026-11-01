@@ -1,6 +1,8 @@
 # Bundle history
 
 ## 2026-11-01
+* **Creation**: [ADR-0017](/decisions/ADR-0017-agent-skills-per-platform.md): the Claude knowledge-architect agent preloads all 10 skills, and `tools/m365-agent.json` picks the at most 8 the M365 agent carries; [Exporters](/systems/exporters.md), the [okf-builder plugin](/systems/plugin-okf-builder.md) and the [Knowledge architect](/roles/knowledge-architect.md) profile say so.
+* **Deprecation**: [ADR-0013](/decisions/ADR-0013-agent-projections.md), superseded by ADR-0017.
 * **Update**: okf-builder 0.4.1 released: okf-distill confirmations footnote an existing sentence and update `generated`, and distillation uses only the standard log labels.
 * **Update**: [Publish a plugin version](/runbooks/release-version.md): the M365 agent package is attached to each release; okf-builder 0.4.0 released.
 * **Update**: [Exporters](/systems/exporters.md): each M365 skill's Paths note, environment note and the okf-standard inventory name only what that skill ships, and the build checks it.

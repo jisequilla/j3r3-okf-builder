@@ -1,0 +1,18 @@
+{
+  "agent_skills": [
+    "okf-init",
+    "okf-capture",
+    "okf-fragment",
+    "okf-distill",
+    "okf-review",
+    "okf-index",
+    "okf-lint",
+    "okf-ask"
+  ],
+  "conversation_starters": [
+    {"title": "Distill a fragment", "text": "Distill the pending fragments in knowledge/fragments/ and show me the change set."},
+    {"title": "Capture a meeting", "text": "Capture this meeting transcript as a knowledge fragment."},
+    {"title": "Double check", "text": "Run the double check: what changed since the last review and which conflicts are open?"},
+    {"title": "Ask the bundle", "text": "What do we know about this decision, and how trustworthy is it?"}
+  ]
+}
