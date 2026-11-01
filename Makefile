@@ -37,7 +37,7 @@ test:
 	python3 tools/export_m365.py >/dev/null
 	rm -rf /tmp/okf-m365 && uv run -q dist/m365/package/skills/okf-init/scripts/okf_init.py --root /tmp/okf-m365 --title T --description D --actor human:test >/dev/null
 	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
-	! grep -q 'okf_migrate.py' dist/m365/package/skills/okf-capture/SKILL.md
+	for s in okf-capture okf-fragment okf-distill; do grep -q 'scripts/okf_migrate.py' dist/m365/package/skills/$$s/SKILL.md && test -f dist/m365/package/skills/$$s/scripts/okf_migrate.py || { echo "$$s: names okf_migrate.py but does not ship it"; exit 1; }; done
 	@echo "OK"
 copilot:
 	python3 tools/export_copilot.py --zip
