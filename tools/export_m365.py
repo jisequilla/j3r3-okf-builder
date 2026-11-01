@@ -37,9 +37,9 @@ PLUGIN_JSON = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text(e
 
 # Which scripts/templates each skill needs (to be self-contained)
 NEEDS = {
-    "okf-standard": {"scripts": [], "templates": True},
-    "okf-init":     {"scripts": ["okf_init.py", "okf_common.py", "okf_index.py", "okf_migrate.py"], "templates": True},
-    "okf-capture":  {"scripts": ["okf_index.py", "okf_lint.py", "okf_migrate.py", "okf_common.py"], "templates": True},
+    "okf-standard": {"scripts": [], "templates": False},
+    "okf-init":     {"scripts": ["okf_init.py", "okf_common.py", "okf_index.py", "okf_migrate.py", "okf_lint.py"], "templates": ["project.md", "log.md"]},
+    "okf-capture":  {"scripts": ["okf_index.py", "okf_lint.py", "okf_common.py"], "templates": True},
     "okf-lint":     {"scripts": ["okf_lint.py", "okf_common.py"], "templates": False},
     "okf-index":    {"scripts": ["okf_index.py", "okf_common.py"], "templates": False},
     "okf-migrate":  {"scripts": ["okf_migrate.py", "okf_common.py", "okf_lint.py"], "templates": False},
@@ -55,12 +55,17 @@ PATHS_NOTE_RE = re.compile(r"^> \*\*(?:Rutas|Paths)\.\*\*.*$\n?", re.M)
 def rewrite(text: str, skill: str) -> str:
     text = PATHS_NOTE_RE.sub("> **Paths.** This skill is self-contained: scripts in `scripts/` and templates in `templates/` of its own base directory.\n"
                         if NEEDS[skill]["templates"] or NEEDS[skill]["scripts"] else "", text)
+    # A script the skill does not ship is reached through the skill that does
+    for script in ("okf_migrate.py",):
+        if script not in NEEDS[skill]["scripts"]:
+            text = re.sub(rf'run `uv run "<skills>/okf-standard/scripts/{script}" <bundle> ([^`]*)`',
+                          r"use the `okf-migrate` skill (`\1`)", text)
     # Each M365 skill is self-contained: <skills>/okf-standard/scripts → the skill's own scripts/
     text = text.replace("<skills>/okf-standard/scripts/", "scripts/")
     if NEEDS[skill]["templates"]:
         text = text.replace("<skills>/okf-standard/templates/", "templates/")
     else:
-        text = text.replace("<skills>/okf-standard/templates/", "(templates: okf-standard skill) templates/")
+        text = text.replace("<skills>/okf-standard/templates/", "(templates: okf-capture skill) templates/")
     text = text.replace("<skills>/okf-standard/references/", "(okf-standard skill) references/")
     text = text.replace("<skills>/", "(skill) ")
     text = text.replace("${CLAUDE_PLUGIN_ROOT}/skills", "(skills)")
@@ -98,15 +103,20 @@ def ensure_frontmatter(text: str, skill: str, author: str) -> str:
 def build_skill(skill_src: Path, dst: Path, author: str) -> int:
     skill = skill_src.name
     shutil.copytree(skill_src, dst, ignore=shutil.ignore_patterns("__pycache__", ".*"))
-    if skill == "okf-standard" and (dst / "scripts").exists():
-        shutil.rmtree(dst / "scripts")  # 20-companion limit; the scripts go into the skills that use them
+    if skill == "okf-standard":  # 20-companion limit: scripts go into the skills that run them, templates into okf-capture
+        for sub in ("scripts", "templates"):
+            if (dst / sub).exists():
+                shutil.rmtree(dst / sub)
     need = NEEDS[skill]
     if need["scripts"]:
         (dst / "scripts").mkdir(exist_ok=True)
         for s in need["scripts"]:
             shutil.copy2(SCRIPTS / s, dst / "scripts" / s)
-    if need["templates"] and skill != "okf-standard":
-        shutil.copytree(PLUGIN / "skills" / "okf-standard" / "templates", dst / "templates")
+    if need["templates"]:
+        src = PLUGIN / "skills" / "okf-standard" / "templates"
+        keep = need["templates"]
+        shutil.copytree(src, dst / "templates", ignore=None if keep is True
+                        else lambda d, names: [n for n in names if n not in keep])
     for md in dst.rglob("*.md"):
         md.write_text(rewrite(md.read_text(encoding="utf-8"), skill), encoding="utf-8")
     sk = dst / "SKILL.md"

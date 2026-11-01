@@ -6,7 +6,7 @@ tags: [runbook, release, m365, copilot]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T14:00:00Z }
 ---
 
 # Steps
@@ -24,7 +24,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 # Checks
 
 - `grep -rn '<skills>' dist/` must find only the definition of the convention in okf-standard.
-- M365: no skill exceeds 20 companions (the exporter fails if it happens).
+- M365: no skill exceeds 20 companions; the exporter fails if one does, and `make test` runs it.
 
 # Knowledge in M365
 
