@@ -12,7 +12,7 @@ Turns knowledge (a decision, procedure, component or definition) into an OKF con
 ## Steps
 
 1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop) and **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`). Write in that version.
-2. **Classify**: pick the `type` and directory from the `okf-standard` table. If the user doesn't say, infer it from the content and confirm it in one line. Common cases:
+2. **Classify**: pick the `type` and directory from the `okf-standard` table. If the user doesn't say, infer it from the content and confirm it in one line. A meeting, transcript or chat to keep as it happened is not a concept: hand it to the `okf-fragment` skill and stop. Common cases:
    - "we decided to use X instead of Y" → Architecture Decision (`decisions/ADR-NNNN-slug.md`, NNNN = highest existing + 1, 4 digits).
    - "when alert X fires we…" → Runbook.
    - "service X does…, exposes…, depends on…" → System (+ API if there is a contract).

@@ -60,6 +60,9 @@ Skills available in `{skills_dir}/` (Agent Skills standard, also valid for Claud
 | okf-standard | OKF v0.1/v0.2 standard, knowledge/2.0 profile, templates and scripts |
 | okf-init | Create `knowledge/` |
 | okf-capture | Add an ADR, runbook, system, API, table, metric, term, policy |
+| okf-fragment | Keep a meeting, transcript or chat as a fragment in `fragments/` |
+| okf-distill | Distill a fragment into concepts; nothing is applied before the person approves |
+| okf-review | Double check: changes, open conflicts, concepts awaiting human review |
 | okf-lint | Check conformance (`uv run {skills_dir}/okf-standard/scripts/okf_lint.py knowledge`) |
 | okf-index | Regenerate `index.md` |
 | okf-ask | Answer questions citing concepts and confidence |
