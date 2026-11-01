@@ -3,10 +3,11 @@ type: Architecture Decision
 title: "ADR-0015: Knowledge fragments follow the KDD bundle's format, and conflicts go to one register"
 description: A fragment is a Knowledge Fragment with occurred_at, origin, participants and distillation_status; each bundle keeps one Conflict Log; okf-fragment, okf-distill and okf-review are separate skills, and distillation still needs a person's approval.
 tags: [adr, standard, capture]
-status: draft
+status: deprecated
 adr_id: ADR-0015
-decision_status: accepted
+decision_status: superseded
 supersedes: /decisions/ADR-0012-knowledge-fragments-and-distillation.md
+superseded_by: /decisions/ADR-0016-refutation-as-a-distillation-kind.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T19:45:00Z }
 sources:
   - { id: review, resource: /fragments/2026-10-31-kdd-bundle-review.md, title: "Fragment: review of the KDD profiles bundle" }
