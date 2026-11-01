@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-01
+* **Creation**: fragment [What eleven real knowledge bundles teach](/fragments/2026-11-01-real-bundles-review.md): three layers, projections and a taxonomy per domain declared in each `index.md`, pending distillation.
 * **Update**: okf-builder 0.5.0 released: the Claude knowledge-architect agent preloads all 10 skills, and the M365 agent's skills and conversation starters come from `tools/m365-agent.json` (ADR-0017).
 * **Creation**: [ADR-0017](/decisions/ADR-0017-agent-skills-per-platform.md): the Claude knowledge-architect agent preloads all 10 skills, and `tools/m365-agent.json` picks the at most 8 the M365 agent carries; [Exporters](/systems/exporters.md), the [okf-builder plugin](/systems/plugin-okf-builder.md) and the [Knowledge architect](/roles/knowledge-architect.md) profile say so.
 * **Deprecation**: [ADR-0013](/decisions/ADR-0013-agent-projections.md), superseded by ADR-0017.
