@@ -76,7 +76,7 @@ knowledge/
 - File names: `kebab-case`, ASCII, no spaces. ADRs: `ADR-NNNN-short-title.md`.
 - `index.md` and `log.md` are **reserved names** at any level: they are never used for a concept.
 - A project can add its own directories under `base/` (e.g. `base/integrations/`, `base/security/`). They are documented in `base/index.md`.
-- `projections/` is skipped by OKF tools (`okf-lint`, `okf-index`, `okf-ask`, `okf-distill`): a projection is a derivation with its own manifest and its own tools (ADR-0019), not knowledge.
+- `projections/` is not OKF content: `okf-lint`, `okf-index` and `okf-ask` skip it, and no OKF tool treats a projection as a concept. A projection is a derivation with its own manifest and its own tools (ADR-0019), not knowledge. After a distillation, `okf-distill` reads only the `refs` of each `projection.yaml` to list the projections whose refs changed for refresh.
 - **What stays in fragments** and does not reach `base/`: logistics, action items, tone, commercial terms, and proposals nobody has validated. A proposal is distilled only as a proposal (an ADR with `decision_status: proposed`, or an open question).
 - **Writing in `base/`**: a concept states the current state in the present tense, with its sources; dated history goes to `log.md` and to the fragments, not into the prose. A concept with several topics, or longer than about 300 lines, is split.
 
