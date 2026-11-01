@@ -7,7 +7,7 @@ tags: [system, plugin, skills]
 status: draft
 owner: human:jisequilla
 runtime: agent-skills
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T20:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T20:35:00Z }
 ---
 
 # Responsibility
@@ -31,7 +31,7 @@ Give any agent the instructions to create, maintain, validate, query and migrate
 
 # Agent
 
-`agents/knowledge-architect.md` is the [knowledge architect](/roles/knowledge-architect.md) as a plugin agent. It preloads 8 skills (all but `okf-standard` and `okf-migrate`), has no `tools` field, and its body names no Claude tools, so `make m365` can turn it into the M365 declarative agent ([ADR-0013](/decisions/ADR-0013-agent-projections.md)).
+`agents/knowledge-architect.md` is the [knowledge architect](/roles/knowledge-architect.md) as a plugin agent. It preloads all 10 skills, has no `tools` field, and its body names no Claude tools, so `make m365` can turn it into the M365 declarative agent, which carries the subset of at most 8 skills chosen in `tools/m365-agent.json` ([ADR-0017](/decisions/ADR-0017-agent-skills-per-platform.md)).
 
 # Dependencies
 

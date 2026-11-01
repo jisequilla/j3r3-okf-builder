@@ -12,8 +12,8 @@ Builds two outputs from plugin/okf-builder/:
   dist/m365/okf-knowledge-architect-m365.zip
                                           The knowledge-architect declarative agent (v1.9),
                                           generated from plugin/okf-builder/agents/, with its own
-                                          copy of the skills it lists (agent_skills must point
-                                          inside the same app package).
+                                          copy of the skills tools/m365-agent.json lists
+                                          (agent_skills must point inside the same app package).
 
 Differences from the Claude plugin that this exporter resolves:
   - ${CLAUDE_PLUGIN_ROOT} does not exist: each skill must be self-contained. The scripts and
@@ -21,7 +21,8 @@ Differences from the Claude plugin that this exporter resolves:
   - M365 limit: ≤20 companion files per skill, ≤5 MB per file, no hidden files.
   - SKILL.md name == folder name (rule ASKILL-P006).
   - Declarative agent limits: instructions ≤ 8,000 characters, ≤ 8 agent_skills, name ≤ 100,
-    description ≤ 1,000, one declarative agent per app (ADR-0013).
+    description ≤ 1,000, one declarative agent per app. The Claude agent lists every skill it
+    uses; tools/m365-agent.json picks the M365 subset and the conversation starters (ADR-0017).
 
 Usage:
     python3 tools/export_m365.py [--out dist/m365] [--developer "Name"] [--website URL]
@@ -203,17 +204,12 @@ def make_icons(out: Path) -> None:
 
 
 AGENT_SRC = PLUGIN / "agents" / "knowledge-architect.md"
+AGENT_CONFIG = ROOT / "tools" / "m365-agent.json"
 AGENT_LIMITS = {"instructions": 8000, "skills": 8, "name": 100, "description": 1000}
-CONVERSATION_STARTERS = [
-    {"title": "Distill a fragment", "text": "Distill the pending fragments in knowledge/fragments/ and show me the change set."},
-    {"title": "Capture a meeting", "text": "Capture this meeting transcript as a knowledge fragment."},
-    {"title": "Double check", "text": "Run the double check: what changed since the last review and which conflicts are open?"},
-    {"title": "Ask the bundle", "text": "What do we know about this decision, and how trustworthy is it?"},
-]
 
 
-def read_agent(path: Path) -> dict:
-    """Read the agent source: name, description, skills list and body (no PyYAML needed)."""
+def read_agent(path: Path, config_path: Path = AGENT_CONFIG) -> dict:
+    """Read the Claude agent source and the M365 config (ADR-0017): name, description, body and the M365 skill subset."""
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", path.read_text(encoding="utf-8"), re.S)
     if not m:
         raise SystemExit(f"{path}: no frontmatter")
@@ -223,18 +219,29 @@ def read_agent(path: Path) -> dict:
     block = re.search(r"^skills:\s*\n((?:\s+-\s*.+\n?)+)", fm, re.M)
     if not (name and desc and block):
         raise SystemExit(f"{path}: needs name, description and a skills list")
-    skills = [ln.split("-", 1)[1].strip() for ln in block.group(1).splitlines() if ln.strip()]
-    agent = {"name": name.group(1).strip(), "description": desc.group(1).strip(), "skills": skills, "instructions": body}
+    claude_skills = [ln.split("-", 1)[1].strip() for ln in block.group(1).splitlines() if ln.strip()]
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    skills = config.get("agent_skills") or []
+    starters = config.get("conversation_starters") or []
+    agent = {"name": name.group(1).strip(), "description": desc.group(1).strip(), "claude_skills": claude_skills,
+             "skills": skills, "starters": starters, "instructions": body}
     problems = []
     if len(body) > AGENT_LIMITS["instructions"]:
         problems.append(f"body has {len(body)} characters > {AGENT_LIMITS['instructions']}")
+    if not skills:
+        problems.append(f"{config_path.name}: agent_skills is empty")
     if len(skills) > AGENT_LIMITS["skills"]:
-        problems.append(f"{len(skills)} skills > {AGENT_LIMITS['skills']}")
+        problems.append(f"{config_path.name}: {len(skills)} agent_skills > {AGENT_LIMITS['skills']}")
+    if len(set(skills)) != len(skills):
+        problems.append(f"{config_path.name}: agent_skills has duplicates")
     if len(agent["description"]) > AGENT_LIMITS["description"]:
         problems.append(f"description has {len(agent['description'])} characters > {AGENT_LIMITS['description']}")
-    missing = [sk for sk in skills if not (PLUGIN / "skills" / sk / "SKILL.md").exists()]
+    missing = [sk for sk in claude_skills + skills if not (PLUGIN / "skills" / sk / "SKILL.md").exists()]
     if missing:
-        problems.append(f"skills not in the plugin: {', '.join(missing)}")
+        problems.append(f"skills not in the plugin: {', '.join(sorted(set(missing)))}")
+    outside = [sk for sk in skills if sk not in claude_skills]
+    if outside:
+        problems.append(f"{config_path.name}: agent_skills not in the Claude agent's skills: {', '.join(outside)}")
     if problems:
         raise SystemExit(f"{path.name}: " + "; ".join(problems))
     return agent
@@ -257,7 +264,7 @@ def build_agent_package(out: Path, built_skills: Path, base_manifest: dict) -> P
         "description": agent["description"],
         "instructions": agent["instructions"],
         "agent_skills": [{"folder": f"./skills/{sk}"} for sk in agent["skills"]],
-        "conversation_starters": CONVERSATION_STARTERS,
+        "conversation_starters": agent["starters"],
     }
     (apkg / "declarativeAgent.json").write_text(json.dumps(declarative, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest = dict(base_manifest)
@@ -273,7 +280,8 @@ def build_agent_package(out: Path, built_skills: Path, base_manifest: dict) -> P
         for f in sorted(apkg.rglob("*")):
             if f.is_file():
                 z.write(f, f.relative_to(apkg))
-    print(f"agent {agent['name']}: {len(agent['instructions'])} instruction characters, {len(agent['skills'])} skills")
+    print(f"agent {agent['name']}: {len(agent['instructions'])} instruction characters, "
+          f"{len(agent['skills'])} M365 skills of {len(agent['claude_skills'])} in Claude")
     return zp
 
 

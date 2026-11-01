@@ -38,12 +38,12 @@ test:
 	rm -rf /tmp/okf-m365 && uv run -q dist/m365/package/skills/okf-init/scripts/okf_init.py --root /tmp/okf-m365 --title T --description D --actor human:test >/dev/null
 	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
 	for s in okf-capture okf-fragment okf-distill; do grep -q 'scripts/okf_migrate.py' dist/m365/package/skills/$$s/SKILL.md && test -f dist/m365/package/skills/$$s/scripts/okf_migrate.py || { echo "$$s: names okf_migrate.py but does not ship it"; exit 1; }; done
-	@echo "[7] canonical copies match the source; agent within the M365 limits"
+	@echo "[7] canonical copies match the source; M365 agent within its limits and matching tools/m365-agent.json"
 	diff -rq templates $(PLUGIN)/skills/okf-standard/templates
 	diff -q standard/OKF-STANDARD.md $(PLUGIN)/skills/okf-standard/references/OKF-STANDARD.md
 	diff -q standard/OKF-COMPATIBILITY.md $(PLUGIN)/skills/okf-standard/references/OKF-COMPATIBILITY.md
 	test -f dist/m365/okf-knowledge-architect-m365.zip
-	python3 -c "import json; d=json.load(open('dist/m365/agent-package/declarativeAgent.json')); assert len(d['instructions']) <= 8000 and len(d['agent_skills']) <= 8, d['name']; print('agent', len(d['instructions']), 'chars,', len(d['agent_skills']), 'skills')"
+	python3 -c "import json; d=json.load(open('dist/m365/agent-package/declarativeAgent.json')); c=json.load(open('tools/m365-agent.json')); assert len(d['instructions']) <= 8000 and len(d['agent_skills']) <= 8, d['name']; assert [s['folder'] for s in d['agent_skills']] == ['./skills/' + k for k in c['agent_skills']], 'agent_skills differ from tools/m365-agent.json'; print('agent', len(d['instructions']), 'chars,', len(d['agent_skills']), 'M365 skills')"
 	@echo "OK"
 copilot:
 	python3 tools/export_copilot.py --zip

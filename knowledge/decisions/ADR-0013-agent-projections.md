@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0013: One knowledge-architect agent for Claude and Microsoft 365 Copilot"
 description: The knowledge-architect agent is written once as a Claude plugin agent and generated into a Microsoft 365 Copilot declarative agent; other platforms keep using the skills until there is a need for their agent formats.
 tags: [adr, projections, agents]
-status: draft
+status: deprecated
 adr_id: ADR-0013
-decision_status: accepted
+decision_status: superseded
+superseded_by: /decisions/ADR-0017-agent-skills-per-platform.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T12:05:00Z }
 sources:
   - { id: claude-agents, resource: "https://code.claude.com/docs/en/sub-agents", title: "Claude Code subagents" }
