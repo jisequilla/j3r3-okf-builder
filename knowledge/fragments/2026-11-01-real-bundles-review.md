@@ -38,3 +38,11 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T21:20:00Z }
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
+| Three layers (fragments, knowledge, projections) | addition | applied | [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md) |
+| Base: the layer rule without a `base/` directory | addition | changed by the owner later the same day: `base/` adopted, profile knowledge/3.0 | [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md) |
+| What stays in fragments; present tense; size guide | addition | applied | [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md) |
+| Not adopted: central registry, deleting concepts | addition | applied as alternatives rejected | [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md) |
+| Projections: manifest, dependency rule, natures, drift by hash | addition | applied; the manifest is a `projection.yaml`, as the owner decided while distilling | [ADR-0019](/decisions/ADR-0019-knowledge-projections.md) |
+| "Projection" is the knowledge layer; the skill exports are renamed | update | applied: platform packages | [Projection](/domain/projection.md), [Platform package](/domain/platform-package.md) |
+| Domain taxonomy in each directory's `index.md`, alias map | addition | pending (okf-stt) | — |
+| Audit after the ADRs | addition | pending (okf-flz) | — |
