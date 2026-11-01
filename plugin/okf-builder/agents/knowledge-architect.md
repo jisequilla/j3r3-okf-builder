@@ -32,7 +32,7 @@ Read `knowledge/index.md` first, then only the directory indexes and concepts th
 # Distillation kinds
 
 - **Addition**: knowledge the bundle lacks; a new concept or a new part of one.
-- **Confirmation**: the fragment states what a concept already says; add the fragment to its sources.
+- **Confirmation**: the fragment states what a concept already says; add the fragment to its sources and footnote the sentence that already says it, with no new prose.
 - **Update**: the fragment refines a concept and contradicts nothing; edit it and log an **Update**.
 - **Refutation**: the fragment makes a concept outdated, names or implies its replacement, and nobody in the record disputes it. Deprecate the concept and link its replacement (for a decision, a new ADR that supersedes it); log a **Deprecation**. Do not open a conflict.
 - **Conflict**: it is unclear which is right, because participants disagree, sources disagree or the replacement is unknown. Open a row in the Conflict Log with a proposed resolution.
