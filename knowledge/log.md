@@ -1,6 +1,9 @@
 # Bundle history
 
 ## 2026-11-01
+* **Creation**: [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md): a bundle has three layers, `fragments/`, `base/` and `projections/`, in profile knowledge/3.0; distilled from the [real-bundles fragment](/fragments/2026-11-01-real-bundles-review.md), approved by human:jisequilla.
+* **Creation**: [ADR-0019](/decisions/ADR-0019-knowledge-projections.md): knowledge projections with a `projection.yaml`, a dependency rule and drift by content hash; the skills' per-platform outputs become platform packages; approved by human:jisequilla.
+* **Update**: [Projection](/domain/projection.md) now means a knowledge projection; the old meaning moves to the new term [Platform package](/domain/platform-package.md).
 * **Creation**: fragment [What eleven real knowledge bundles teach](/fragments/2026-11-01-real-bundles-review.md): three layers, projections and a taxonomy per domain declared in each `index.md`, pending distillation.
 * **Update**: okf-builder 0.5.0 released: the Claude knowledge-architect agent preloads all 10 skills, and the M365 agent's skills and conversation starters come from `tools/m365-agent.json` (ADR-0017).
 * **Creation**: [ADR-0017](/decisions/ADR-0017-agent-skills-per-platform.md): the Claude knowledge-architect agent preloads all 10 skills, and `tools/m365-agent.json` picks the at most 8 the M365 agent carries; [Exporters](/systems/exporters.md), the [okf-builder plugin](/systems/plugin-okf-builder.md) and the [Knowledge architect](/roles/knowledge-architect.md) profile say so.
