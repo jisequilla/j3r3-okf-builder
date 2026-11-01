@@ -1,5 +1,8 @@
 # Bundle history
 
+## 2026-11-01
+* **Creation**: [Knowledge architect](/roles/knowledge-architect.md) role profile in the new `roles/` directory: it links the human-verified KDD role and fixes the agent's 8 skills, what it hands to a person and the fragment contract with the functional architect.
+
 ## 2026-10-31
 * **Update**: [Export and deliver projections](/runbooks/export-projections.md) and the [projections view](/architecture/single-source-projections.md): M365 Copilot reads the bundle through the GitHub connector or from a SharePoint source (ADR-0014); the claim that SharePoint indexes `.md` as is is gone.
 * **Creation**: fragment [Review of the KDD profiles bundle](/fragments/2026-10-31-kdd-bundle-review.md), distilled into ADR-0015 and the conflict log.

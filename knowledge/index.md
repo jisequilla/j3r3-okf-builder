@@ -19,5 +19,6 @@ okf_profile: "knowledge/2.0"
 * [fragments](fragments/index.md) - Concepts in fragments.
 * [policies](policies/index.md) - Rules, standards and compliance.
 * [references](references/index.md) - Mirrored external material, execution skills and attesters.
+* [roles](roles/index.md) - Concepts in roles.
 * [runbooks](runbooks/index.md) - Operational and incident procedures.
 * [systems](systems/index.md) - Services, modules and deployable components.
