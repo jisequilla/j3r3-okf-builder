@@ -6,7 +6,7 @@ tags: [runbook, release]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T03:59:10Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T21:30:00Z }
 ---
 
 # Trigger
@@ -21,7 +21,7 @@ A change in skills, scripts, templates or the standard that must reach users.
 4. `claude plugin validate plugin/okf-builder/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 5. `make lint` (own knowledge/ and example at 0 errors).
 6. Commit + tag `v<version>` + push. Claude Code: `/plugin marketplace update`.
-7. GitHub Release for the tag, with notes on what changed for users and the built files attached: `okf-builder.plugin`, `dist/okf-copilot-pack.zip`, `dist/m365/okf-builder-m365.zip`.
+7. GitHub Release for the tag, with notes on what changed for users and the built files attached: `okf-builder.plugin`, `dist/okf-copilot-pack.zip`, `dist/m365/okf-builder-m365.zip`, `dist/m365/okf-knowledge-architect-m365.zip`.
 8. Deliver projections: see [Export projections](/runbooks/export-projections.md).
 
 # Rollback

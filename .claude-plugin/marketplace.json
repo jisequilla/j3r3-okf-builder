@@ -11,7 +11,7 @@
       "name": "okf-builder",
       "source": "./plugin/okf-builder",
       "description": "Manages a project's knowledge as an OKF v0.2 bundle in knowledge/.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "category": "productivity"
     }
   ]
