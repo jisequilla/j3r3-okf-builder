@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-01
+* **Creation**: [ADR-0020](/decisions/ADR-0020-domain-profiles.md): a domain declares its types, fields, questions, dependencies and aliases in a `Domain Profile` concept (`profile.md`), which lint and the skills read; distilled from the [real-bundles fragment](/fragments/2026-11-01-real-bundles-review.md), approved by human:jisequilla.
 * **Creation**: [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md): a bundle has three layers, `fragments/`, `base/` and `projections/`, in profile knowledge/3.0; distilled from the [real-bundles fragment](/fragments/2026-11-01-real-bundles-review.md), approved by human:jisequilla.
 * **Creation**: [ADR-0019](/decisions/ADR-0019-knowledge-projections.md): knowledge projections with a `projection.yaml`, a dependency rule and drift by content hash; the skills' per-platform outputs become platform packages; approved by human:jisequilla.
 * **Update**: [Projection](/domain/projection.md) now means a knowledge projection; the old meaning moves to the new term [Platform package](/domain/platform-package.md).

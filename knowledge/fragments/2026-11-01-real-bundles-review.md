@@ -44,5 +44,5 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T21:20:00Z }
 | Not adopted: central registry, deleting concepts | addition | applied as alternatives rejected | [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md) |
 | Projections: manifest, dependency rule, natures, drift by hash | addition | applied; the manifest is a `projection.yaml`, as the owner decided while distilling | [ADR-0019](/decisions/ADR-0019-knowledge-projections.md) |
 | "Projection" is the knowledge layer; the skill exports are renamed | update | applied: platform packages | [Projection](/domain/projection.md), [Platform package](/domain/platform-package.md) |
-| Domain taxonomy in each directory's `index.md`, alias map | addition | pending (okf-stt) | — |
+| Domain taxonomy in each directory's `index.md`, alias map | addition | applied as a `Domain Profile` concept instead, as the owner decided while distilling: OKF v0.2 §8 allows no frontmatter in a directory `index.md` | [ADR-0020](/decisions/ADR-0020-domain-profiles.md) |
 | Audit after the ADRs | addition | pending (okf-flz) | — |
