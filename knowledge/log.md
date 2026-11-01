@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-01
+* **Update**: okf-builder 0.4.1 released: okf-distill confirmations footnote an existing sentence and update `generated`, and distillation uses only the standard log labels.
 * **Update**: [Publish a plugin version](/runbooks/release-version.md): the M365 agent package is attached to each release; okf-builder 0.4.0 released.
 * **Update**: [Exporters](/systems/exporters.md): each M365 skill's Paths note, environment note and the okf-standard inventory name only what that skill ships, and the build checks it.
 * **Update**: [okf-builder plugin](/systems/plugin-okf-builder.md), [Exporters](/systems/exporters.md) and the [Knowledge architect](/roles/knowledge-architect.md) profile: the plugin ships the knowledge-architect agent, and `make m365` generates it as a separate M365 declarative agent package.
