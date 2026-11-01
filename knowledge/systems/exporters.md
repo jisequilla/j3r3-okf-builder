@@ -7,7 +7,7 @@ tags: [system, exporters, m365, copilot]
 status: draft
 owner: human:jisequilla
 runtime: python3
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T14:00:00Z }
 ---
 
 # Responsibility
@@ -20,7 +20,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 # Applicable rules
 
 - They replace the `<skills>/` convention with the concrete path of the target.
-- M365: they copy into each skill the scripts/templates it needs (`NEEDS` table), remove `scripts/` from okf-standard to respect the 20-companion limit, and add `license`/`metadata` and an environment note.
+- M365: they copy into each skill the scripts and templates it needs (`NEEDS` table; `okf-init` gets only the templates `okf_init.py` renders), keep only `references/` in okf-standard, whose templates live in `okf-capture`, to respect the 20-companion limit, point a skill to `okf-migrate` when it does not ship `okf_migrate.py`, and add `license`/`metadata` and an environment note. `okf-capture` sits at the limit: a new template needs room made first.
 - The M365 manifest uses a stable GUID (uuid5 of the repo URL).
 
 # Operation

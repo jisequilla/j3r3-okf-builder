@@ -33,6 +33,11 @@ test:
 	grep -q '\*\*Migration\*\*' /tmp/okf-m1/log.md
 	uv run -q $(S)/okf_migrate.py examples/fixtures/google-acme-retail-v0.2 --to 0.1 --keep-extensions --out /tmp/okf-m2 >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m2 --no-profile | tail -1
 	uv run -q $(S)/okf_migrate.py /tmp/okf-m2 --to 0.2 --out /tmp/okf-m3 --force >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m3 --no-profile --strict | tail -1
+	@echo "[6] M365 export: within the companion limit, and each exported skill self-contained"
+	python3 tools/export_m365.py >/dev/null
+	rm -rf /tmp/okf-m365 && uv run -q dist/m365/package/skills/okf-init/scripts/okf_init.py --root /tmp/okf-m365 --title T --description D --actor human:test >/dev/null
+	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
+	! grep -q 'okf_migrate.py' dist/m365/package/skills/okf-capture/SKILL.md
 	@echo "OK"
 copilot:
 	python3 tools/export_copilot.py --zip
