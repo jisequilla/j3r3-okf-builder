@@ -4,10 +4,11 @@ title: Knowledge architect
 description: How okf-builder serves the KDD knowledge architect role, which the KDD bundle defines; this concept fixes the skills its agent carries, what it hands to a person and its fragment contract with the functional architect.
 tags: [role, knowledge-architect, agents, kdd]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T12:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T20:00:00Z }
 sources:
   - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/81828dd/knowledge/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.1, human-verified" }
   - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/81828dd/knowledge/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition (draft)" }
+  - { id: kdd-agent-v2, resource: "https://github.com/jisequilla/kdd-knowledge/blob/e4afa95/knowledge/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, five distillation kinds" }
   - { id: kdd-af, resource: "https://github.com/jisequilla/kdd-knowledge/blob/81828dd/knowledge/roles/arquitecto-funcional-ti.md", title: "KDD bundle: functional architect role profile" }
   - { id: adr-0005, resource: /decisions/ADR-0005-required-generated-human-verified.md }
   - { id: adr-0013, resource: /decisions/ADR-0013-agent-projections.md }
@@ -38,6 +39,10 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 
 The agent carries 8 skills, the Microsoft 365 limit[^adr-0013]: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-migrate` stays out of the M365 agent[^adr-0016]. Claude users still have it as a plugin skill.
 
+The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds) and awaits a person's re-verification. `make m365` generates the M365 declarative agent from the same file ([Exporters](/systems/exporters.md)).
+
+In the M365 agent package none of the 8 skills reads `okf-standard`'s references or templates: each carries the scripts and templates it uses. Only `okf-capture` names the `okf-standard` type table when it classifies a concept, and its templates cover the same types.
+
 # What it decides and what it hands to a person
 
 | Decides alone | Proposes; a person decides |
@@ -67,7 +72,7 @@ The two agents live in separate repositories. As long as both keep to the fragme
 
 # Not verified
 
-- Whether the M365 agent's skills can still read `okf-standard`'s references and templates when `okf-standard` itself is not among its 8 `agent_skills`.
+- Whether Microsoft 365 accepts the generated agent package and runs its skills; no tenant with Copilot has been available to test it.
 
 # Related
 
@@ -77,6 +82,7 @@ The two agents live in separate repositories. As long as both keep to the fragme
 
 [^kdd-role]: KDD bundle, knowledge architect role profile v1.1.
 [^kdd-agent]: KDD bundle, knowledge architect agent definition.
+[^kdd-agent-v2]: KDD bundle, knowledge architect agent definition with the five distillation kinds.
 [^kdd-af]: KDD bundle, functional architect role profile.
 [^adr-0005]: ADR-0005, `generated` required and `verified` only by people.
 [^adr-0013]: ADR-0013, decision 3.
