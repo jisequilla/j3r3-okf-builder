@@ -2,7 +2,7 @@
 
 **Sources:** `SPEC.md` v0.1 (commit `ee67a5c`, Jun 2026) and v0.2 (commit `780fe9d`, Jul 2026, + `62432a0`, Aug 2026, which requires an explicit offset on every timestamp) from the `GoogleCloudPlatform/knowledge-catalog` repo. Verbatim copies in `plugin/okf-builder/skills/okf-standard/references/`.
 
-Google declares v0.2 a *minor bump* except for **two breaking changes** (§13.1). In practice a v0.2 consumer reads v0.1 with two fallbacks, and a v0.1 consumer reads v0.2 because it must tolerate unknown keys. The `knowledge/2.0` profile is **v0.2 by default** and supports v0.1 for reading, validation and migration in both directions.
+Google declares v0.2 a *minor bump* except for **two breaking changes** (§13.1). In practice a v0.2 consumer reads v0.1 with two fallbacks, and a v0.1 consumer reads v0.2 because it must tolerate unknown keys. The `knowledge/3.0` profile is **v0.2 by default** and supports v0.1 for reading, validation and migration in both directions. The OKF version and the profile version are independent; §5 covers both.
 
 ---
 
@@ -21,7 +21,7 @@ Google declares v0.2 a *minor bump* except for **two breaking changes** (§13.1)
 | Headings `# Schema`, `# Examples` | ✓ | ✓ |
 | Types not registered; unknown keys preserved | ✓ | ✓ |
 | Conformance: parseable frontmatter + `type` + well-formed reserved files | ✓ (§9) | ✓ (§11) |
-| `references/` convention | ✓ (in §8 Citations) | ✓ (§6.3) |
+| `references/` subdirectory convention (`base/references/` in profile 3.0) | ✓ (in §8 Citations) | ✓ (§6.3) |
 
 Any tool that only uses the common core works with both versions unchanged.
 
@@ -66,7 +66,23 @@ Order of precedence applied by `okf_common.detect_version()`:
 
 ---
 
-## 5. `knowledge/2.0` profile policy
+## 5. Profile policy (`knowledge/3.0` and `knowledge/2.0`)
+
+### 5.1 Profile versions
+
+| | `knowledge/2.0` (older) | `knowledge/3.0` (default) |
+|---|---|---|
+| Root `index.md` | `okf_profile: "knowledge/2.0"` | `okf_profile: "knowledge/3.0"` |
+| Layout | Typed directories (`decisions/`, `systems/`, `references/`…) and `fragments/` at the root | Root holds `index.md`, `log.md`, `project.md`, `conflict-log.md` and the layers `fragments/`, `base/` (the typed directories, `references/` included) and `projections/` (not OKF, skipped by OKF tools) |
+| Where concepts live | Anywhere in the bundle | Only in `base/` (any depth) and `fragments/`, besides `project.md` and `conflict-log.md` at the root |
+| Bundle paths | `/decisions/ADR-0001-x.md` | `/base/decisions/ADR-0001-x.md` |
+| `okf-init` | Not written any more | Always |
+| `okf-lint` | Validated by the 2.0 layout, with a notice "profile knowledge/2.0 is outdated: run okf_migrate.py --profile knowledge/3.0" that is neither a warning nor an error (`--strict` does not fail; `"profile_outdated": true` in `--json`) | Validated by the 3.0 layout; a concept outside `base/` and `fragments/` is an error |
+| Migration | `okf_migrate.py --profile knowledge/3.0`: moves the typed directories under `base/`, rewrites the bundle-path links and `sources` that point into them, sets `okf_profile` and logs a **Migration** entry | — |
+
+`--profile` is separate from `--to`: one migrates the profile, the other the OKF version, and at least one of them is required. Migrating the profile leaves `okf_version` as it is.
+
+### 5.2 OKF version policy
 
 | Situation | Behaviour |
 |---|---|
