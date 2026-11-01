@@ -7,7 +7,7 @@ tags: [system, exporters, m365, copilot]
 status: draft
 owner: human:jisequilla
 runtime: python3
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T14:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T16:00:00Z }
 ---
 
 # Responsibility
@@ -20,7 +20,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T14:00:00Z }
 # Applicable rules
 
 - They replace the `<skills>/` convention with the concrete path of the target.
-- M365: they copy into each skill the scripts and templates it needs (`NEEDS` table; `okf-init` gets only the templates `okf_init.py` renders), keep only `references/` in okf-standard, whose templates live in `okf-capture`, to respect the 20-companion limit, point a skill to `okf-migrate` when it does not ship `okf_migrate.py`, and add `license`/`metadata` and an environment note. `okf-capture` sits at the limit: a new template needs room made first.
+- M365: each skill is self-contained and gets only the scripts and templates it uses (`NEEDS` table), to respect the limit of 20 companion files: `okf-init` the templates `okf_init.py` renders; `okf-capture` the 15 concept templates; `okf-fragment` `fragment.md`; `okf-distill` the concept templates and `conflict-log.md`; `okf-review` no templates. The M365 okf-standard keeps only `references/`, and its template table says each template is carried by the skill that writes that type. They add `license`/`metadata` and an environment note. `okf-distill` sits at the limit: a new template needs room made first.
 - The M365 manifest uses a stable GUID (uuid5 of the repo URL).
 
 # Operation

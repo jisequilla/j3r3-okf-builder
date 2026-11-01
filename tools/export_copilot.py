@@ -27,7 +27,7 @@ PLUGIN = ROOT / "plugin" / "okf-builder"
 
 AGENT_MD = """---
 name: okf
-description: OKF (Open Knowledge Format) knowledge manager for this repository. Use it to initialize knowledge/, capture ADRs/runbooks/systems, validate, regenerate indexes, migrate between OKF 0.1 and 0.2, and answer questions about the project from knowledge/.
+description: OKF (Open Knowledge Format) knowledge manager for this repository. Use it to initialize knowledge/, capture ADRs/runbooks/systems, capture meetings as fragments and distill them, run the double check, validate, regenerate indexes, migrate between OKF 0.1 and 0.2, and answer questions about the project from knowledge/.
 tools: ["read", "edit", "search", "shell"]
 ---
 
@@ -41,8 +41,10 @@ Rules:
    indexes → concepts (okf-ask skill). Cite paths and the confidence level.
 2. To create or change knowledge use okf-capture: template, `log.md`, index and lint.
    Never add `verified` with `human:` without the person's explicit confirmation.
-3. Before finishing any change in `knowledge/`, run
-   `uv run {skills_dir}/okf-standard/scripts/okf_lint.py knowledge` and fix every ERROR.
+   Meetings, transcripts and chats go to okf-fragment first; okf-distill proposes the
+   change set and applies only what the person approves; okf-review resolves conflicts.
+3. Before finishing any change in `knowledge/`, regenerate the indexes (okf-index) and validate
+   with okf-lint: `uv run {skills_dir}/okf-standard/scripts/okf_lint.py knowledge`; fix every ERROR.
 4. Respect the OKF version of the bundle (`okf_version` in `knowledge/index.md`); do not mix
    0.1 and 0.2 forms. To change version use okf-migrate with `--dry-run` first.
 5. If `knowledge/` does not exist, propose okf-init and wait for confirmation.

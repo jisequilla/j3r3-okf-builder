@@ -30,6 +30,9 @@ Los skills viven una vez en `plugin/okf-builder/skills/`; cada plataforma recibe
 ```
 okf-init        → crea knowledge/
 okf-capture     → "documenta esta decisión / crea un runbook"
+okf-fragment    → "guarda esta reunión / esta transcripción" como fragmento, tal como ocurrió
+okf-distill     → propone qué cambia un fragmento en el bundle; aplica solo lo que apruebas
+okf-review      → doble check: cambios desde la última revisión, conflictos abiertos, borradores sin verificar
 okf-lint        → valida spec + perfil
 okf-index       → regenera index.md desde el frontmatter
 okf-ask         → "¿por qué decidimos X?"

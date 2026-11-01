@@ -9,6 +9,9 @@ A Claude Code / Cowork plugin that manages a project's knowledge as an **OKF bun
 | `okf-standard` | Knowledge of the standard and the `knowledge/2.0` profile; concept templates. |
 | `okf-init` | Creates the `knowledge/` structure in the current repo. |
 | `okf-capture` | Adds a concept (ADR, runbook, system, API, table, metric, term, policy…) with its template, log and index. |
+| `okf-fragment` | Captures a meeting, transcript, chat or slide deck as a knowledge fragment, recorded as it happened. |
+| `okf-distill` | Proposes what one fragment changes in the bundle (additions, confirmations, updates, refutations, conflicts) and applies only what the person approves. |
+| `okf-review` | The double check: changes since the last review, open conflicts and unverified drafts; records the person's decision on each conflict. |
 | `okf-lint` | Validates conformance with the spec and the profile. |
 | `okf-index` | Regenerates the `index.md` files from the frontmatter. |
 | `okf-ask` | Answers questions about the project by navigating the bundle and citing sources and trust level. |

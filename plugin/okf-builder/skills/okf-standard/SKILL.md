@@ -5,7 +5,7 @@ description: 'Knowledge of the OKF standard (Google''s Open Knowledge Format v0.
 
 # OKF standard · knowledge/2.0 profile
 
-This skill is the source of truth for the standard inside the plugin. The other skills (`okf-init`, `okf-capture`, `okf-lint`, `okf-index`, `okf-ask`) assume it.
+This skill is the source of truth for the standard inside the plugin. The other skills (`okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate`) assume it.
 
 ## Operating summary (what to always keep in mind)
 
