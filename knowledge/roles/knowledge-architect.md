@@ -64,6 +64,7 @@ The two agents live in separate repositories. As long as both keep to the fragme
 
 - The verified KDD role describes distillation as "add, refute or mark a conflict", and the KDD agent draft classifies items as adds, confirms, refutes or conflicts[^kdd-role][^kdd-agent]. ADR-0015 has no "refute": an item that contradicts the bundle is a conflict, and a person resolves it. Either the KDD bundle adopts the four ADR-0015 kinds, or a new ADR adds refutation.
 - The KDD agent draft lists `okf-migrate` among its tools[^kdd-agent]. Here it is a Claude-only skill.
+- The KDD bundle keeps its own agent definition next to the okf-builder agent. The two are kept in step by hand: a change to one is carried to the other in the same piece of work.
 
 # Not verified
 
