@@ -2,6 +2,7 @@
 
 # Fragmento
 
+* [2026-10-28 · Finance chat: asking for the refund dispute window](2026-10-28-finance-dispute-window-ask.md) - A short fictional chat in which María asks finance how long a refund can be disputed and Lucía takes it to check, recorded and distilled with the bundle's local names. _(draft)_
 * [2026-11-02 · Finance chat: the refund dispute window](2026-11-02-finance-dispute-window.md) - A short fictional chat in which finance gives María the dispute window of a refund, recorded with the bundle's local names for a fragment and its distillation state. _(draft)_
 
 # Knowledge Fragment

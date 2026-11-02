@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-02
+* **Creation**: [Finance chat: asking for the refund dispute window](/fragments/2026-10-28-finance-dispute-window-ask.md), a fictional chat captured and distilled with the bundle's local names (type Fragmento, ingerido: true); its action item went to the tracker. Finance's fragments are now the bundle's most used name for a fragment, so the next one is written as a Fragmento.
 * **Update**: [Domain Profile of Demo Payments](/base/profile.md) gains the type alias Fragmento (Knowledge Fragment), the value aliases ingerido: true (distillation_status: distilled) and ingerido: false (pending), and the question "Who answers for each runbook?" mapped to Runbook.owner.
 * **Creation**: [Finance chat: the refund dispute window](/fragments/2026-11-02-finance-dispute-window.md), a fictional chat captured with the bundle's local names (type Fragmento, ingerido: false), not distilled yet.
 * **Creation**: [Payments dead-letter replay](/base/runbooks/payments-dead-letter-replay.md), a fictional runbook owned by team:payments.

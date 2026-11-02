@@ -712,6 +712,14 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
     for v in r.validators:
         if v.get("types"):
             v["types"] = [canonical_type(r, t) for t in v["types"]]
+    # a question mapped to Type.field with local names stands for the declared type and field
+    for q in r.questions:
+        if isinstance(q.get("field"), str) and "." in q["field"]:
+            t, f = q["field"].split(".", 1)
+            f = r.aliases["fields"][f]["to"] if f in r.aliases["fields"] else f
+            declared = f"{canonical_type(r, t)}.{f}"
+            if declared != q["field"]:
+                q["field_as_written"], q["field"] = q["field"], declared
     # 2. by_type, a type before its subtypes (then layer order), so the order of declaration does not matter
     entries = [(lay.source, tid, e or {}) for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
     entries.sort(key=lambda x: len(ancestors(r, x[1])))
@@ -931,6 +939,8 @@ def format_in_force(info: dict) -> str:
         lines.append(f"alias (value) {a['from']} → {a['to']}  [{a['source']}]")
     for q in info["questions"]:
         target = f"field {q['field']}" if "field" in q else f"concept {q['concept']}"
+        if q.get("field_as_written"):
+            target += f" (written {q['field_as_written']})"
         lines.append(f"question {q['question']} → {target}  [{q['source']}]")
     for v in info["validators"]:
         lines.append(f"validator {v['name']}: {v['command']} (not run here)  [{v['source']}]")
@@ -1693,6 +1703,16 @@ def test_a_question_mapped_to_a_field_or_to_a_concept_keeps_its_target_in_text_a
     assert "question Who owns each runbook? → field Runbook.owner  [base/shared/profile.md]" in out
     assert "question How is the product deployed? → concept /base/architecture/deployment.md  [base/profile.md]" in out
     assert json.loads(json.dumps(in_force(r), default=str))["questions"][0]["field"] == "Runbook.owner"
+
+
+def test_a_question_mapped_with_local_names_is_in_force_with_the_declared_type_and_field(tmp_path):
+    own = _OWN + "questions:\n  - { question: \"Which client was each meeting with?\", field: Reunión con cliente.cliente }\n"
+    r = load_profile(_bundle(tmp_path, own), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    q = in_force(r)["questions"][-1]
+    assert q["field"] == "Client Meeting.client" and q["field_as_written"] == "Reunión con cliente.cliente"
+    assert ("question Which client was each meeting with? → field Client Meeting.client "
+            "(written Reunión con cliente.cliente)") in format_in_force(in_force(r))
 
 
 if __name__ == "__main__":
