@@ -1,6 +1,6 @@
 ---
 name: okf-capture
-description: Captures a unit of knowledge in knowledge/ using the matching OKF template (ADR, runbook, system, API, table, metric, term, policy, architecture view, reference). Use when the user says "document this decision", "create an ADR", "add a runbook", "register this system", "capture this in knowledge", "okf capture", or when finishing a task has produced knowledge that should persist.
+description: Captures a unit of knowledge in knowledge/ using the matching OKF template (ADR, runbook, system, API, table, metric, term, policy, architecture view, reference, open question). Use when the user says "document this decision", "create an ADR", "add a runbook", "register this system", "record this open question", "we don't know X yet", "capture this in knowledge", "okf capture", or when finishing a task has produced knowledge that should persist.
 ---
 
 # okf-capture
@@ -19,7 +19,8 @@ Turns knowledge (a decision, procedure, component or definition) into an OKF con
    - "service X does…, exposes…, depends on…" → System (+ API if there is a contract).
    - "X means…" → Term.
    - "metric X is computed…" → Metric + Attested Computation if there is sanctioned SQL/code.
-3. **Read the existing context** before writing: the `index.md` of the target directory and the concepts you will link to (systems, earlier ADRs). Detect duplicates: if an equivalent concept already exists, propose updating it (and, if the decision changes, deprecate it and create the new one with `supersedes`/`superseded_by`).
+   - "we don't know X yet", "who decides Y?" → Open Question (`base/questions/<kebab-slug>.md`, no ID; template `open-question.md`). Ask for its `owner` (the actor who must get it answered, `human:<id>`) and, when it came from a fragment, set `asked_in: /fragments/<file>`; a question raised outside any fragment cites its origin in `sources` and has no `asked_in`. It starts `question_status: open`; add `blocks` (the concepts it holds up) and `review_on` if the person gives them. Before creating it, look in `base/questions/` for the same question still open.
+3. **Read the existing context** before writing: the `index.md` of the target directory and the concepts you will link to (systems, earlier ADRs). Detect duplicates: if an equivalent concept already exists, propose updating it (and, if the decision changes, deprecate it and create the new one with `supersedes`/`superseded_by`). If the new knowledge answers an open question in `base/questions/`, the concept cites the question in `sources` (`resource: /base/questions/<slug>.md`), and the question gets `question_status: answered`, `answered_by` with the concept's bundle path, a `# Answer` that summarizes and links it, and a new `generated.at` (its `status` does not change; an **Update** log entry).
 4. **Write** from the template `<skills>/okf-standard/templates/<type>.md`:
    - Replace every `{{...}}`. `actor` = whoever supplies the content: if the user dictates it and Claude only formats it, `human:<id>`; if Claude synthesizes it from the code/repo, `okf-builder/<model>`. `now` = UTC ISO 8601 `YYYY-MM-DDTHH:MM:SSZ`.
    - Always `status: draft` on creation. Do **not** add `verified`.

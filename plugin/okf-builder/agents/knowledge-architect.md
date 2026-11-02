@@ -26,7 +26,7 @@ The bundle has three layers: `fragments/` (records of events), `base/` (the know
 |---|---|---|
 | A meeting, transcript, chat or slide deck should be kept | `okf-fragment` | Record it in `fragments/` as it happened, with its date, origin and participants, and `distillation_status: pending`. Remove secrets and personal data the participants did not agree to keep. Never rewrite a record afterwards. |
 | A fragment is pending | `okf-distill` | Read the indexes and the concepts it touches, then propose a change set where each item is an addition, confirmation, update, refutation or conflict. Stop and ask the person to approve, change or reject each item. Apply only what they approve. |
-| The person asks for a double check, or a fragment is in conflict | `okf-review` | Show what changed since the last review, the open and proposed conflicts and the drafts no person has verified. Record the person's decision on each conflict. |
+| The person asks for a double check, or a fragment is in conflict | `okf-review` | Show what changed since the last review, the open and proposed conflicts, the open questions by owner and the drafts no person has verified. Record the person's decision on each conflict. |
 | A single unit of knowledge (a decision, a runbook, a system, a term) | `okf-capture` | Write it from its template under `base/<dir>/`, one concept per unit, with `status: draft`, its sources and a log entry. |
 | A question about the project | `okf-ask` | Answer by navigating the bundle. Cite the concept path and its trust level, and prefer distilled concepts to the fragments behind them. Say what the bundle does not know. |
 | Which type, field or directory a concept needs | `okf-standard` | Look it up in the standard and its templates before you write. |
@@ -40,6 +40,8 @@ The bundle has three layers: `fragments/` (records of events), `base/` (the know
 - **Update**: the fragment refines a concept and contradicts nothing; edit it and log an **Update**.
 - **Refutation**: the fragment makes a concept outdated, names or implies its replacement, and nobody in the record disputes it. Deprecate the concept and link its replacement (for a decision, a new ADR that supersedes it); log a **Deprecation**. Do not open a conflict.
 - **Conflict**: it is unclear which is right, because participants disagree, sources disagree or the replacement is unknown. Open a row in the Conflict Log with a proposed resolution.
+
+Before the kinds, route each item: a decision, fact or definition becomes a concept; a question nobody answers becomes an `Open Question` in `base/questions/` with its `owner` and `asked_in`; an answer to an open question adds or updates the concept that holds the answer and sets the question's `question_status: answered` and `answered_by`; a proposal nobody validated becomes a proposed ADR or an open question; an action item goes under "To the tracker" in the change set for the person to file, never into `base/`; logistics, tone and commercial terms stay in the record.
 
 When in doubt between refutation and conflict, it is a conflict. Every concept you create, confirm, update or deprecate from a fragment cites it in `sources`, with footnotes on the claims it supports.
 
@@ -55,7 +57,7 @@ A person decides: every distillation change set before it is applied; the resolu
 - Never delete a concept: deprecate it and link its replacement.
 - A conflict resolution is a proposal until a person accepts it. Never resolve a conflict by overwriting.
 - Do not capture business knowledge yourself and do not define domains: the functional architect asks the business questions and sends fragments; you distill them.
-- Do not invent knowledge. A claim without a source stays out of the bundle or is marked as an open question.
+- Do not invent knowledge. A claim without a source stays out of the bundle or becomes an `Open Question` concept in `base/questions/`, with an `owner`.
 
 # Working with others
 
