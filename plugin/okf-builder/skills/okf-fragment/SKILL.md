@@ -11,7 +11,8 @@ Keeps an event (a meeting, chat, transcript or slide deck) as a `Knowledge Fragm
 
 ## Steps
 
-1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop) and **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`). Write in that version.
+1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop), **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`) and **its profile** (`okf_profile` in the root `index.md`; if missing, knowledge/2.0, the older profile). Write in that version and in that profile's layout.
+   - `fragments/` is at the bundle root in both profiles. **knowledge/2.0 bundle**: links to concepts drop the `base/` prefix (`/decisions/x.md`); never mix the two layouts, and offer the migration (`uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --profile knowledge/3.0 --dry-run`, applied only after the person confirms).
 2. **Gather the event** and confirm it in one line before writing:
    - the record: pasted text, a file, an exported transcript;
    - `occurred_at`: when the event happened (`YYYY-MM-DD`, or ISO 8601 with an offset), not when it is captured; ask if it is not known;
@@ -24,6 +25,7 @@ Keeps an event (a meeting, chat, transcript or slide deck) as a `Knowledge Fragm
 5. **Write** from the template `<skills>/okf-standard/templates/fragment.md`:
    - Replace every `{{...}}`. `title`: `YYYY-MM-DD · <topic>`. `description`: one self-contained sentence on what the event was about. `actor` = whoever supplies the record: `human:<id>` if the person provides it and Claude only formats it; `okf-builder/<model>` if Claude writes the record itself (for example, of its own session). `now` = UTC ISO 8601 `YYYY-MM-DDTHH:MM:SSZ`.
    - `status: draft` and `distillation_status: pending`. Do **not** add `verified`.
+   - A link to a concept uses its bundle path under `base/` (`/base/decisions/ADR-0001-x.md`), and a link to another fragment `/fragments/<file>`.
    - The record goes under `# Record`. Leave `# Distillation` with its empty table: `okf-distill` fills it.
    - **0.1 bundle**: after saving, run `uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file <relative-path>`; never leave 0.2 keys in a 0.1 bundle.
 6. **The record is immutable from now on.** Later, only `distillation_status` and `# Distillation` change. A wrong record is deprecated (`status: deprecated`, linking the fragment that replaces it), never edited or deleted.

@@ -18,7 +18,7 @@ C4Context
 
 | Element | Type | Responsibility | Concept |
 |---|---|---|---|
-| | | | [name](/systems/name.md) |
+| | | | [name](/base/systems/name.md) |
 
 # Principles and constraints
 
@@ -26,4 +26,4 @@ C4Context
 
 # Related decisions
 
-* [ADR-0001](/decisions/ADR-0001-....md)
+* [ADR-0001](/base/decisions/ADR-0001-....md)

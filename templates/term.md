@@ -14,9 +14,9 @@ generated: { by: {{actor}}, at: {{now}} }
 # Synonyms and related terms
 
 - Synonyms:
-- Not to be confused with: [other term](/domain/other-term.md)
+- Not to be confused with: [other term](/base/domain/other-term.md)
 
 # Where it appears
 
-* [Table](/data/....md) · column `...`
-* [API](/apis/....md) · field `...`
+* [Table](/base/data/....md) · column `...`
+* [API](/base/apis/....md) · field `...`

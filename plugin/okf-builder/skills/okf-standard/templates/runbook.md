@@ -12,7 +12,7 @@ generated: { by: {{actor}}, at: {{now}} }
 
 # Trigger
 
-{{Alert, symptom or event that starts this runbook. Link to the system: [X](/systems/x.md).}}
+{{Alert, symptom or event that starts this runbook. Link to the system: [X](/base/systems/x.md).}}
 
 # Impact
 
