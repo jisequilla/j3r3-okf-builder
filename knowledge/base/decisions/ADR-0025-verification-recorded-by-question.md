@@ -11,14 +11,14 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:58:18Z }
 sources:
   - { id: adr-0005, resource: /base/decisions/ADR-0005-required-generated-human-verified.md }
   - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }
-  - { id: kdd-pr, resource: "https://github.com/jisequilla/kdd-knowledge/pull/10", title: "KDD bundle: the human-validation policy asks the person through a question" }
+  - { id: kdd-rev11, resource: "https://github.com/jisequilla/kdd-knowledge/blob/fcf6f3d/knowledge/fragments/2026-11-02-rev-11-validacion-por-pregunta.md", title: "KDD bundle: fragment rev-11, human validation through a recorded question" }
 ---
 
 # Context
 
 [ADR-0005](/base/decisions/ADR-0005-required-generated-human-verified.md) made `generated` required and kept `verified` for people: "No skill or script adds `verified`. Only after the person's explicit confirmation is `verified: { by: human:<id>, at }` added"[^adr-0005]. The knowledge-architect agent reads that as "never write `verified` with a `human:` actor". The signal it protects is OKF's derived trust: any `human:` entry raises a concept to *human-reviewed*.
 
-In practice the person who verifies is often in a session with an agent, and the agent does the editing. The person then has to write the frontmatter by hand, or the agent writes it from a chat reply that nobody can trace afterwards. The KDD bundle met both problems and changed its validation policy: the agent asks the person a question that names each concept and its version, keeps the question and the answer as a fragment, and writes `verified` from that answer[^kdd-pr]. Its agent now does what this profile forbids, and the bundle's owner, who also owns this profile, asked for the profile to allow it.
+In practice the person who verifies is often in a session with an agent, and the agent does the editing. The person then has to write the frontmatter by hand, or the agent writes it from a chat reply that nobody can trace afterwards. The KDD bundle met both problems and changed its validation policy: the agent asks the person a question that names each concept and its version, keeps the question and the answer as a fragment, and writes `verified` from that answer[^kdd-rev11]. Its agent now does what this profile forbids, and the bundle's owner, who also owns this profile, asked for the profile to allow it.
 
 The question is what keeps the signal honest when the agent writes it. A free chat reply ("ok", "looks good") does not say what was reviewed or which version. A structured question that names the concepts and their versions does, and its verbatim record lets anyone check later who answered what.
 
@@ -49,7 +49,7 @@ The question is what keeps the signal honest when the agent writes it. A free ch
 
 - Positive: an agent can carry a verification through without hand edits, and every agent-written `human:` entry has a verbatim, dated record of who confirmed which version; the KDD agent and this profile agree again.
 - Negative / accepted debt: the trust signal now also depends on the fragment being kept honestly, which nothing checks yet; one more fragment per verification session.
-- Follow-up actions: the standard's §6 "Human review" row (both copies); the knowledge-architect agent and `okf-review` (ask the question for the drafts awaiting verification, capture the fragment, write `verified` and the log entry); AGENTS.md rule 4 and the policy for agents in this repo; a lint or audit check that every **Verification** entry for an agent-written `human:` actor links a fragment (with okf-flz); cite the KDD fragment of this decision, pinned to a commit, once kdd-knowledge PR #10 merges. A verification level between draft and human, and role actors, stay open in the [migration-tool fragment](/fragments/2026-11-02-migration-tool-okf-review.md).
+- Follow-up actions: the standard's §6 "Human review" row (both copies); the knowledge-architect agent and `okf-review` (ask the question for the drafts awaiting verification, capture the fragment, write `verified` and the log entry); AGENTS.md rule 4 and the policy for agents in this repo; a lint or audit check that every **Verification** entry for an agent-written `human:` actor links a fragment (with okf-flz). A verification level between draft and human, and role actors, stay open in the [migration-tool fragment](/fragments/2026-11-02-migration-tool-okf-review.md).
 
 # Related
 
@@ -59,4 +59,4 @@ The question is what keeps the signal honest when the agent writes it. A free ch
 * [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md)
 
 [^adr-0005]: ADR-0005, decision 2.
-[^kdd-pr]: KDD bundle, pull request 10: the validation policy, the knowledge architect role v1.3 and fragment rev-11.
+[^kdd-rev11]: KDD bundle, fragment rev-11: the owner decides that an agent may write a person's validation from a recorded question.
