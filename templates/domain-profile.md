@@ -18,7 +18,7 @@ families:                         # per directory under base/, written /base/<di
     required: [tags]
 forbidden: {}                     # key: { reason, level }, e.g. internal_notes: { reason: Internal notes stay out of the bundle, level: error }
 fixed: {}                         # key: { value, level }, e.g. okf_lang: { value: en, level: warn }
-by_type: {}                       # Type: { required, fixed, forbidden }, e.g. Policy: { required: [stale_after] }
+by_type: {}                       # Type: { required, fixed, forbidden, values }, e.g. Policy: { required: [stale_after] }
 rules:                            # { name, when: { field: value }, require: [fields], level }
   - { name: distilled-client-meeting-names-client, when: { type: Client Meeting, distillation_status: distilled }, require: [client], level: warn }
 validator: []                     # run only with okf-lint --run-validators
