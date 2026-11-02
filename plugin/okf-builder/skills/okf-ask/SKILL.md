@@ -1,6 +1,6 @@
 ---
 name: okf-ask
-description: Answers questions about the project by reading knowledge/ (an OKF bundle) with progressive disclosure, citing concepts, their status and their trust level. Use when the user asks "why did we decide X?", "how do we operate Y?", "what does Z mean in this project?", "what do we know about…?", "check the knowledge", "okf ask", or when a coding task needs architecture or domain context from the repo.
+description: Answers questions about the project by reading knowledge/ (an OKF bundle) with progressive disclosure, citing concepts, their status and their trust level. Use when the user asks "why did we decide X?", "how do we operate Y?", "what does Z mean in this project?", "what do we know about…?", "is X still an open question?", "check the knowledge", "okf ask", or when a coding task needs architecture or domain context from the repo.
 ---
 
 # okf-ask
@@ -19,8 +19,9 @@ description: Answers questions about the project by reading knowledge/ (an OKF b
    - `stale_after` in the past ⇒ warn that the content may be stale.
    - Trust: no `verified` ⇒ *unverified*; `verified` with `human:` ⇒ *human-reviewed*; only processes/agents ⇒ *machine-confirmed*.
    - `generated.at` for age; in 0.1 bundles, `timestamp`. Sources: `sources[]` or, in 0.1, the `# Citations` section.
+   - Open questions: read `base/questions/index.md` (in 2.0, `questions/index.md`) and find the questions that block a concept you use (`grep -rl "<concept bundle path>" knowledge/base/questions`). If an `Open Question` with `question_status: open` lists a concept you use in its `blocks`, or its title or description matches the question asked, the answer names that question (path) and its `owner` and says the point is still open. A question with `question_status: answered` is followed to its `answered_by` concept, which is the answer; one that is `dropped` is not an answer.
 4. Answer directly and briefly. At the end, add a **Sources** block with the path of each concept (`knowledge/base/decisions/ADR-0007-....md`) and its status/trust on one line. If two concepts contradict each other, say so and prefer the most recent verified one. If a `Knowledge Fragment` and a distilled concept both answer the question, cite the distilled concept first; cite the fragment as the record behind it, never as the established answer.
-5. If the knowledge is not in the bundle: say so explicitly, answer with what can be inferred from the code and mark it as *undocumented*, and offer `okf-capture` to record it. If while answering you find an error in a concept, propose the fix (do not apply it without confirmation).
+5. If the knowledge is not in the bundle: say so explicitly (if an open question covers it, that is the answer: name it and its owner), answer with what can be inferred from the code and mark it as *undocumented*, and offer `okf-capture` to record it. If while answering you find an error in a concept, propose the fix (do not apply it without confirmation).
 
 ## Don't
 
