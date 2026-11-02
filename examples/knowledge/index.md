@@ -10,3 +10,4 @@ okf_profile: "knowledge/3.0"
 # Subdirectories
 
 * [base](base/index.md) - The project's knowledge, in typed directories.
+* [fragments](fragments/index.md) - Records of events, distilled into the base.

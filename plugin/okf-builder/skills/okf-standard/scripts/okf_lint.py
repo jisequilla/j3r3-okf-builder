@@ -22,13 +22,14 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from okf_common import (  # noqa: E402
     ACTOR_RE,
     CITATIONS_RE,
+    DATE_RE,
     SUPPORTED_VERSIONS,
     V02_KEYS,
     detect_version,
@@ -52,6 +53,7 @@ from okf_common import (  # noqa: E402
 
 
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
+VALID_QUESTION_STATUS = ("open", "answered", "dropped")
 
 
 class Report:
@@ -244,6 +246,8 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
 
     if profile and str(t) == "Knowledge Fragment":
         check_fragment(doc, fm, rep)
+    if profile and str(t) == "Open Question":
+        check_question(doc, fm, rep, now)
 
     if profile and not KEBAB_RE.match(doc.path.name):
         rep.warn("NAME_KEBAB", doc.rel, "file name is not ASCII kebab-case (profile §2)")
@@ -279,6 +283,41 @@ def check_fragment(doc: Doc, fm: dict, rep: Report) -> None:
     ds = fm.get("distillation_status")
     if not _blank(ds) and str(ds) not in VALID_DISTILLATION:
         rep.error("BAD_DISTILLATION_STATUS", doc.rel, f"distillation_status '{ds}' is not pending|distilled|conflict (§7)")
+
+
+def utc_date(v) -> date | None:
+    """The UTC calendar date of a YYYY-MM-DD or an ISO 8601 datetime with an offset; None otherwise."""
+    if not is_iso_date_or_datetime(v):
+        return None
+    if isinstance(v, datetime):
+        return v.astimezone(timezone.utc).date()
+    if isinstance(v, date):
+        return v
+    if DATE_RE.match(v):
+        return date.fromisoformat(v)
+    return to_dt(v).astimezone(timezone.utc).date()
+
+
+def check_question(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
+    """Frontmatter of an Open Question (ADR-0021); the body sections are not checked."""
+    for key in ("owner", "question_status", "asked_in"):
+        if _blank(fm.get(key)):
+            rep.warn("QUESTION_NO_FIELD", doc.rel, f"Open Question has no '{key}' (§4)")
+    owner = fm.get("owner")
+    if not _blank(owner) and not ACTOR_RE.match(str(owner)):
+        rep.warn("BAD_ACTOR", doc.rel, f"owner '{owner}' does not follow the actor convention (§7)")
+    qs = fm.get("question_status")
+    if not _blank(qs) and str(qs) not in VALID_QUESTION_STATUS:
+        rep.error("BAD_QUESTION_STATUS", doc.rel, f"question_status '{qs}' is not open|answered|dropped (§7)")
+    if str(qs) == "answered" and _blank(fm.get("answered_by")):
+        rep.warn("QUESTION_NO_ANSWER", doc.rel, "question_status is answered but 'answered_by' is missing (§4)")
+    ro = fm.get("review_on")
+    if ro is not None:
+        due = utc_date(ro)
+        if due is None:
+            rep.warn("BAD_ISO", doc.rel, f"review_on '{ro}' is neither YYYY-MM-DD nor ISO 8601 with an offset")
+        elif str(qs) == "open" and due < now.date():
+            rep.warn("QUESTION_REVIEW_DUE", doc.rel, f"open question due for review since {due.isoformat()}")
 
 
 def check_layers(docs: list[Doc], rep: Report) -> None:
@@ -642,6 +681,125 @@ def test_profile_messages_name_the_declared_profile(tmp_path):
     rep, _, _ = lint(k)
     [msg] = [i["message"] for i in rep.items if i["code"] == "PROFILE_NO_GENERATED"]
     assert msg == "profile knowledge/3.0 requires 'generated: { by, at }'"
+
+
+_QUESTION = "base/questions/who-approves-refunds.md"
+_QUESTION_FIELDS = "owner: human:alice\nquestion_status: open\nasked_in: /fragments/2026-10-31-meeting.md\n"
+_BAD_QUESTION = "owner: Alice\nquestion_status: closed\nreview_on: next week\n"
+
+
+def _question_bundle(tmp_path, fields: str, profile: str = PROFILE_30) -> Path:
+    """A clean bundle with one Open Question: under base/questions/ in 3.0, under questions/ in 2.0."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    if profile == PROFILE_30:
+        k, qdir = _bundle_30(tmp_path), "base/questions"
+        (k / "base" / "index.md").write_text("# Subdirectories\n\n* [questions](questions/index.md) - Questions.\n",
+                                             encoding="utf-8")
+    else:
+        k, qdir = _fragment_bundle(tmp_path, _FRAGMENT_FIELDS), "questions"
+        index = k / "index.md"
+        index.write_text(index.read_text(encoding="utf-8") + "* [questions](questions/index.md) - Questions.\n",
+                         encoding="utf-8")
+    (k / qdir).mkdir()
+    (k / qdir / "index.md").write_text("# Open questions\n\n* [Q](who-approves-refunds.md) - Q.\n", encoding="utf-8")
+    (k / qdir / "who-approves-refunds.md").write_text(
+        "---\ntype: Open Question\ntitle: Q\ndescription: Q.\nstatus: draft\n" + fields + _GEN
+        + "---\n\n# Question\n\nWho approves refunds?\n", encoding="utf-8")
+    return k
+
+
+def _qcodes(tmp_path, fields: str, profile: str = PROFILE_30, path: str = _QUESTION) -> list[tuple[str, str]]:
+    """Findings of the question; asserts the rest of the bundle stays clean."""
+    rep, _, _ = lint(_question_bundle(tmp_path, fields, profile))
+    assert [i for i in rep.items if i["path"] != path] == []
+    return _codes(rep, path)
+
+
+def _json_codes(capsys, k: Path, exit_code: int) -> set[tuple[str, str]]:
+    import json as _json
+
+    assert main([str(k), "--json"]) == exit_code
+    return {(i["level"], i["code"]) for i in _json.loads(capsys.readouterr().out)["findings"] if i["path"] == _QUESTION}
+
+
+def test_question_with_all_fields_passes(tmp_path):
+    assert _qcodes(tmp_path, _QUESTION_FIELDS + "blocks: [/base/decisions/x.md]\nreview_on: 2999-01-01\n") == []
+
+
+def test_question_missing_fields_warn_one_each(tmp_path):
+    rep, _, _ = lint(_question_bundle(tmp_path, ""))
+    found = [i for i in rep.items if i["path"] == _QUESTION]
+    assert [(i["level"], i["code"]) for i in found] == [("WARN", "QUESTION_NO_FIELD")] * 3
+    assert all(any(k in i["message"] for i in found) for k in ("owner", "question_status", "asked_in"))
+    assert rep.errors == []
+
+
+def test_question_missing_asked_in_only_warns(tmp_path):
+    fields = _QUESTION_FIELDS.replace("asked_in: /fragments/2026-10-31-meeting.md\n", "")
+    assert _qcodes(tmp_path, fields) == [("WARN", "QUESTION_NO_FIELD")]
+
+
+def test_question_bad_status_errors(tmp_path):
+    fields = _QUESTION_FIELDS.replace("question_status: open", "question_status: closed")
+    assert _qcodes(tmp_path, fields) == [("ERROR", "BAD_QUESTION_STATUS")]
+
+
+def test_question_owner_not_an_actor_warns(tmp_path):
+    fields = _QUESTION_FIELDS.replace("owner: human:alice", "owner: Alice")
+    assert _qcodes(tmp_path, fields) == [("WARN", "BAD_ACTOR")]
+
+
+def test_question_answered_without_answered_by_warns(tmp_path):
+    fields = _QUESTION_FIELDS.replace("question_status: open", "question_status: answered")
+    assert _qcodes(tmp_path / "a", fields) == [("WARN", "QUESTION_NO_ANSWER")]
+    assert _qcodes(tmp_path / "b", fields + "answered_by: /base/decisions/x.md\n") == []
+
+
+def test_question_review_due_only_while_open(tmp_path):
+    from datetime import timedelta
+
+    today = datetime.now(timezone.utc).date()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    due = [("WARN", "QUESTION_REVIEW_DUE")]
+    cases = [("open", yesterday, due), ("open", f'"{yesterday}"', due), ("open", "2020-01-01T09:00:00+01:00", due),
+             ("open", today.isoformat(), []), ("open", "2999-01-01", []),
+             ("answered", "2020-01-01", []), ("dropped", "2020-01-01", [])]
+    for n, (qs, review_on, expected) in enumerate(cases):
+        fields = (_QUESTION_FIELDS.replace("question_status: open", f"question_status: {qs}")
+                  + f"review_on: {review_on}\n" + ("answered_by: /base/x.md\n" if qs == "answered" else ""))
+        assert _qcodes(tmp_path / str(n), fields) == expected, (qs, review_on)
+
+
+def test_question_review_on_bad_format_warns(tmp_path):
+    for n, value in enumerate(("next week", "2026-11-10T09:00:00", '"2026-02-30"')):
+        assert _qcodes(tmp_path / str(n), _QUESTION_FIELDS + f"review_on: {value}\n") == [("WARN", "BAD_ISO")], value
+
+
+def test_question_frontmatter_paths_are_not_link_checked(tmp_path):
+    """Lint resolves body links only, never frontmatter paths (sources included): a missing target adds nothing."""
+    fields = (_QUESTION_FIELDS.replace("question_status: open", "question_status: answered")
+              .replace("/fragments/2026-10-31-meeting.md", "/fragments/missing.md")
+              + "blocks: [/base/missing.md]\nanswered_by: /base/missing-answer.md\n")
+    assert _qcodes(tmp_path, fields) == []
+
+
+def test_question_in_20_bundle_gets_the_same_checks(tmp_path):
+    assert _qcodes(tmp_path, _BAD_QUESTION, PROFILE_20, "questions/who-approves-refunds.md") == [
+        ("ERROR", "BAD_QUESTION_STATUS"), ("WARN", "BAD_ACTOR"), ("WARN", "BAD_ISO"), ("WARN", "QUESTION_NO_FIELD")]
+
+
+def test_question_codes_in_json(tmp_path, capsys):
+    assert _json_codes(capsys, _question_bundle(tmp_path / "a", _BAD_QUESTION), 1) == {
+        ("ERROR", "BAD_QUESTION_STATUS"), ("WARN", "BAD_ACTOR"), ("WARN", "BAD_ISO"), ("WARN", "QUESTION_NO_FIELD")}
+    answered = _QUESTION_FIELDS.replace("question_status: open", "question_status: answered")
+    assert _json_codes(capsys, _question_bundle(tmp_path / "b", answered), 0) == {("WARN", "QUESTION_NO_ANSWER")}
+    due = _QUESTION_FIELDS + "review_on: 2020-01-01\n"
+    assert _json_codes(capsys, _question_bundle(tmp_path / "c", due), 0) == {("WARN", "QUESTION_REVIEW_DUE")}
+
+
+def test_no_profile_skips_question_checks(tmp_path):
+    rep, _, _ = lint(_question_bundle(tmp_path, _BAD_QUESTION), profile=False)
+    assert rep.items == []
 
 
 if __name__ == "__main__":
