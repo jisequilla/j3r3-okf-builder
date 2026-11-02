@@ -48,18 +48,18 @@ TEMPLATES = PLUGIN / "skills" / "okf-standard" / "templates"
 # The concept templates: every template except the fragment, the conflict log and the ones only okf-init writes
 CONCEPT_TEMPLATES = sorted(p.name for p in TEMPLATES.glob("*.md")
                            if p.name not in ("fragment.md", "conflict-log.md", "root-index.md", "log.md", "project.md"))
-WRITE_SCRIPTS = ["okf_index.py", "okf_lint.py", "okf_migrate.py", "okf_common.py"]
+WRITE_SCRIPTS = ["okf_index.py", "okf_lint.py", "okf_profile.py", "okf_migrate.py", "okf_common.py"]
 NEEDS = {
     "okf-standard": {"scripts": [], "templates": False},
-    "okf-init":     {"scripts": ["okf_init.py", "okf_common.py", "okf_index.py", "okf_migrate.py", "okf_lint.py"], "templates": ["project.md", "log.md"]},
+    "okf-init":     {"scripts": ["okf_init.py", "okf_common.py", "okf_index.py", "okf_migrate.py", "okf_lint.py", "okf_profile.py"], "templates": ["project.md", "log.md"]},
     "okf-capture":  {"scripts": WRITE_SCRIPTS, "templates": CONCEPT_TEMPLATES},
     "okf-fragment": {"scripts": WRITE_SCRIPTS, "templates": ["fragment.md"]},
     "okf-distill":  {"scripts": WRITE_SCRIPTS, "templates": CONCEPT_TEMPLATES + ["conflict-log.md"]},
-    "okf-review":   {"scripts": ["okf_index.py", "okf_lint.py", "okf_common.py"], "templates": False},
-    "okf-lint":     {"scripts": ["okf_lint.py", "okf_common.py"], "templates": False},
+    "okf-review":   {"scripts": ["okf_index.py", "okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
+    "okf-lint":     {"scripts": ["okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
     "okf-index":    {"scripts": ["okf_index.py", "okf_common.py"], "templates": False},
-    "okf-migrate":  {"scripts": ["okf_migrate.py", "okf_common.py", "okf_lint.py", "okf_index.py"], "templates": False},
-    "okf-ask":      {"scripts": ["okf_lint.py", "okf_common.py"], "templates": False},
+    "okf-migrate":  {"scripts": ["okf_migrate.py", "okf_common.py", "okf_lint.py", "okf_profile.py", "okf_index.py"], "templates": False},
+    "okf-ask":      {"scripts": ["okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
 }
 MAX_COMPANIONS = 20
 
@@ -146,6 +146,8 @@ def build_skill(skill_src: Path, dst: Path, author: str) -> int:
             if (dst / sub).exists():
                 shutil.rmtree(dst / sub)
     need = NEEDS[skill]
+    if "okf_lint.py" in need["scripts"] and "okf_profile.py" not in need["scripts"]:
+        raise SystemExit(f"{skill}: ships okf_lint.py without okf_profile.py, which it imports")
     if need["scripts"]:
         (dst / "scripts").mkdir(exist_ok=True)
         for s in need["scripts"]:

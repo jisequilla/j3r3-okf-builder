@@ -7,9 +7,14 @@
 
 Usage:
     uv run okf_lint.py [path/to/bundle] [--json] [--strict] [--no-profile]
+    uv run okf_lint.py <bundle> --profiles [<path>] [--json]
 
 Output: a list of findings with level ERROR / WARN and a code. Exit 1 if there
-are errors (or warnings with --strict).
+are errors (or warnings with --strict). Notices are neither and never fail.
+
+In a knowledge/3.0 bundle the Domain Profile (built-in layer, extends,
+base/profile.md) must be well formed (okf_profile.py); --profiles lists what is
+in force at a path and which source declared each item.
 
 The profile is the okf_profile of the root index.md; a bundle without one is
 treated as knowledge/2.0. A knowledge/2.0 bundle stays valid, and lint prints a
@@ -50,6 +55,7 @@ from okf_common import (  # noqa: E402
     to_dt,
     walk_bundle,
 )
+from okf_profile import IGNORED_20_NOTICE, bundle_path, format_in_force, ignored_in_20, in_force, load_profile, misplaced  # noqa: E402
 
 
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
@@ -59,6 +65,7 @@ VALID_QUESTION_STATUS = ("open", "answered", "dropped")
 class Report:
     def __init__(self) -> None:
         self.items: list[dict] = []
+        self.notices: list[str] = []  # neither warnings nor errors; they never fail --strict
         self.profile_outdated = False
 
     def add(self, level: str, code: str, path: str, msg: str) -> None:
@@ -338,6 +345,13 @@ def check_layers(docs: list[Doc], rep: Report) -> None:
                       f"profile {PROFILE_30}: {parts[0]}/ is not a layer; move it under base/")
 
 
+def check_domain_profile(bundle: Path, docs: list[Doc], rep: Report) -> None:
+    """knowledge/3.0: the Domain Profile is well formed (§7 rule 14); concepts are not checked against it here."""
+    prof = load_profile(bundle, read_own=True)
+    for i in prof.findings + misplaced(docs, prof):
+        rep.add(i["level"], i["code"], i["path"], i["message"])
+
+
 def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Report, str, str]:
     rep = Report()
     now = datetime.now(timezone.utc)
@@ -349,6 +363,9 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
         rep.profile_outdated = pname == PROFILE_20
         if declared == PROFILE_30:
             check_layers(docs, rep)
+            check_domain_profile(bundle, docs, rep)
+        else:
+            rep.notices += [IGNORED_20_NOTICE.format(rel=rel) for rel in ignored_in_20(docs)]
 
     detected, origin = detect_version(bundle, docs)
     if version == "auto":
@@ -400,22 +417,37 @@ def main(argv=None) -> int:
     ap.add_argument("--no-profile", action="store_true", help="validate the OKF spec only, not the knowledge profile")
     ap.add_argument("--okf-version", default="auto", choices=("auto", *SUPPORTED_VERSIONS),
                     help="spec version to validate against (auto: okf_version of the root index, or heuristic)")
+    ap.add_argument("--profiles", nargs="?", const="/", metavar="PATH",
+                    help="list the Domain Profile in force at PATH (a bundle path such as /base/clients/, or a "
+                         "file or directory inside the bundle; default /) and which source declared each item")
     args = ap.parse_args(argv)
 
     bundle = Path(args.bundle).resolve() if args.bundle else find_bundle()
     if bundle is None or not bundle.is_dir():
         print("ERROR: bundle not found (knowledge/index.md). Pass its path.", file=sys.stderr)
         return 2
+    if args.profiles is not None:
+        if args.no_profile:
+            print("ERROR: --profiles lists the Domain Profile and --no-profile turns every one off; pass one of them",
+                  file=sys.stderr)
+            return 2
+        prof = load_profile(bundle)
+        info = in_force(prof, bundle_path(bundle, args.profiles))
+        print(json.dumps(info, ensure_ascii=False, indent=2, default=str) if args.json else format_in_force(info))
+        return 1 if prof.findings else 0
 
     rep, version, origin = lint(bundle, profile=not args.no_profile, version=args.okf_version)
     n_docs = len([d for d in walk_bundle(bundle) if not d.is_reserved])
     if args.json:
         print(json.dumps({"bundle": str(bundle), "okf_version": version, "version_origin": origin, "concepts": n_docs, "errors": len(rep.errors),
-                          "warnings": len(rep.warns), "profile_outdated": rep.profile_outdated, "findings": rep.items},
+                          "warnings": len(rep.warns), "profile_outdated": rep.profile_outdated, "notices": rep.notices,
+                          "findings": rep.items},
                          ensure_ascii=False, indent=2))
     else:
         for i in rep.items:
             print(f"{i['level']:5} {i['code']:22} {i['path']}: {i['message']}")
+        for n in rep.notices:
+            print(f"NOTICE {n}")
         if rep.profile_outdated:
             print(f"NOTICE {OUTDATED_NOTICE}")
         verdict = "CONFORMANT" if not rep.errors else "NOT CONFORMANT"
