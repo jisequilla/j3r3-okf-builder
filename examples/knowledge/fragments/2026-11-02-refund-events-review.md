@@ -23,5 +23,5 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:58:35Z }
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| How long must refund events be kept on the bus? | addition | applied as an open question | [Retention of refund events](/base/questions/refund-event-retention.md) |
-| Add a `refunds` topic (Tomás) | action item | to the tracker | — |
+| How long must refund events be kept on the bus? (an open question) | addition | applied | [Retention of refund events](/base/questions/refund-event-retention.md) |
+| Add a `refunds` topic (Tomás; an action item, filed in the team's tracker) | — | not distilled | — |

@@ -295,7 +295,10 @@ def utc_date(v) -> date | None:
         return v
     if DATE_RE.match(v):
         return date.fromisoformat(v)
-    return to_dt(v).astimezone(timezone.utc).date()
+    try:
+        return to_dt(v).astimezone(timezone.utc).date()
+    except (ValueError, AttributeError):
+        return None
 
 
 def check_question(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
@@ -771,7 +774,8 @@ def test_question_review_due_only_while_open(tmp_path):
 
 
 def test_question_review_on_bad_format_warns(tmp_path):
-    for n, value in enumerate(("next week", "2026-11-10T09:00:00", '"2026-02-30"')):
+    for n, value in enumerate(("next week", "2026-11-10T09:00:00", '"2026-02-30"',
+                               '"2026-02-30T09:00:00Z"', '"2026-13-40T09:00:00+00:00"', '"2026-11-01T25:00:00Z"')):
         assert _qcodes(tmp_path / str(n), _QUESTION_FIELDS + f"review_on: {value}\n") == [("WARN", "BAD_ISO")], value
 
 
