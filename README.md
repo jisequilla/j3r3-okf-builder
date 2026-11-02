@@ -8,11 +8,11 @@ A project knowledge standard based on **OKF (Open Knowledge Format v0.2, Google)
 
 The project's knowledge (decisions, architecture, runbooks, policies) lives in [`knowledge/`](knowledge/index.md). Every agent starts there; `AGENTS.md` (imported by `CLAUDE.md` and `GEMINI.md`) sets the rules.
 
-## Single source and projections
+## Single source and platform packages
 
-The skills live once, in `plugin/okf-builder/skills/`. Each platform gets a projection:
+The skills live once, in `plugin/okf-builder/skills/`. Each platform gets a platform package:
 
-| Platform | Projection | How |
+| Platform | Package | How |
 |---|---|---|
 | Claude Code | `.claude/skills` → symlink | on clone |
 | GitHub Copilot, Gemini CLI | `.agents/skills` → symlink | on clone |
@@ -30,7 +30,7 @@ The skills live once, in `plugin/okf-builder/skills/`. Each platform gets a proj
 | `standard/OKF-COMPATIBILITY.md` | OKF v0.1 ↔ v0.2 differences, field matrix, mapping rules and versioning policy. |
 | `templates/` | Concept templates (`{{placeholders}}`): ADR, runbook, playbook, system, API, table, metric, computation, term, policy, view, reference, project, fragment, conflict log. Canonical copy of `okf-standard/templates/`; `make test` checks they match. |
 | `knowledge/` | The project's own knowledge (a conformant OKF bundle with the ADRs behind every decision). |
-| `tools/` | Projection exporters (Copilot, M365). |
+| `tools/` | Platform package exporters (Copilot, M365). |
 | `plugin/okf-builder/` | Plugin / single source: the skills `okf-standard`, `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate` + Python scripts run with uv (PEP 723), and the `knowledge-architect` agent. |
 | `examples/knowledge/` | A conformant example bundle. |
 | `.claude-plugin/marketplace.json` | This repo acts as a plugin marketplace. |

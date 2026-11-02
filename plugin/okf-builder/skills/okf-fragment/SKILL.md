@@ -1,6 +1,6 @@
 ---
 name: okf-fragment
-description: Captures a knowledge fragment in knowledge/fragments/, the record of a meeting, transcript, chat or slide deck kept as it happened, with its date, origin and participants, ready for okf-distill. Use when the user says "capture this meeting", "save this transcript", "record this chat", "keep this conversation", "okf fragment", or shares the notes or transcript of an event that should be kept before it is distilled.
+description: Captures a knowledge fragment in knowledge/fragments/, the record of a meeting, transcript, chat or slide deck kept as it happened, with its date, origin and participants, ready for okf-distill. Use when the user says "capture this meeting", "save this transcript", "record this chat", "keep this conversation", "okf fragment", or shares the notes or transcript of an event that should be kept before it is distilled. Also backfills a missing occurred_at, origin or participants in existing fragments ("backfill fragment fields", "fragments missing participants").
 ---
 
 # okf-fragment
@@ -28,7 +28,7 @@ Keeps an event (a meeting, chat, transcript or slide deck) as a `Knowledge Fragm
    - A link to a concept uses its bundle path under `base/` (`/base/decisions/ADR-0001-x.md`), and a link to another fragment `/fragments/<file>`.
    - The record goes under `# Record`. Leave `# Distillation` with its empty table: `okf-distill` fills it.
    - **0.1 bundle**: after saving, run `uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file <relative-path>`; never leave 0.2 keys in a 0.1 bundle.
-6. **The record is immutable from now on.** Later, only `distillation_status` and `# Distillation` change. A wrong record is deprecated (`status: deprecated`, linking the fragment that replaces it), never edited or deleted.
+6. **The record is immutable from now on.** Later, only `distillation_status` and `# Distillation` change, plus a one-time backfill of a missing capture field (see Backfill). A wrong record is deprecated (`status: deprecated`, linking the fragment that replaces it), never edited or deleted.
 7. **Log**: add a `* **Creation**: ...` entry linking the fragment by its bundle path (`/fragments/<file>`) to `knowledge/log.md` under today's date (create the section if it doesn't exist, above the earlier ones). If `fragments/` has its own `log.md`, add it there too.
 8. **Index and validate**:
    ```bash
@@ -38,3 +38,14 @@ Keeps an event (a meeting, chat, transcript or slide deck) as a `Knowledge Fragm
    ```
    Fix any ERROR before finishing.
 9. **Close**: show the fragment's path, `occurred_at`, the participants and the redactions, and offer `okf-distill` for it. Do not distill in the same step unless the person asks.
+
+## Backfill
+
+For fragments captured before a capture field existed (`okf_lint` warns `FRAGMENT_NO_FIELD`). Only `occurred_at`, `origin` and `participants`, and only where the field is absent.
+
+1. **Find them**: `uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --json`, the `FRAGMENT_NO_FIELD` items for those three fields.
+2. **Read each value from the evidence**: the fragment's own `# Record` (a date line, attendee lines, speaker labels) or an original its `sources` already cite. Never infer it, take it from memory or from another fragment. `participants` lists the actors the record shows taking part. If the record does not show the value, leave the field absent: the warning stays, and that is correct.
+3. **Propose a change set**: one row per fragment with the field, the value, and the line of the record or the source it comes from; for `participants`, how each name maps to an actor id (`human:<id>`). Apply nothing until the person approves it, mappings included.
+4. **Apply**: add only the absent keys. Never change a value already written (a wrong one means the fragment is deprecated and replaced), and leave `# Record`, `generated` and every other key as they are. Do not add `verified`.
+5. **Log**: one `* **Update**: ...` entry in `knowledge/log.md` under today's date naming the fragments, the fields filled and who approved them.
+6. **Validate**: `uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle>`; the backfilled fields no longer warn.

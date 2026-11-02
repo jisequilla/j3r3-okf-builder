@@ -1,13 +1,13 @@
 ---
 type: System
-title: Projection exporters
-description: tools/export_copilot.py and tools/export_m365.py generate the skill projections for other repos and for Microsoft 365 Copilot.
+title: Platform package exporters
+description: tools/export_copilot.py and tools/export_m365.py generate the platform packages of the skills for other repos and for Microsoft 365 Copilot.
 resource: /tools
 tags: [system, exporters, m365, copilot]
 status: draft
 owner: human:jisequilla
 runtime: python3
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T20:35:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
 ---
 
 # Responsibility
@@ -27,5 +27,5 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T20:35:00Z }
 
 # Operation
 
-* [Export and deliver projections](/base/runbooks/export-projections.md)
+* [Export and deliver platform packages](/base/runbooks/export-projections.md)
 * Decision: [ADR-0007](/base/decisions/ADR-0007-single-source-and-projections.md)

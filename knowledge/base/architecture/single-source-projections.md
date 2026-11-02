@@ -1,10 +1,10 @@
 ---
 type: Architecture View
-title: Single source and per-platform projections
+title: Single source and per-platform packages
 description: How a single set of skills and scripts reaches Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI and Microsoft 365 Copilot.
 tags: [architecture, containers]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
 ---
 
 # View
@@ -28,12 +28,12 @@ flowchart LR
 |---|---|---|---|
 | Source skills | directory | Instructions, templates, scripts | [okf-builder plugin](/base/systems/plugin-okf-builder.md) |
 | Scripts | Python | init, lint, index, migrate | [OKF scripts](/base/systems/scripts-okf.md) |
-| Exporters | Python | Copilot and M365 projections | [Exporters](/base/systems/exporters.md) |
+| Exporters | Python | Copilot and M365 packages | [Exporters](/base/systems/exporters.md) |
 | Bundle | directory | Project knowledge | — |
 
 # Principles and constraints
 
-- A change is made only in the source; projections are regenerated (`make all`).
+- A change is made only in the source; platform packages are regenerated (`make all`).
 - Skills use the `<skills>/` convention; no vendor variable.
 - M365: each skill is self-contained, with ≤20 companion files and no hidden files.
 
