@@ -13,7 +13,7 @@ description: Answers questions about the project by reading knowledge/ (an OKF b
    - knowledge/3.0: the root index lists `fragments/` and `base/` (and `projections/` only if it has an `index.md`); read `base/index.md`, which lists the typed directories.
    - knowledge/2.0: the root index lists the typed directories directly. Read the bundle in its own layout; if the person maintains it, mention the migration to knowledge/3.0 with the `okf-migrate` skill.
    Pick the directories that fit the question (decisions for "why", runbooks for "how to operate", domain for "what does it mean", systems/architecture for "how is it built", data/metrics for "where does this number come from"). Do not answer from `projections/`: it is derived from the base for a reader, not OKF knowledge; answer from the base concepts.
-2. Read the `index.md` of those directories (`base/<dir>/index.md` in 3.0); select concepts by `description`. Open only the ones you need (at most ~8 in a first pass). Follow links only if the answer requires it. If you need a text search: `grep -ril --exclude-dir=projections "<term>" knowledge/`.
+2. Read the `index.md` of those directories (`base/<dir>/index.md` in 3.0); select concepts by `description`. Open only the ones you need (at most ~8 in a first pass). Follow links only if the answer requires it. If you need a text search: `grep -ril "<term>" knowledge/base knowledge/fragments knowledge/*.md` (in 2.0, `grep -ril "<term>" knowledge/`).
 3. Assess each concept you use:
    - `status` (`deprecated` ⇒ say so and look for `superseded_by`).
    - `stale_after` in the past ⇒ warn that the content may be stale.
