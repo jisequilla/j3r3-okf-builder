@@ -56,10 +56,12 @@ knowledge/
 │   │   └── index.md
 │   ├── policies/            # Rules, standards, compliance, security.
 │   │   └── index.md
-│   └── references/          # OKF convention §6.3: mirrored external material, execution skills, attesters.
-│       ├── index.md
-│       ├── skills/
-│       └── attesters/
+│   ├── references/          # OKF convention §6.3: mirrored external material, execution skills, attesters.
+│   │   ├── index.md
+│   │   ├── skills/
+│   │   └── attesters/
+│   └── questions/           # type: Open Question — what the team does not know yet, with an owner (kebab-slug.md).
+│       └── index.md
 └── projections/             # Derivation layer, not OKF (ADR-0019): one directory per projection.
     └── <slug>/
         ├── projection.yaml  # Manifest: lifecycle, nature, intent, refs with their content hashes.
@@ -77,7 +79,15 @@ knowledge/
 - `index.md` and `log.md` are **reserved names** at any level: they are never used for a concept.
 - A project can add its own directories under `base/` (e.g. `base/integrations/`, `base/security/`). They are documented in `base/index.md`.
 - `projections/` is not OKF content: `okf-lint`, `okf-index` and `okf-ask` skip it, and no OKF tool treats a projection as a concept. A projection is a derivation with its own manifest and its own tools (ADR-0019), not knowledge. After a distillation, `okf-distill` reads only the `refs` of each `projection.yaml` to list the projections whose refs changed for refresh.
-- **What stays in fragments** and does not reach `base/`: logistics, action items, tone, commercial terms, and proposals nobody has validated. A proposal is distilled only as a proposal (an ADR with `decision_status: proposed`, or an open question).
+- **What a fragment's content becomes** (ADR-0021), the routing `okf-distill` applies:
+
+  | In the fragment | Goes to |
+  |---|---|
+  | A decision, a fact, a definition | A concept in `base/` (`okf-distill`) |
+  | A question nobody has answered | An `Open Question` concept in `base/questions/` |
+  | A proposal nobody has validated | An ADR with `decision_status: proposed`, or an open question |
+  | An action item (someone must do something) | The team's tracker; the base never copies it, and a concept may link the tracker item |
+  | Logistics, tone, commercial terms | Nothing: they stay in the fragment's record |
 - **Writing in `base/`**: a concept states the current state in the present tense, with its sources; dated history goes to `log.md` and to the fragments, not into the prose. A concept with several topics, or longer than about 300 lines, is split.
 
 ---
@@ -165,6 +175,7 @@ The headings of the other templates (§5) are recommendations of the profile, no
 | `Policy` | `base/policies/` | Rule or standard; usually carries `stale_after` and a human `verified`. |
 | `Reference` | `base/references/` | Mirrored external material or execution instructions. |
 | `Knowledge Fragment` | `fragments/` | Record of an event (meeting, chat, slides, transcript), named `YYYY-MM-DD-slug.md` with the date of the event. Extra fields: `occurred_at` (when it happened: `YYYY-MM-DD` or ISO 8601 with an offset), `origin` (where it happened), `participants` (list of actors, §3.1), `distillation_status` (`pending` / `distilled` / `conflict`). Body: `# Record` (immutable after capture) and `# Distillation`; bundles written in Spanish may title them «Contenido capturado» and «Destilado en». After capture only `distillation_status` and `# Distillation` change, except that a missing `occurred_at`, `origin` or `participants` may be backfilled once (§6). |
+| `Open Question` | `base/questions/` | What the team does not know yet, named `<kebab-slug>.md` (no ID). Extra fields: `owner` (an actor, §3.1, required), `question_status` (`open` / `answered` / `dropped`), `asked_in` (the bundle path of the fragment where it arose, `/fragments/<file>`; absent when it arose outside any fragment, whose origin `sources` then cites), and optionally `blocks` (list of the concepts it holds up), `review_on` (a date `YYYY-MM-DD`) and `answered_by` (the concept that answers it). Body: `# Question`, `# Why it matters`, `# What is known` and `# Answer`. Never deleted: an answered one links its answer. `status` (`draft` / `stable` / `deprecated`) is independent of `question_status`: answering or dropping a question does not deprecate it. |
 | `Conflict Log` | root (`conflict-log.md`) | The bundle's conflict register. Zero or one per bundle; created with the first conflict. Body: a table with the columns ID (`C-NNN`), source fragment, description, kind, resolution, state (`open` / `proposed` / `resolved` / `dismissed`) and who decided. |
 | `Log` | — | Only for `log.md` if frontmatter is added to it (optional, tolerated by consumers). |
 
@@ -221,8 +232,11 @@ okf_profile: "knowledge/3.0"
 | Staleness | `now >= stale_after` | `okf-lint` warns; review and renew `stale_after` or deprecate |
 | Capture a fragment | `okf-fragment` records an event in `fragments/` | `type: Knowledge Fragment`, `status: draft`, `distillation_status: pending`, `generated` |
 | Backfill a fragment | `okf-fragment` fills a missing `occurred_at`, `origin` or `participants` with a value read from `# Record` or from an original its `sources` cite, never inferred; a person approves it, the mapping of names to actors included. A value already written is never changed: a wrong one means the fragment is deprecated and replaced | Only the absent field is added; `# Record`, `generated` and every other key stay as they are; an **Update** entry in `log.md` names the fragments, the fields and who approved them. A fragment whose record does not show the value keeps the field absent |
-| Distill a fragment | `okf-distill` proposes a change set (additions, confirmations, updates, refutations, conflicts); a refutation deprecates an outdated concept and links its replacement without opening a conflict, and anything disputed is a conflict; a person approves it before anything is applied | Touched concepts cite the fragment in `sources`; the fragment gets `distillation_status: distilled` (or `conflict` while one of its conflicts is open). Distillation never sets `verified` |
+| Distill a fragment | `okf-distill` routes each item by the table in §2 and proposes a change set (additions, confirmations, updates, refutations, conflicts); action items are listed for the team's tracker and never written to `base/`; a refutation deprecates an outdated concept and links its replacement without opening a conflict, and anything disputed is a conflict; a person approves it before anything is applied | Touched concepts cite the fragment in `sources`; the fragment gets `distillation_status: distilled` (or `conflict` while one of its conflicts is open). Distillation never sets `verified` |
 | Resolve a conflict | A person decides: the knowledge changed (new ADR that supersedes, an **Update** citing the fragment, or a deprecation as in a refutation) or it was a misunderstanding (dismissed with the reason) | The row of the Conflict Log changes its state and records who decided; the fragment returns to `distilled` when no conflict of it is open; a **Conflict** entry in `log.md` |
+| Open a question | `okf-capture` or `okf-distill` writes an `Open Question` in `base/questions/` with the template | `type: Open Question`, `status: draft`, `owner`, `question_status: open`, `asked_in` (or the origin in `sources`), `generated`; a **Creation** entry in `log.md` |
+| Answer a question | The concept that holds the answer is created or updated and cites the question in `sources` (`resource: /base/questions/<slug>.md`); the question's `# Answer` summarizes it and links it | `question_status: answered`, `answered_by` with the answer's bundle path, `generated.at` updated; `status` unchanged; an **Update** entry in `log.md` |
+| Drop a question | A person decides the question no longer needs an answer; the reason goes under `# Answer` | `question_status: dropped`, `generated.at` updated; `status` unchanged; the question is never deleted; an **Update** entry in `log.md` |
 | Supersession | New concept | Old one: `status: deprecated` + a link to the new one. Never delete: that breaks the graph and the history |
 | Any of the above | Log | An entry in the `log.md` of the affected directory and/or the root |
 
@@ -240,15 +254,16 @@ It is **conformant with this profile** if, in addition:
 
 4. `knowledge/index.md` (with `okf_version`), `knowledge/log.md` and `knowledge/project.md` (`type: Project`) exist.
 5. Every concept carries `generated.by` following the actor convention.
-6. Timestamps are ISO 8601 with an explicit offset; the exception is a Knowledge Fragment's `occurred_at`, which also accepts a date `YYYY-MM-DD`.
+6. Timestamps are ISO 8601 with an explicit offset; the exceptions are a Knowledge Fragment's `occurred_at` and an Open Question's `review_on`, which also accept a date `YYYY-MM-DD`.
 7. `status`, if present, is `draft | stable | deprecated`.
 8. `Attested Computation` concepts carry `runtime` and either `computation` or a `# Computation` block with a single fence.
 9. File names are ASCII kebab-case.
 10. A Knowledge Fragment's `distillation_status`, if present, is `pending | distilled | conflict`.
 11. At most one concept per bundle has `type: Conflict Log`.
 12. In a `knowledge/3.0` bundle, concepts live only in `base/` (at any depth) or `fragments/`; the root holds no concept other than `project.md` and `conflict-log.md`. `projections/` is not checked.
+13. An Open Question's `question_status`, if present, is `open | answered | dropped`.
 
-`okf-lint` separates **errors** (1–5, 7, 8, 10–12) from **warnings** (6, 9, broken links, expired `stale_after`, concepts without `description`, out-of-date `index.md`, Knowledge Fragments missing `occurred_at`, `origin`, `participants` or `distillation_status`, `participants` not following the actor convention, `occurred_at` that is neither a date nor an ISO 8601 datetime with an offset).
+`okf-lint` separates **errors** (1–5, 7, 8, 10–13) from **warnings** (6, 9, broken links, expired `stale_after`, concepts without `description`, out-of-date `index.md`, Knowledge Fragments missing `occurred_at`, `origin`, `participants` or `distillation_status`, `participants` not following the actor convention, `occurred_at` that is neither a date nor an ISO 8601 datetime with an offset, Open Questions missing `owner`, `question_status` or `asked_in`, an Open Question's `owner` not following the actor convention, `question_status: answered` without `answered_by`, `review_on` in the past while `question_status` is `open`, `review_on` that is neither a date nor an ISO 8601 datetime with an offset).
 
 ---
 
