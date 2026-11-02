@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-02
+* **Creation**: [ADR-0027](/base/decisions/ADR-0027-owner-is-a-string-actor-stays-the-spec.md): `owner` on API, Metric, Playbook, Policy, Runbook, System and Table is a string, a team or a person, so the templates' `team:<team>` is valid; an Open Question's `owner` stays an actor, and the actor convention stays the OKF spec's; decided by human:jisequilla in answer to a structured question, while finishing okf-6x3.4.
 * **Creation**: [ADR-0026](/base/decisions/ADR-0026-built-in-domain-profile.md): the standard's types become a built-in Domain Profile under each bundle's `base/profile.md`, with a level per requirement, the field types `actor`, `datetime` and `date_or_datetime`, local references only, validators on request, aliases resolved by lint and undeclared keys warned only in bundles with a profile; decided by human:jisequilla while scoping okf-6x3.
 * **Deprecation**: [ADR-0023](/base/decisions/ADR-0023-domain-profile-per-bundle.md), superseded by ADR-0026.
 * **Update**: [Knowledge architect](/base/roles/knowledge-architect.md) cites the KDD role v1.3, verified by a person, and its agent definition at kdd-knowledge commit `929515c`, where the KDD bundle is on profile 3.0; the difference on unbuilt skills is gone; the KDD agent follows ADR-0025 at `929515c`, and its policy's local exception for a written chat confirmation is listed as a difference.

@@ -1,5 +1,9 @@
 > The project's knowledge, in typed directories.
 
+# Domain Profile
+
+* [Domain Profile of Demo Payments](profile.md) - The taxonomy of the demo payments bundle, on top of the built-in Domain Profile; one local type for payments meetings, one family for open questions, one rule and its aliases. _(draft)_
+
 # Subdirectories
 
 * [apis](apis/index.md) - API contracts and their semantics.

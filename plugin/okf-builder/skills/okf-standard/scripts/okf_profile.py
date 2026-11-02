@@ -37,7 +37,8 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from okf_common import PROFILE_30, Doc, declared_profile, find_bundle, parse_yaml, split_frontmatter  # noqa: E402
+from okf_common import (PROFILE_30, V02_KEYS, Doc, declared_profile, find_bundle, parse_yaml,  # noqa: E402
+                        split_frontmatter)
 
 FIELD_TYPES = ("string", "integer", "boolean", "date", "datetime", "date_or_datetime", "actor", "list", "enum", "path")
 LEVELS = ("error", "warn")
@@ -50,6 +51,9 @@ FAMILY_KEYS = {"types", "required", "fixed", "forbidden", "fields", "description
 BY_TYPE_KEYS = {"required", "fixed", "forbidden", "values", "fields"}
 DOMAIN_PROFILE = "Domain Profile"
 OWN_REL = "base/profile.md"
+BUILTIN = "built-in"  # the source label of the built-in layer
+# the keys every concept may carry: the spec's (OKF v0.1 and v0.2) and those of the standard's §3.1
+SPEC_KEYS = frozenset({"type", "title", "description", "resource", "tags", "timestamp"}) | V02_KEYS
 BUILTIN_LABEL = "<skills>/okf-standard/profiles/knowledge-3.0.md"
 # scripts/ sits beside profiles/ in okf-standard. A copy without profiles/ reads BUILTIN_TEXT, the copy of that
 # file an exported package inlines here (tools/export_m365.py), and without either falls back to the names of §4
@@ -479,10 +483,10 @@ def load_profile(bundle: Path, read_own: bool | None = None, builtin: Path | Non
         for e in errs:
             r.add("PROFILE_INVALID", BUILTIN_LABEL, e)
         if not errs:
-            layers.append(Layer("built-in", fm))
+            layers.append(Layer(BUILTIN, fm))
             r.builtin_file = True
     if not r.builtin_file:
-        layers.append(Layer("built-in", {"types": {n: {} for n in STANDARD_TYPE_NAMES}}))
+        layers.append(Layer(BUILTIN, {"types": {n: {} for n in STANDARD_TYPE_NAMES}}))
     own = bundle / OWN_REL
     if read_own and own.is_file():
         fm, err = _fm_of(own.read_text(encoding="utf-8"))
@@ -701,6 +705,13 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
     for name, a in r.aliases["fields"].items():
         if name in all_fields:
             r.add("PROFILE_DUPLICATE_ID", a["source"], f"alias '{name}' is named like a field declared by {all_fields[name]}")
+    # a type alias in a rule's when.type or a validator's types stands for the declared type
+    for rule in r.rules:
+        if isinstance(rule.get("when"), dict) and "type" in rule["when"]:
+            rule["when"] = {**rule["when"], "type": canonical_type(r, rule["when"]["type"])}
+    for v in r.validators:
+        if v.get("types"):
+            v["types"] = [canonical_type(r, t) for t in v["types"]]
     # 2. by_type, a type before its subtypes (then layer order), so the order of declaration does not matter
     entries = [(lay.source, tid, e or {}) for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
     entries.sort(key=lambda x: len(ancestors(r, x[1])))
@@ -736,7 +747,10 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
                 r.add("PROFILE_DUPLICATE_ID", lay.source, f"family '{dr}' declared by {declared[dr]} and by {lay.source}")
                 continue
             declared[dr] = lay.source
-            fams.append((lay.source, dr, f or {}))
+            f = dict(f or {})
+            if f.get("types"):  # a type alias in a family's types stands for the declared type
+                f["types"] = [canonical_type(r, t) for t in f["types"]]
+            fams.append((lay.source, dr, f))
     fams.sort(key=lambda x: x[1].count("/"))
     for src, dr, f in fams:
         req_in: dict = {}
@@ -805,10 +819,66 @@ def bundle_path(bundle: Path, arg: str | None) -> str:
     return "/" + rel + ("" if rel.endswith(".md") else "/")
 
 
+def families_at(r: Resolved, path: str) -> list[dict]:
+    """The families that cover a bundle path (/base/x/ or /base/x/c.md), enclosing first."""
+    d = path if path.endswith("/") else posixpath.dirname(path) + "/"
+    return sorted((f for f in r.families.values() if d.startswith(f["dir"])), key=lambda f: f["dir"].count("/"))
+
+
+def concept_force(r: Resolved, t: str, path: str) -> dict:
+    """What is in force for a concept of type t at a bundle path (§7 rule 15): type_in_force for its type,
+    raised by every family that covers its directory, enclosing first; "families" lists those families.
+    A type no layer declares gets only the fixed and forbidden keys (§4.1 What lint checks)."""
+    fams = families_at(r, path)
+    fi = type_in_force(r, t)
+    if t not in r.types:
+        fi["fields"], fi["required"] = {}, {}
+    for f in fams:
+        keys = ("required", "fixed", "forbidden") if t in r.types else ("fixed", "forbidden")
+        for key in keys:
+            _raise_into(fi[key], f[key])
+    fi["families"] = fams
+    return fi
+
+
+def canonical_type(r: Resolved | None, t: Any) -> Any:
+    """The type a local type name stands for (aliases.types), or t itself."""
+    if r is not None and isinstance(t, str) and t in r.aliases["types"]:
+        return r.aliases["types"][t]["to"]
+    return t
+
+
+def _same(a: Any, b: Any) -> bool:
+    return a == b or str(a) == str(b)
+
+
+def resolve_aliases(r: Resolved, fm: dict) -> dict:
+    """The frontmatter as the profile reads it (§4.1 What lint checks): a local type name becomes the type it
+    stands for, a local field name the declared field, and a value alias whose `from` holds in full is replaced
+    by its `to`. A key the concept also carries under its declared name keeps the concept's own value."""
+    out = dict(fm)
+    if "type" in out:
+        out["type"] = canonical_type(r, out["type"])
+    for name, a in r.aliases["fields"].items():
+        if name in out:
+            out.setdefault(a["to"], out.pop(name))
+    for va in r.aliases["values"]:
+        if all(k in out and _same(out[k], v) for k, v in va["from"].items()):
+            for k in va["from"]:
+                out.pop(k)
+            for k, v in va["to"].items():
+                out.setdefault(k, v)
+    return out
+
+
+def alias_keys(r: Resolved) -> set:
+    """The local names aliases give to keys: field aliases and the keys of each value alias's `from`."""
+    return set(r.aliases["fields"]) | {k for va in r.aliases["values"] for k in va["from"]}
+
+
 def in_force(r: Resolved, path: str = "/") -> dict:
     """Types allowed at a bundle path, each one's fields and requirements, rules and aliases, with sources."""
-    d = path if path.endswith("/") else posixpath.dirname(path) + "/"
-    fams = sorted((f for f in r.families.values() if d.startswith(f["dir"])), key=lambda f: f["dir"].count("/"))
+    fams = families_at(r, path)
     allowed = list(r.types)
     for f in fams:
         if f["types"]:
@@ -1540,6 +1610,48 @@ def test_lint_profiles_prints_what_is_in_force_and_who_declared_it(tmp_path, cap
     assert okf_lint.main([str(k), "--profiles", "/base/", "--json"]) == 0  # the family's forbidden applies only under it
     assert "draft_notes" not in json.loads(capsys.readouterr().out)["types"]["Term"]["forbidden"]
     assert okf_lint.main([str(k), "--profiles", "--no-profile"]) == 2
+
+
+def test_concept_force_adds_every_family_that_covers_the_directory(tmp_path):
+    own = ("families:\n  /base/a/: { required: [tags], fixed: { okf_lang: { value: en, code: MY_LANG } } }\n"
+           "  /base/a/b/: { required: { review_on: { level: warn } }, forbidden: { x: { reason: r } } }\n")
+    r = load_profile(_bundle(tmp_path, own), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    deep = concept_force(r, "Open Question", "/base/a/b/q.md")
+    assert [f["dir"] for f in deep["families"]] == ["/base/a/", "/base/a/b/"]  # enclosing first
+    assert {"tags", "review_on", "owner"} <= set(deep["required"]) and deep["fixed"]["okf_lang"]["code"] == "MY_LANG"
+    assert "x" in deep["forbidden"] and deep["required"]["owner"]["code"] == "QUESTION_NO_FIELD"
+    shallow = concept_force(r, "Open Question", "/base/a/q.md")
+    assert "review_on" not in shallow["required"] and "x" not in shallow["forbidden"] and "tags" in shallow["required"]
+    assert concept_force(r, "Open Question", "/fragments/f.md")["families"] == []
+    # a type no layer declares gets only the fixed and forbidden keys of its families
+    memo = concept_force(r, "Memo", "/base/a/b/m.md")
+    assert memo["fields"] == {} and memo["required"] == {} and set(memo["forbidden"]) == {"x"}
+
+
+def test_resolve_aliases_reads_local_names_as_the_declared_ones(tmp_path):
+    r = load_profile(_bundle(tmp_path, _OWN), builtin=_builtin(tmp_path))
+    fm = {"type": "Reunión con cliente", "cliente": "Acme", "ingerido": True}
+    assert resolve_aliases(r, fm) == {"type": "Client Meeting", "client": "Acme", "distillation_status": "distilled"}
+    assert fm == {"type": "Reunión con cliente", "cliente": "Acme", "ingerido": True}  # the frontmatter is not changed
+    # the concept's own value under the declared name wins; a value alias whose from does not hold reads nothing
+    own = {"type": "Client Meeting", "cliente": "Acme", "client": "Beta", "ingerido": True, "distillation_status": "pending"}
+    assert resolve_aliases(r, own) == {"type": "Client Meeting", "client": "Beta", "distillation_status": "pending"}
+    assert resolve_aliases(r, {"type": "Term", "ingerido": False}) == {"type": "Term", "ingerido": False}
+    assert canonical_type(r, "Reunión con cliente") == "Client Meeting" and canonical_type(None, "X") == "X"
+    assert alias_keys(r) == {"cliente", "ingerido"}
+
+
+def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_type(tmp_path):
+    own = (_OWN.replace("types: [Term, Knowledge Fragment]", "types: [Term, Reunión con cliente]")
+           .replace("when: { type: Client Meeting,", "when: { type: Reunión con cliente,")
+           + "validator:\n  - { name: meetings, types: [Reunión con cliente], command: \"true\" }\n")
+    r = load_profile(_bundle(tmp_path, own), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    assert r.families["/base/clients/"]["types"] == ["Term", "Client Meeting"]
+    assert r.rules[-1]["when"] == {"type": "Client Meeting", "distillation_status": "distilled"}
+    assert r.validators[0]["types"] == ["Client Meeting"]
+    assert "Client Meeting" in in_force(r, "/base/clients/")["types_allowed"]
 
 
 if __name__ == "__main__":
