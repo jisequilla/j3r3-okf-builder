@@ -1,5 +1,9 @@
 > Records of events, distilled into the base.
 
+# Fragmento
+
+* [2026-11-02 · Finance chat: the refund dispute window](2026-11-02-finance-dispute-window.md) - A short fictional chat in which finance gives María the dispute window of a refund, recorded with the bundle's local names for a fragment and its distillation state. _(draft)_
+
 # Knowledge Fragment
 
 * [2026-11-02 · Payments sync: refund events on the Kafka bus](2026-11-02-refund-events-review.md) - A short fictional platform meeting on moving refund events to Kafka, which left open how long refund events must be kept. _(draft)_

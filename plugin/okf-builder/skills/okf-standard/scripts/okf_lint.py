@@ -14,7 +14,8 @@ are errors (or warnings with --strict). Notices are neither and never fail.
 
 In a knowledge/3.0 bundle the Domain Profile (built-in layer, extends,
 base/profile.md) must be well formed (okf_profile.py); --profiles lists what is
-in force at a path and which source declared each item. Each concept is checked,
+in force at a path and which source declared each item, the questions the
+profile maps included (every one, at any path). Each concept is checked,
 aliases resolved first, against what is in force for its type and its directory:
 a requirement with its own code under that code (the built-in profile keeps the
 per-field checks of a Knowledge Fragment and an Open Question that way), one
@@ -1181,6 +1182,24 @@ def test_profiles_lists_the_builtin_layer_with_its_codes(tmp_path, capsys):
     data = _json.loads(capsys.readouterr().out)
     assert data["types"]["Open Question"]["fields"]["owner"]["code"] == "BAD_ACTOR"
     assert {t["source"] for t in data["types"].values()} == {"built-in"}
+
+
+def test_profiles_lists_the_questions_in_force_with_their_source_in_text_and_json(tmp_path, capsys):
+    import json as _json
+
+    k = _bundle_30(tmp_path)
+    (k / "base" / "profile.md").write_text(_domain_profile(
+        "questions:\n  - { question: \"Who owns each runbook?\", field: Runbook.owner }\n"
+        "  - { question: \"How is it deployed?\", concept: /base/architecture/deployment.md }\n"), encoding="utf-8")
+    capsys.readouterr()
+    assert main([str(k), "--profiles", "/fragments/"]) == 0
+    out = capsys.readouterr().out
+    assert "question Who owns each runbook? → field Runbook.owner  [base/profile.md]" in out
+    assert "question How is it deployed? → concept /base/architecture/deployment.md  [base/profile.md]" in out
+    assert main([str(k), "--profiles", "--json"]) == 0
+    assert _json.loads(capsys.readouterr().out)["questions"] == [
+        {"question": "Who owns each runbook?", "field": "Runbook.owner", "source": "base/profile.md"},
+        {"question": "How is it deployed?", "concept": "/base/architecture/deployment.md", "source": "base/profile.md"}]
 
 
 def test_a_blank_field_required_through_by_type_is_reported_once_as_missing(tmp_path):

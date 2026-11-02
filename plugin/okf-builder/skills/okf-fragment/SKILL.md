@@ -1,6 +1,6 @@
 ---
 name: okf-fragment
-description: Captures a knowledge fragment in knowledge/fragments/, the record of a meeting, transcript, chat or slide deck kept as it happened, with its date, origin and participants, ready for okf-distill. Use when the user says "capture this meeting", "save this transcript", "record this chat", "keep this conversation", "okf fragment", or shares the notes or transcript of an event that should be kept before it is distilled. Also backfills a missing occurred_at, origin or participants in existing fragments ("backfill fragment fields", "fragments missing participants").
+description: Captures a knowledge fragment in knowledge/fragments/, the record of a meeting, transcript, chat or slide deck kept as it happened, with its date, origin and participants, in the bundle's own type and key names, ready for okf-distill. Use when the user says "capture this meeting", "save this transcript", "record this chat", "keep this conversation", "okf fragment", or shares the notes or transcript of an event that should be kept before it is distilled. Also backfills a missing occurred_at, origin or participants in existing fragments ("backfill fragment fields", "fragments missing participants").
 ---
 
 # okf-fragment
@@ -11,8 +11,9 @@ Keeps an event (a meeting, chat, transcript or slide deck) as a `Knowledge Fragm
 
 ## Steps
 
-1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop), **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`) and **its profile** (`okf_profile` in the root `index.md`; if missing, knowledge/2.0, the older profile). Write in that version and in that profile's layout.
-   - `fragments/` is at the bundle root in both profiles. **knowledge/2.0 bundle**: links to concepts drop the `base/` prefix (`/decisions/x.md`); never mix the two layouts, and offer the migration (`uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --profile knowledge/3.0 --dry-run`, applied only after the person confirms).
+1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop), **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`) and **its OKF profile** (`okf_profile` in the root `index.md`; if missing, knowledge/2.0, the older OKF profile). Write in that version and in that OKF profile's layout.
+   - `fragments/` is at the bundle root in both OKF profiles. **knowledge/2.0 bundle**: links to concepts drop the `base/` prefix (`/decisions/x.md`); never mix the two layouts, and offer the migration (`uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --profile knowledge/3.0 --dry-run`, applied only after the person confirms).
+   - **The Domain Profile in force** (knowledge/3.0; a knowledge/2.0 bundle has none): run `uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --profiles /fragments/ --json` and read from it, not from `base/profile.md` by hand, the fragment types allowed (`Knowledge Fragment` and the local types that extend it, such as a `Client Meeting`, each with its fields and requirements), the rules and the aliases. When a local fragment type fits the event, offer it and ask for its required fields.
 2. **Gather the event** and confirm it in one line before writing:
    - the record: pasted text, a file, an exported transcript;
    - `occurred_at`: when the event happened (`YYYY-MM-DD`, or ISO 8601 with an offset), not when it is captured; ask if it is not known;
@@ -25,10 +26,15 @@ Keeps an event (a meeting, chat, transcript or slide deck) as a `Knowledge Fragm
 5. **Write** from the template `<skills>/okf-standard/templates/fragment.md`:
    - Replace every `{{...}}`. `title`: `YYYY-MM-DD · <topic>`. `description`: one self-contained sentence on what the event was about. `actor` = whoever supplies the record: `human:<id>` if the person provides it and Claude only formats it; `okf-builder/<model>` if Claude writes the record itself (for example, of its own session). `now` = UTC ISO 8601 `YYYY-MM-DDTHH:MM:SSZ`.
    - `status: draft` and `distillation_status: pending`. Do **not** add `verified`.
+   - **The bundle's own names.** When the Domain Profile's `aliases` give a local name to what you write, write the name the bundle's existing concepts already use, so a bundle that calls its fragments `Fragmento` keeps doing so:
+     - *Type*: count the existing concepts whose `type` is the chosen type and those whose `type` is each local name the aliases map to exactly that type (a local name of `Client Meeting` stands for `Client Meeting`, never for `Knowledge Fragment`). Write the name with the most concepts; on a tie, or when no concept uses a local name, write the declared name.
+     - *Field*: the same count, over the concepts of that type, between the declared field name and each field alias of it.
+     - *Value*: only in a fragment whose `type` is written with a local name, write a value alias in reverse when exactly one alias maps to that field and value (`ingerido: false` for `distillation_status: pending`); otherwise write the declared field and value.
+     - Lint reads every local name as the declared one, so all the checks still apply.
    - A link to a concept uses its bundle path under `base/` (`/base/decisions/ADR-0001-x.md`), and a link to another fragment `/fragments/<file>`.
    - The record goes under `# Record`. Leave `# Distillation` with its empty table: `okf-distill` fills it.
    - **0.1 bundle**: after saving, run `uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --to 0.1 --file <relative-path>`; never leave 0.2 keys in a 0.1 bundle.
-6. **The record is immutable from now on.** Later, only `distillation_status` and `# Distillation` change, plus a one-time backfill of a missing capture field (see Backfill). A wrong record is deprecated (`status: deprecated`, linking the fragment that replaces it), never edited or deleted.
+6. **The record is immutable from now on.** Later, only `distillation_status` (or the local key a value alias reads as it) and `# Distillation` change, plus a one-time backfill of a missing capture field (see Backfill). A wrong record is deprecated (`status: deprecated`, linking the fragment that replaces it), never edited or deleted.
 7. **Log**: add a `* **Creation**: ...` entry linking the fragment by its bundle path (`/fragments/<file>`) to `knowledge/log.md` under today's date (create the section if it doesn't exist, above the earlier ones). If `fragments/` has its own `log.md`, add it there too.
 8. **Index and validate**:
    ```bash

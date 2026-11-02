@@ -1,6 +1,9 @@
 # Bundle history
 
 ## 2026-11-02
+* **Update**: [Domain Profile of Demo Payments](/base/profile.md) gains the type alias Fragmento (Knowledge Fragment), the value aliases ingerido: true (distillation_status: distilled) and ingerido: false (pending), and the question "Who answers for each runbook?" mapped to Runbook.owner.
+* **Creation**: [Finance chat: the refund dispute window](/fragments/2026-11-02-finance-dispute-window.md), a fictional chat captured with the bundle's local names (type Fragmento, ingerido: false), not distilled yet.
+* **Creation**: [Payments dead-letter replay](/base/runbooks/payments-dead-letter-replay.md), a fictional runbook owned by team:payments.
 * **Creation**: [Domain Profile of Demo Payments](/base/profile.md), the bundle's own Domain Profile: the local type Payments Meeting (extends Knowledge Fragment), the family /base/questions/, the rule distilled-payments-meeting-names-team and the aliases Reunión de pagos and equipo.
 * **Creation**: [Payments follow-up: the refunds topic](/fragments/2026-11-02-refund-topic-follow-up.md), a fictional follow-up captured as a Payments Meeting, not distilled yet.
 * **Creation**: [Payments sync: refund events on the Kafka bus](/fragments/2026-11-02-refund-events-review.md), a fictional meeting captured as a Knowledge Fragment and distilled; its action item went to the tracker.

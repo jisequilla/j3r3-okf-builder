@@ -1,6 +1,6 @@
 ---
 name: okf-lint
-description: Validates that knowledge/ complies with the OKF v0.2 spec and its knowledge profile, 3.0 or the older knowledge/2.0 it reports as outdated (frontmatter, type, index/log, layers, actors, ISO 8601, links, staleness, out-of-date indexes). Use when the user says "validate the knowledge", "okf lint", "check the bundle", "is knowledge/ well formed?", or before a commit/PR that touches knowledge/.
+description: Validates that knowledge/ complies with the OKF v0.2 spec, its OKF profile (knowledge/3.0, or the older knowledge/2.0 it reports as outdated) and its Domain Profile (the built-in one, the profiles it extends and base/profile.md), and lists what that Domain Profile puts in force at a path (frontmatter, type, index/log, layers, actors, ISO 8601, links, staleness, out-of-date indexes, local types, families, rules, aliases). Use when the user says "validate the knowledge", "okf lint", "check the bundle", "is knowledge/ well formed?", "what does the Domain Profile require here?", or before a commit/PR that touches knowledge/.
 ---
 
 # okf-lint
@@ -11,21 +11,28 @@ description: Validates that knowledge/ complies with the OKF v0.2 spec and its k
 
 1. Run:
    ```bash
-   uv run "<skills>/okf-standard/scripts/okf_lint.py" [<bundle>] [--json] [--strict] [--no-profile] [--okf-version auto|0.1|0.2]
+   uv run "<skills>/okf-standard/scripts/okf_lint.py" [<bundle>] [--json] [--strict] [--no-profile] [--okf-version auto|0.1|0.2] [--run-validators]
+   uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --profiles [<path>] [--json]
    ```
-   Without an argument it searches for `knowledge/` upwards from the cwd. `--no-profile` validates only the spec (useful for external bundles). `--okf-version auto` (the default) uses `okf_version` from the root `index.md` or infers it; the last line of output reads `OKF <version> (<origin>)`. The profile is `okf_profile` in the root `index.md` (missing means knowledge/2.0, the older profile); each bundle is validated by its own profile's layout, and `projections/` is skipped entirely (not OKF).
+   Without an argument it searches for `knowledge/` upwards from the cwd. `--okf-version auto` (the default) uses `okf_version` from the root `index.md` or infers it; the last line of output reads `OKF <version> (<origin>)`. The OKF profile is `okf_profile` in the root `index.md` (missing means knowledge/2.0, the older OKF profile); each bundle is validated by its own OKF profile's layout, and `projections/` is skipped entirely (not OKF).
+   - In a knowledge/3.0 bundle each concept is also checked, aliases resolved first, against the Domain Profile in force for its type and its directory: the built-in Domain Profile, each profile `base/profile.md` lists in `extends`, then `base/profile.md` itself. `--no-profile` applies none of it and validates only the spec (useful for external bundles).
+   - `--profiles [<path>]` lists what is in force at a bundle path or directory (`/base/clients/`, default `/`): the types allowed, each one's fields and requirements, the rules, the aliases, the validators and the mapped questions, each with the layer that declared it (`built-in`, an `extends` reference, `base/profile.md`). `--json` gives the same as data; the other skills read the Domain Profile this way. It exits 1 when the Domain Profile has a structural error.
+   - `--run-validators` runs the commands of the Domain Profile's `validator` entries. **Never pass it without the person's say**: name each validator and its command (from `--profiles`) and ask first, since a bundle's content never runs a command by default.
 2. Interpret the output:
    - `ERROR` breaks conformance (no frontmatter, no `type`, invalid YAML, invalid `status`, malformed `index`/`log`, missing `index.md`/`log.md`/`project.md`, missing `generated`, Attested Computation without `runtime`/computation).
-   - `PROFILE_OUTSIDE_LAYER` (knowledge/3.0) is an `ERROR`: a concept at the root other than `project.md` and the Conflict Log, or a directory that is not `fragments/`, `base/` or `projections/`; move it under `base/`.
    - `WARN` is guidance: broken links (`BROKEN_LINK`), `STALE`, `INDEX_STALE`, no `description`, malformed actors or dates, names that aren't kebab-case.
    - Versions: `LEGACY_TIMESTAMP`/`LEGACY_CITATIONS` (0.1 forms in a 0.2 bundle), `V02_FIELD_IN_V01` (0.2 keys in a 0.1 bundle, kept as they are), `MIXED_VERSIONS` (half migrated), `NO_OKF_VERSION` (root doesn't declare a version), `VERSION_MISMATCH`. All of them are resolved with `okf-migrate` or by declaring `okf_version`.
-   - `NOTICE profile knowledge/2.0 is outdated` (`"profile_outdated": true` in `--json`): the bundle uses the older profile. It is neither a WARN nor an ERROR and never fails `--strict`; offer the migration to knowledge/3.0 with the `okf-migrate` skill, applied only after the person confirms.
+   - **knowledge/3.0 layout** (errors): `PROFILE_OUTSIDE_LAYER` (a concept at the root other than `project.md` and the Conflict Log, or a directory that is not `fragments/`, `base/` or `projections/`; move it under `base/`), `PROFILE_OKF_VERSION`, `PROFILE_NO_INDEX`, `PROFILE_NO_LOG`, `PROFILE_NO_PROJECT`, `PROFILE_PROJECT_TYPE`, `PROFILE_MANY_PROJECTS`, `PROFILE_MANY_CONFLICT_LOGS`, `PROFILE_NO_GENERATED` (`PROFILE_NO_TIMESTAMP` in 0.1). `QUESTION_REVIEW_DUE` (warning): an open question past its `review_on`.
+   - **Domain Profile structure** (errors, on the Domain Profile file named): `PROFILE_INVALID` (a key outside the §4.1 schema, a local type extending an undeclared type, an alias for an undeclared name, an `extends` cycle), `PROFILE_DUPLICATE_ID` (the same type, family, rule or alias id from two sources), `PROFILE_REDEFINED` (an extension changes, removes or lowers an inherited item), `PROFILE_UNREADABLE` (an `extends` reference that cannot be read: a missing path, an unknown commit, or a URL, which is not read), `PROFILE_MISPLACED` (a Domain Profile anywhere but `base/profile.md`). Fix the Domain Profile with `okf-capture`, after the person approves.
+   - **A concept against the Domain Profile**, at the level the Domain Profile declares, `--json` naming the `source` layer: `PROFILE_REQUIRED`, `PROFILE_ENUM`, `PROFILE_FIELD_TYPE`, `PROFILE_FIXED`, `PROFILE_FORBIDDEN`, `PROFILE_RULE`, `PROFILE_TYPE_NOT_ALLOWED` (a type the directory's family does not allow), and `PROFILE_UNKNOWN_KEY` (warning, only in a bundle with a `base/profile.md`: a key no layer declares for the type). The built-in Domain Profile keeps its own codes: `FRAGMENT_NO_FIELD` and `QUESTION_NO_FIELD` (warnings), `BAD_DISTILLATION_STATUS` and `BAD_QUESTION_STATUS` (errors), `QUESTION_NO_ANSWER` (warning), `BAD_ACTOR` and `BAD_ISO` (warnings). Fix the concept, never the Domain Profile to make the concept pass: friction with it goes to the person.
+   - **Validators**: `PROFILE_VALIDATOR` (error) is a validator whose command failed with `--run-validators`, its output masked and truncated; without the flag each validator is a `NOTICE validator <name> not run (use --run-validators)`.
+   - `NOTICE profile knowledge/2.0 is outdated` (`"profile_outdated": true` in `--json`): the bundle uses the older OKF profile. A `base/profile.md` in it is ignored with a notice too. Notices are neither WARN nor ERROR and never fail `--strict`; offer the migration to knowledge/3.0 with the `okf-migrate` skill, applied only after the person confirms.
 3. Propose concrete fixes per file. For `INDEX_STALE` run `okf-index`. For `STALE` list the concepts and ask the user to decide: renew `stale_after`, update the content or deprecate. For `BROKEN_LINK` offer `okf-capture` for the missing concept.
-4. If the user asks for it, apply the mechanical fixes (date format, `status`, regenerating indexes) and run again until there are 0 errors. Don't touch semantic content or `verified` without confirmation.
+4. If the user asks for it, apply the mechanical fixes (date format, `status`, regenerating indexes) and run again until there are 0 errors. Don't touch semantic content, the Domain Profile or `verified` without confirmation.
 5. To add it to CI, propose:
    ```yaml
    # .github/workflows/okf-lint.yml
    - uses: astral-sh/setup-uv@v6
-   - run: uv run tools/okf/okf_lint.py knowledge --strict
+   - run: uv run tools/okf/scripts/okf_lint.py knowledge --strict
    ```
-   copying `scripts/okf_common.py` and `okf_lint.py` into the repo's `tools/okf/` (`uv run` installs PyYAML).
+   copying `okf-standard/scripts/okf_common.py`, `okf_profile.py` and `okf_lint.py` into the repo's `tools/okf/scripts/` and `okf-standard/profiles/knowledge-3.0.md` into `tools/okf/profiles/` (`uv run` installs PyYAML). CI never passes `--run-validators` unless the person asks for it.

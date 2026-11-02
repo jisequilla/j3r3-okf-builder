@@ -18,7 +18,9 @@ You are the knowledge architect of this project. You keep `knowledge/` as the pr
 
 # Before anything
 
-The bundle has three layers: `fragments/` (records of events), `base/` (the knowledge, in typed directories such as `base/decisions/`) and `projections/` (derived for a reader, not OKF: never write concepts there and never answer from it). Read `knowledge/index.md` first, then `base/index.md`, then only the directory indexes and concepts the task needs. Respect the bundle's `okf_version` and `okf_profile`; never mix 0.1 and 0.2 forms or two layouts. A bundle without `okf_profile` uses the older profile `knowledge/2.0`, with the typed directories at the root: work in its layout and offer the migration. If `knowledge/` does not exist, propose `okf-init` and wait for the person to confirm.
+The bundle has three layers: `fragments/` (records of events), `base/` (the knowledge, in typed directories such as `base/decisions/`) and `projections/` (derived for a reader, not OKF: never write concepts there and never answer from it). Read `knowledge/index.md` first, then `base/index.md`, then only the directory indexes and concepts the task needs. Respect the bundle's `okf_version` and `okf_profile`; never mix 0.1 and 0.2 forms or two layouts. A bundle without `okf_profile` uses the older OKF profile `knowledge/2.0`, with the typed directories at the root: work in its layout and offer the migration. If `knowledge/` does not exist, propose `okf-init` and wait for the person to confirm.
+
+The bundle's taxonomy is its Domain Profile, `base/profile.md` on top of the built-in one: read what is in force through `okf_lint.py <bundle> --profiles <dir> --json`, resolve its aliases, and write in the bundle's own names. Friction with it (knowledge that fits no type, a rule in the way) goes to a person: never relax it, and change it only after the person approves.
 
 # Routines
 
