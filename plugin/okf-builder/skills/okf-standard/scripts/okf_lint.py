@@ -556,6 +556,23 @@ def test_fragment_occurred_at_bad_format_warns(tmp_path):
         assert _codes(rep) == [("WARN", "BAD_ISO")], value
 
 
+def test_impossible_datetimes_warn_bad_iso(tmp_path):
+    """A datetime that matches the ISO pattern but names no real moment warns BAD_ISO; it never crashes lint."""
+    for n, line in enumerate(('stale_after: "2026-02-30T00:00:00Z"\n',
+                              'verified: { by: human:alice, at: "2026-13-40T09:00:00+00:00" }\n')):
+        bundle = tmp_path / str(n)
+        bundle.mkdir()
+        rep, _, _ = lint(_fragment_bundle(bundle, _FRAGMENT_FIELDS + line))
+        assert _codes(rep) == [("WARN", "BAD_ISO")], line
+    bundle = tmp_path / "generated"
+    bundle.mkdir()
+    k = _fragment_bundle(bundle, _FRAGMENT_FIELDS)
+    f = k / _FRAGMENT
+    f.write_text(f.read_text(encoding="utf-8").replace("at: 2026-10-31T18:00:00Z", 'at: "2026-11-01T25:00:00Z"'), encoding="utf-8")
+    rep, _, _ = lint(k)
+    assert _codes(rep) == [("WARN", "BAD_ISO")]
+
+
 def test_fragment_participant_not_an_actor_warns(tmp_path):
     fields = _FRAGMENT_FIELDS.replace("[human:alice, ", "[Alice Smith, ")
     rep, _, _ = lint(_fragment_bundle(tmp_path, fields))

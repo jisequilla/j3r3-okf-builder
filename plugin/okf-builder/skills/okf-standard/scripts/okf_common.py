@@ -132,9 +132,10 @@ def now_iso() -> str:
 
 
 def is_iso(ts: Any) -> bool:
+    """An ISO 8601 datetime with an explicit offset that names a real moment."""
     if isinstance(ts, datetime):
         return ts.tzinfo is not None
-    return isinstance(ts, str) and bool(ISO_RE.match(ts))
+    return to_dt(ts) is not None
 
 
 def is_iso_date_or_datetime(v: Any) -> bool:
@@ -149,14 +150,17 @@ def is_iso_date_or_datetime(v: Any) -> bool:
         except ValueError:
             return False
         return True
-    return isinstance(v, str) and bool(ISO_RE.match(v))
+    return is_iso(v)
 
 
 def to_dt(ts: Any) -> datetime | None:
     if isinstance(ts, datetime):
         return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
     if isinstance(ts, str) and ISO_RE.match(ts):
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            return None
     return None
 
 
