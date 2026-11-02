@@ -1,6 +1,13 @@
 # Bundle history
 
 ## 2026-11-02
+* **Creation**: [ADR-0021](/decisions/ADR-0021-three-layers-with-open-questions.md): three layers in profile knowledge/3.0, with open questions as `Open Question` concepts in `base/` and action items in the team's tracker; distilled from the [migration-tool fragment](/fragments/2026-11-02-migration-tool-okf-review.md), approved by human:jisequilla.
+* **Deprecation**: [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md), superseded by ADR-0021.
+* **Creation**: [ADR-0022](/decisions/ADR-0022-knowledge-projections-drift-by-nature.md): projection drift checked by nature (rendered, composed, recomputable) and frozen projections; approved by human:jisequilla.
+* **Deprecation**: [ADR-0019](/decisions/ADR-0019-knowledge-projections.md), superseded by ADR-0022.
+* **Creation**: [ADR-0023](/decisions/ADR-0023-domain-profile-per-bundle.md): one Domain Profile per bundle with families, composition rules and profiles shared by reference; approved by human:jisequilla.
+* **Deprecation**: [ADR-0020](/decisions/ADR-0020-domain-profiles.md), superseded by ADR-0023.
+* **Update**: [Projection](/domain/projection.md) cites ADR-0022.
 * **Creation**: fragment [What a long-running OKF implementation teaches](/fragments/2026-11-02-migration-tool-okf-review.md): open work outside fragments, drift by a projection's nature and composition rules for profiles; the owner decides to revise ADR-0018, ADR-0019 and ADR-0020.
 
 ## 2026-11-01

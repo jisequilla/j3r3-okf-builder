@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0019: Knowledge projections derive from the base for a reader, declared in a projection.yaml and checked for drift by content hash"
 description: A projection is a directory in knowledge/projections/ with a projection.yaml (lifecycle, nature, intent, refs with their hashes), its content and its rendered deliverables; it is not OKF and has its own tools, it never regenerates by itself, and this repository's per-platform outputs of the skills are renamed platform packages.
 tags: [adr, standard, projections]
-status: draft
+status: deprecated
 adr_id: ADR-0019
-decision_status: accepted
+decision_status: superseded
+superseded_by: /decisions/ADR-0022-knowledge-projections-drift-by-nature.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T21:15:00Z }
 sources:
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }

@@ -48,5 +48,10 @@ sources:
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
+| ADR-0018: open questions in `base/`, action items in the tracker | refutation | applied | [ADR-0021](/decisions/ADR-0021-three-layers-with-open-questions.md) |
+| ADR-0019: drift by a projection's nature, and frozen projections | refutation | applied; a third nature, `rendered`, names the deterministic case | [ADR-0022](/decisions/ADR-0022-knowledge-projections-drift-by-nature.md) |
+| ADR-0020: one profile per bundle with families, composition rules, sharing by reference, aliases optional | refutation | applied | [ADR-0023](/decisions/ADR-0023-domain-profile-per-bundle.md) |
+| Refinements for the audit and the skills | addition | pending (okf-1ck) | — |
+| Verification level between draft and human; role actors | addition | pending, later (touches ADR-0005) | — |
 
 [^bundles]: Fragment of 2026-11-01, the review of eleven real knowledge bundles.
