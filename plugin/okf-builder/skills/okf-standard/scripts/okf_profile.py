@@ -512,6 +512,13 @@ def _lvl(e: dict) -> str:
     return e.get("level", "error")
 
 
+def _raise_into(dst: dict, src: dict) -> None:
+    """Combine requirements, fixed or forbidden keys: the highest level wins; on a tie the first one stays."""
+    for k, e in src.items():
+        if k not in dst or RANK[_lvl(e)] > RANK[_lvl(dst[k])]:
+            dst[k] = dict(e)
+
+
 def ancestors(r: Resolved, t: str) -> list[str]:
     """The types t extends, nearest first; stops at an unknown type or a cycle."""
     out, seen = [], {t}
@@ -546,11 +553,9 @@ def type_in_force(r: Resolved, t: str) -> dict:
     forbidden = {k: dict(v) for k, v in r.forbidden.items()}
     for x in chain:
         bt = r.by_type.get(x) or {}
-        for k, e in bt.get("required", {}).items():
-            if k not in required or RANK[_lvl(e)] > RANK[_lvl(required[k])]:
-                required[k] = dict(e)
-        fixed.update({k: dict(v) for k, v in bt.get("fixed", {}).items()})
-        forbidden.update({k: dict(v) for k, v in bt.get("forbidden", {}).items()})
+        _raise_into(required, bt.get("required", {}))
+        _raise_into(fixed, bt.get("fixed", {}))
+        _raise_into(forbidden, bt.get("forbidden", {}))
         for fid, vals in bt.get("values", {}).items():
             if fid in fields and "values" in fields[fid]:
                 have = {v["value"] for v in fields[fid]["values"]}
@@ -578,12 +583,27 @@ def _check_lowering(r: Resolved, where: str, src: str, entry: dict, req_in: dict
         cur = forb_in.get(k)
         if cur and RANK[_lvl(e)] < RANK[_lvl(cur)]:
             r.add("PROFILE_REDEFINED", src, f"{where}: lowers forbidden '{k}' from {_lvl(cur)} (by {cur['source']})")
-    for fid in (entry.get("fields") or {}):
+    for fid, new in (entry.get("fields") or {}).items():
         if fid in fields_in:
             r.add("PROFILE_REDEFINED", src, f"{where}: declares field '{fid}' again, declared by {fields_in[fid]['source']}"
-                                            " (a field changes only through a local type, and never its type, values or level)")
+                                            f"{_field_change(fields_in[fid], new or {})} (a field changes only through a "
+                                            "local type, and never its type, values or level)")
         else:
             r.add("PROFILE_INVALID", src, f"{where}: adds field '{fid}'; a field is added only by a local type that extends")
+
+
+def _field_change(old: dict, new: dict) -> str:
+    """What a re-declared field changes: its type, the values it drops, its level."""
+    parts = []
+    if new.get("type") and new["type"] != old.get("type"):
+        parts.append(f"changes its type from {old.get('type')} to {new['type']}")
+    if "values" in new:
+        gone = [str(v["value"]) for v in old.get("values") or [] if v["value"] not in (new["values"] or [])]
+        if gone:
+            parts.append(f"removes value(s) {', '.join(gone)}")
+    if new.get("level") in RANK and RANK[new["level"]] < RANK[old.get("level", "error")]:
+        parts.append(f"lowers its level from {old.get('level', 'error')} to {new['level']}")
+    return (": " + "; ".join(parts)) if parts else ""
 
 
 def _stamp(m: dict | None, src: str) -> dict:
@@ -662,60 +682,67 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
     for name, a in r.aliases["fields"].items():
         if name in all_fields:
             r.add("PROFILE_DUPLICATE_ID", a["source"], f"alias '{name}' is named like a field declared by {all_fields[name]}")
-    # 2. families
+    # 2. by_type, a type before its subtypes (then layer order), so the order of declaration does not matter
+    entries = [(lay.source, tid, e or {}) for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
+    entries.sort(key=lambda x: len(ancestors(r, x[1])))
+    for src, tid, e in entries:
+        cur = type_in_force(r, tid)
+        where = f"by_type.{tid}"
+        _check_lowering(r, where, src, e, cur["required"], cur["fixed"], cur["forbidden"], cur["fields"])
+        for fid in (e.get("values") or {}):
+            fd = cur["fields"].get(fid)
+            if fd is None:
+                r.add("PROFILE_INVALID", src, f"{where}.values: '{tid}' has no field '{fid}'")
+            elif fd.get("type") != "enum":
+                r.add("PROFILE_REDEFINED", src,
+                      f"{where}.values: '{fid}' is a {fd.get('type')} ({fd['source']}); values turn it into an enum")
+        slot = r.by_type.setdefault(tid, {"required": {}, "fixed": {}, "forbidden": {}, "values": {}})
+        _raise_into(slot["required"], {k: {**q, "source": src} for k, q in _req_map(e.get("required")).items()
+                                       if not q.get("optional")})
+        _raise_into(slot["fixed"], _stamp(e.get("fixed"), src))
+        _raise_into(slot["forbidden"], _stamp(e.get("forbidden"), src))
+        for fid, vals in (e.get("values") or {}).items():
+            fd = cur["fields"].get(fid)
+            if fd is not None and fd.get("type") == "enum":
+                slot["values"].setdefault(fid, [])
+                slot["values"][fid] += [{"value": v, "source": src} for v in vals]
+    # 3. families, enclosing before nested (then layer order). A family is narrower than the types it
+    # covers (all of them when it names none), so it never loosens what they, their by_type or an
+    # enclosing family require.
+    fams: list[tuple[str, str, dict]] = []
+    declared: dict = {}
     for lay in layers:
         for dr, f in (lay.data.get("families") or {}).items():
-            f = f or {}
-            if dr in r.families:
-                r.add("PROFILE_DUPLICATE_ID", lay.source, f"family '{dr}' declared by {r.families[dr]['source']} and by {lay.source}")
+            if dr in declared:
+                r.add("PROFILE_DUPLICATE_ID", lay.source, f"family '{dr}' declared by {declared[dr]} and by {lay.source}")
                 continue
-            enclosing = [x for x in r.families.values() if dr.startswith(x["dir"])]
-            req_in: dict = {}
-            fixed_in, forb_in = dict(r.fixed), dict(r.forbidden)
-            for x in enclosing:
-                req_in.update(x["required"])
-                fixed_in.update(x["fixed"])
-                forb_in.update(x["forbidden"])
-            fields_in: dict = {}
-            for t in (f.get("types") or list(r.types)):
-                fields_in.update(type_in_force(r, t)["fields"])
-                if f.get("types"):
-                    req_in.update({k: v for k, v in type_in_force(r, t)["required"].items() if k not in req_in})
-            _check_lowering(r, f"family {dr}", lay.source, f, req_in, fixed_in, forb_in, fields_in)
-            r.families[dr] = {"dir": dr, "types": f.get("types"),
-                              "required": {k: {**e, "source": lay.source} for k, e in _req_map(f.get("required")).items()
-                                           if not e.get("optional")},
-                              "fixed": _stamp(f.get("fixed"), lay.source), "forbidden": _stamp(f.get("forbidden"), lay.source),
-                              "source": lay.source}
-    # 3. by_type
-    for lay in layers:
-        for tid, e in (lay.data.get("by_type") or {}).items():
-            e = e or {}
-            cur = type_in_force(r, tid)
-            where = f"by_type.{tid}"
-            _check_lowering(r, where, lay.source, e, cur["required"], cur["fixed"], cur["forbidden"], cur["fields"])
-            for fid, vals in (e.get("values") or {}).items():
-                fd = cur["fields"].get(fid)
-                if fd is None:
-                    r.add("PROFILE_INVALID", lay.source, f"{where}.values: '{tid}' has no field '{fid}'")
-                    continue
-                if fd.get("type") != "enum":
-                    r.add("PROFILE_REDEFINED", lay.source,
-                          f"{where}.values: '{fid}' is a {fd.get('type')} ({fd['source']}); values turn it into an enum")
-            slot = r.by_type.setdefault(tid, {"required": {}, "fixed": {}, "forbidden": {}, "values": {}})
-            for k, q in _req_map(e.get("required")).items():
-                if q.get("optional"):
-                    continue
-                if k not in slot["required"] or RANK[_lvl(q)] > RANK[_lvl(slot["required"][k])]:
-                    slot["required"][k] = {**q, "source": lay.source}
-            slot["fixed"].update(_stamp(e.get("fixed"), lay.source))
-            slot["forbidden"].update(_stamp(e.get("forbidden"), lay.source))
-            for fid, vals in (e.get("values") or {}).items():
-                fd = cur["fields"].get(fid)
-                if fd is None or fd.get("type") != "enum":
-                    continue
-                slot["values"].setdefault(fid, [])
-                slot["values"][fid] += [{"value": v, "source": lay.source} for v in vals]
+            declared[dr] = lay.source
+            fams.append((lay.source, dr, f or {}))
+    fams.sort(key=lambda x: x[1].count("/"))
+    for src, dr, f in fams:
+        req_in: dict = {}
+        fixed_in, forb_in = {k: dict(v) for k, v in r.fixed.items()}, {k: dict(v) for k, v in r.forbidden.items()}
+        for x in r.families.values():
+            if dr.startswith(x["dir"]):
+                _raise_into(req_in, x["required"])
+                _raise_into(fixed_in, x["fixed"])
+                _raise_into(forb_in, x["forbidden"])
+        covered = list(r.types)
+        if f.get("types"):
+            covered = [t for t in r.types if t in f["types"] or any(a in f["types"] for a in ancestors(r, t))]
+        fields_in: dict = {}
+        for t in covered:
+            ti = type_in_force(r, t)
+            fields_in.update({k: v for k, v in ti["fields"].items() if k not in fields_in})
+            _raise_into(req_in, ti["required"])
+            _raise_into(fixed_in, ti["fixed"])
+            _raise_into(forb_in, ti["forbidden"])
+        _check_lowering(r, f"family {dr}", src, f, req_in, fixed_in, forb_in, fields_in)
+        r.families[dr] = {"dir": dr, "types": f.get("types"),
+                          "required": {k: {**e, "source": src} for k, e in _req_map(f.get("required")).items()
+                                       if not e.get("optional")},
+                          "fixed": _stamp(f.get("fixed"), src), "forbidden": _stamp(f.get("forbidden"), src),
+                          "source": src}
 
 
 # --------------------------------------------------------------------------
@@ -730,7 +757,8 @@ def misplaced(docs: list[Doc], r: Resolved) -> list[dict]:
         if d.rel == OWN_REL or d.rel in r.extended:
             continue
         out.append({"level": "ERROR", "code": "PROFILE_MISPLACED", "path": d.rel,
-                    "message": f"a {DOMAIN_PROFILE} lives only at base/profile.md (or is read through its extends)"})
+                    "message": f"a {DOMAIN_PROFILE} lives only at base/profile.md and in the profiles it reaches "
+                               "through extends by bundle paths"})
     return out
 
 
@@ -761,7 +789,7 @@ def bundle_path(bundle: Path, arg: str | None) -> str:
 def in_force(r: Resolved, path: str = "/") -> dict:
     """Types allowed at a bundle path, each one's fields and requirements, rules and aliases, with sources."""
     d = path if path.endswith("/") else posixpath.dirname(path) + "/"
-    fams = [f for f in r.families.values() if d.startswith(f["dir"])]
+    fams = sorted((f for f in r.families.values() if d.startswith(f["dir"])), key=lambda f: f["dir"].count("/"))
     allowed = list(r.types)
     for f in fams:
         if f["types"]:
@@ -773,10 +801,8 @@ def in_force(r: Resolved, path: str = "/") -> dict:
     for t in allowed:
         fi = type_in_force(r, t)
         for f in fams:
-            fi["required"].update({k: v for k, v in f["required"].items()
-                                   if k not in fi["required"] or RANK[_lvl(v)] > RANK[_lvl(fi["required"][k])]})
-            fi["fixed"].update(f["fixed"])
-            fi["forbidden"].update(f["forbidden"])
+            for key in ("required", "fixed", "forbidden"):
+                _raise_into(fi[key], f[key])
         types[t] = {"source": r.types[t]["source"], "extends": r.types[t].get("extends"), **fi}
     return {"path": path, "sources": r.sources, "families": [{"dir": f["dir"], "types": f["types"], "source": f["source"]}
                                                              for f in fams],
@@ -816,6 +842,8 @@ def format_in_force(info: dict) -> str:
         lines.append(f"validator {v['name']}: {v['command']} (not run here)  [{v['source']}]")
     for f in info["findings"]:
         lines.append(f"{f['level']:5} {f['code']:22} {f['path']}: {f['message']}")
+    for n in info.get("notices") or []:
+        lines.append(f"NOTICE {n}")
     return "\n".join(lines)
 
 
@@ -1010,10 +1038,8 @@ def test_extends_url_is_unreadable_and_names_the_missing_support(tmp_path):
 def test_missing_reference_or_unresolvable_commit_is_unreadable(tmp_path):
     k = _bundle(tmp_path / "a", "extends: [/base/shared/missing.md]\n")
     assert "does not exist" in _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")["message"]
-    k = _bundle(tmp_path / "nogit", 'extends: ["profiles/acme.md@abc1234"]\n')
-    reader_r = load_profile(k, builtin=_builtin(tmp_path))
-    if _Reader(k, Resolved()).toplevel() is None:
-        assert "not inside a git repository" in _one(reader_r, "PROFILE_UNREADABLE")["message"]
+    k = _bundle(tmp_path / "out", "extends: [/../outside.md]\n")
+    assert "the path leaves the bundle" in _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")["message"]
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q")
@@ -1025,6 +1051,17 @@ def test_missing_reference_or_unresolvable_commit_is_unreadable(tmp_path):
     assert "cannot resolve commit abc1234" in _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")["message"]
     (k / OWN_REL).write_text(_profile_doc(f'extends: ["profiles/acme.md@{sha}"]\n'), encoding="utf-8")
     assert "does not exist at commit" in _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")["message"]
+
+
+def test_pinned_reference_outside_a_git_repository_is_unreadable(tmp_path, monkeypatch):
+    import pytest
+
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))  # git does not look above tmp_path
+    k = _bundle(tmp_path / "nogit", 'extends: ["profiles/acme.md@abc1234"]\n')
+    if _Reader(k, Resolved()).toplevel() is not None:
+        pytest.skip(f"{tmp_path} is inside a git work tree even with GIT_CEILING_DIRECTORIES set")
+    f = _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")
+    assert "not inside a git repository" in f["message"]
 
 
 def test_pinned_blob_missing_from_a_partial_clone_is_unreadable_and_never_fetched(tmp_path):
@@ -1078,7 +1115,8 @@ def test_git_without_no_lazy_fetch_makes_a_pinned_profile_unreadable(tmp_path, m
 
 def test_same_id_from_two_sources_is_a_duplicate_naming_both(tmp_path):
     shared = _profile_doc("types:\n  Contract: { extends: Term }\nfamilies:\n  /base/clients/: {}\n"
-                          "rules:\n  - { name: r1, when: { type: Term }, require: [tags] }\naliases:\n  types: { Contrato: Contract }\n")
+                          "rules:\n  - { name: r1, when: { type: Term }, require: [tags] }\naliases:\n  types: { Contrato: Contract }\n"
+                          "  values: [{ from: { ingerido: true }, to: { distillation_status: distilled } }]\n")
     cases = {
         "type": "types:\n  Contract: { extends: Term }\n",
         "standard type declared again": "types:\n  Knowledge Fragment: {}\n",
@@ -1086,6 +1124,8 @@ def test_same_id_from_two_sources_is_a_duplicate_naming_both(tmp_path):
         "rule": "rules:\n  - { name: r1, when: { type: Term }, require: [title] }\n",
         "alias": "aliases:\n  types: { Contrato: Contract }\n",
         "alias named like a type": "aliases:\n  types: { Policy: Contract }\n",
+        "value alias": "aliases:\n  values: [{ from: { ingerido: true }, to: { distillation_status: pending } }]\n",
+        "alias named like a field": "aliases:\n  fields: { owner: client }\n",
     }
     for n, (case, own) in enumerate(cases.items()):
         k = _bundle(tmp_path / str(n), "extends: [/base/shared/profile.md]\n" + own,
@@ -1093,7 +1133,7 @@ def test_same_id_from_two_sources_is_a_duplicate_naming_both(tmp_path):
         f = _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_DUPLICATE_ID")
         if case == "standard type declared again":
             assert "built-in" in f["message"] and OWN_REL in f["message"], f
-        elif case == "alias named like a type":
+        elif case in ("alias named like a type", "alias named like a field"):
             assert "built-in" in f["message"] and f["path"] == OWN_REL, f
         else:
             assert "base/shared/profile.md" in f["message"] and OWN_REL in f["message"], (case, f)
@@ -1111,12 +1151,73 @@ def test_changing_an_inherited_item_through_an_adding_key_is_redefined(tmp_path)
         "by_type gives values to a non-enum": "by_type:\n  System: { values: { owner: [nobody] } }\n",
         "family lowers a level": "fixed:\n  okf_lang: { value: en }\nfamilies:\n  /base/x/: { fixed: { okf_lang: { value: en, level: warn } } }\n",
         "family makes a field optional": "families:\n  /base/systems/: { types: [System], required: { owner: false } }\n",
+        "by_type changes a fixed value": "fixed:\n  okf_lang: { value: en }\nby_type:\n  Term: { fixed: { okf_lang: { value: es } } }\n",
+        "by_type lowers a forbidden key":
+            "forbidden:\n  draft: { reason: r }\nby_type:\n  Term: { forbidden: { draft: { reason: r, level: warn } } }\n",
+    }
+    expected = {
+        "by_type changes a field type": "by_type.System: declares field 'owner' again, declared by built-in: changes its type from actor to string",
+        "by_type removes an enum value": "by_type.Open Question: declares field 'question_status' again, declared by built-in: removes value(s) dropped",
+        "by_type changes a fixed value": "by_type.Term: fixes 'okf_lang' to 'es', fixed to 'en' by base/profile.md",
+        "by_type lowers a forbidden key": "by_type.Term: lowers forbidden 'draft' from error (by base/profile.md)",
     }
     for n, (case, own) in enumerate(cases.items()):
         f = _one(load_profile(_bundle(tmp_path / str(n), own), builtin=_builtin(tmp_path)), "PROFILE_REDEFINED")
         assert f["path"] == OWN_REL, (case, f)
+        if case in expected:
+            assert expected[case] in f["message"], (case, f)
     # raising a level and adding a requirement are additions, not redefinitions
     ok = "by_type:\n  Open Question: { required: { owner: { level: error } }, forbidden: { draft_notes: {} } }\n"
+    assert load_profile(_bundle(tmp_path / "ok", ok), builtin=_builtin(tmp_path)).findings == []
+
+
+def _swap(a: str, b: str) -> list[str]:
+    return [a + b, b + a]
+
+
+def test_nested_families_and_by_type_give_the_same_result_in_either_order(tmp_path):
+    inner_low = "  /base/a/b/: { forbidden: { x: { reason: r, level: warn } } }\n"
+    outer_high = "  /base/a/: { forbidden: { x: { reason: r } } }\n"
+    for n, fams in enumerate(_swap(inner_low, outer_high)):
+        r = load_profile(_bundle(tmp_path / f"f{n}", "families:\n" + fams), builtin=_builtin(tmp_path))
+        assert "lowers forbidden 'x'" in _one(r, "PROFILE_REDEFINED")["message"], fams
+        assert _lvl(in_force(r, "/base/a/b/")["types"]["Term"]["forbidden"]["x"]) == "error", fams
+    inner_high = "  /base/a/b/: { forbidden: { x: { reason: r } }, fixed: { okf_lang: { value: en } } }\n"
+    outer_low = "  /base/a/: { forbidden: { x: { reason: r, level: warn } }, fixed: { okf_lang: { value: en, level: warn } } }\n"
+    for n, fams in enumerate(_swap(inner_high, outer_low)):
+        r = load_profile(_bundle(tmp_path / f"g{n}", "families:\n" + fams), builtin=_builtin(tmp_path))
+        assert r.findings == [], fams
+        term = in_force(r, "/base/a/b/")["types"]["Term"]
+        assert _lvl(term["forbidden"]["x"]) == "error" and _lvl(term["fixed"]["okf_lang"]) == "error", fams
+    req_low = "  /base/a/b/: { required: { tags: { level: warn } } }\n"
+    req_high = "  /base/a/: { required: [tags] }\n"
+    for n, fams in enumerate(_swap(req_low, req_high)):
+        r = load_profile(_bundle(tmp_path / f"r{n}", "families:\n" + fams), builtin=_builtin(tmp_path))
+        assert "lowers 'tags' from error" in _one(r, "PROFILE_REDEFINED")["message"], fams
+    sub = "types:\n  Client Meeting: { extends: Knowledge Fragment }\nby_type:\n"
+    sub_low = "  Client Meeting: { required: { tags: { level: warn } } }\n"
+    base_high = "  Knowledge Fragment: { required: [tags] }\n"
+    for n, bt in enumerate(_swap(sub_low, base_high)):
+        r = load_profile(_bundle(tmp_path / f"b{n}", sub + bt), builtin=_builtin(tmp_path))
+        assert "by_type.Client Meeting: lowers 'tags'" in _one(r, "PROFILE_REDEFINED")["message"], bt
+
+
+def test_a_family_cannot_loosen_what_a_type_or_by_type_requires(tmp_path):
+    cases = {
+        "family without types makes a type requirement optional": "families:\n  /base/x/: { required: { owner: false } }\n",
+        "family without types lowers a type requirement": "families:\n  /base/x/: { required: { owner: { level: warn } } }\n",
+        "family lowers a by_type requirement":
+            "by_type:\n  System: { required: [tags] }\nfamilies:\n  /base/x/: { types: [System], required: { tags: { level: warn } } }\n",
+        "family makes a by_type requirement optional":
+            "by_type:\n  System: { required: [tags] }\nfamilies:\n  /base/x/: { types: [System], required: { tags: false } }\n",
+        "family lowers a by_type forbidden key":
+            "by_type:\n  System: { forbidden: { x: { reason: r } } }\nfamilies:\n  /base/x/: { forbidden: { x: { reason: r, level: warn } } }\n",
+    }
+    for n, (case, own) in enumerate(cases.items()):
+        f = _one(load_profile(_bundle(tmp_path / str(n), own), builtin=_builtin(tmp_path)), "PROFILE_REDEFINED")
+        assert f["path"] == OWN_REL and "family /base/x/" in f["message"], (case, f)
+    # a family that only raises, or names a field no covered type requires, adds
+    ok = "families:\n  /base/x/: { required: { owner: { level: error }, tags: { level: warn } } }\n"
     assert load_profile(_bundle(tmp_path / "ok", ok), builtin=_builtin(tmp_path)).findings == []
 
 
@@ -1148,10 +1249,56 @@ def test_malformed_keys_are_invalid(tmp_path):
         "list without of": "types:\n  T:\n    fields:\n      f: { type: list }\n",
         "family outside base": "families:\n  clients/: {}\n",
         "pinned to a branch": 'extends: ["profiles/acme.md@main"]\n',
+        "extends neither form": 'extends: ["profiles/acme.md"]\n',
+        "by_type adds a field": "by_type:\n  Term: { fields: { newf: { type: string } } }\n",
+        "by_type values for a missing field": "by_type:\n  Term: { values: { nope: [a] } }\n",
+        "alias for an undeclared type": "aliases:\n  types: { X: Nope }\n",
+        "type extends itself": "types:\n  A: { extends: A }\n",
     }
     for n, (case, own) in enumerate(cases.items()):
         f = _one(load_profile(_bundle(tmp_path / str(n), own), builtin=_builtin(tmp_path)), "PROFILE_INVALID")
         assert f["path"] == OWN_REL, (case, f)
+
+
+def test_a_profile_that_cannot_be_read_as_one_is_invalid(tmp_path):
+    term = "---\ntype: Term\ntitle: T\ndescription: T.\n" + _GEN + "---\n\nText.\n"
+    ext = "extends: [/base/shared/profile.md]\n"
+    cases = {
+        "extends a concept of another type": (ext, {"base/shared/profile.md": term}, "base/shared/profile.md",
+                                              "a profile in extends must have type: Domain Profile"),
+        "extends a file without frontmatter": (ext, {"base/shared/profile.md": "no frontmatter\n"}, "base/shared/profile.md",
+                                               "no YAML frontmatter block"),
+        "base/profile.md without frontmatter": (None, {OWN_REL: "no frontmatter\n"}, OWN_REL, "no YAML frontmatter block"),
+        "base/profile.md of another type": (None, {OWN_REL: term}, OWN_REL, "base/profile.md must have type: Domain Profile"),
+    }
+    for n, (case, (own, extra, path, msg)) in enumerate(cases.items()):
+        f = _one(load_profile(_bundle(tmp_path / str(n), own, extra=extra), builtin=_builtin(tmp_path)), "PROFILE_INVALID")
+        assert (f["path"], f["message"]) == (path, msg), (case, f)
+    broken = tmp_path / "broken.md"
+    broken.write_text(_profile_doc("types:\n  T:\n    fields:\n      f: { type: text }\n"), encoding="utf-8")
+    r = load_profile(_bundle(tmp_path / "builtin"), builtin=broken)
+    assert _one(r, "PROFILE_INVALID")["path"] == BUILTIN_LABEL and not r.builtin_file
+    assert set(r.types) == set(STANDARD_TYPE_NAMES)  # the names of §4 still apply
+    r = load_profile(_bundle(tmp_path / "cycle", "types:\n  A: { extends: B }\n  B: { extends: A }\n"), builtin=_builtin(tmp_path))
+    assert [f["message"] for f in r.findings] == ["type 'A' extends itself: A → B → A", "type 'B' extends itself: B → A → B"]
+
+
+def test_fixed_or_forbidden_redefined_across_extends(tmp_path):
+    shared = _profile_doc("fixed:\n  okf_lang: { value: en }\nforbidden:\n  draft: { reason: r }\n")
+    cases = {
+        "fixed to another value": ("fixed:\n  okf_lang: { value: es }\n", "fixes 'okf_lang' to 'es', fixed to 'en' by base/shared/profile.md"),
+        "forbidden at a lower level": ("forbidden:\n  draft: { reason: r, level: warn }\n",
+                                       "lowers forbidden 'draft' from error (by base/shared/profile.md) to warn"),
+        "fixed at a lower level": ("fixed:\n  okf_lang: { value: en, level: warn }\n",
+                                   "lowers fixed 'okf_lang' from error (by base/shared/profile.md) to warn"),
+    }
+    for n, (case, (own, msg)) in enumerate(cases.items()):
+        k = _bundle(tmp_path / str(n), "extends: [/base/shared/profile.md]\n" + own, extra={"base/shared/profile.md": shared})
+        f = _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_REDEFINED")
+        assert (f["path"], f["message"]) == (OWN_REL, msg), case
+    k = _bundle(tmp_path / "same", "extends: [/base/shared/profile.md]\nfixed:\n  okf_lang: { value: en }\n",
+                extra={"base/shared/profile.md": shared})
+    assert load_profile(k, builtin=_builtin(tmp_path)).findings == []
 
 
 def test_domain_profile_elsewhere_than_base_profile_is_misplaced(tmp_path):
@@ -1195,7 +1342,10 @@ def test_extends_cycle_is_invalid_and_names_the_cycle(tmp_path):
 def test_lint_profiles_prints_what_is_in_force_and_who_declared_it(tmp_path, capsys, monkeypatch):
     import okf_lint
 
-    k = _bundle(tmp_path, _OWN_ARCHIVED)
+    own = (_OWN_ARCHIVED.replace("    required: [tags]\n", "    required: [tags]\n"
+                                 "    forbidden: { draft_notes: { reason: drafts stay out, level: warn } }\n")
+           + "fixed:\n  okf_lang: { value: en }\n")
+    k = _bundle(tmp_path, own)
     monkeypatch.setattr(sys.modules[__name__], "BUILTIN_PATH", _builtin(tmp_path))
     monkeypatch.setattr(okf_lint, "load_profile", lambda b, **kw: load_profile(b, builtin=_builtin(tmp_path), **kw))
     assert okf_lint.main([str(k), "--profiles", "/base/clients/"]) == 0
@@ -1207,12 +1357,20 @@ def test_lint_profiles_prints_what_is_in_force_and_who_declared_it(tmp_path, cap
     assert "  field distillation_status: enum [pending, distilled, conflict, archived (base/profile.md)]" in out
     assert "  required tags (error)  [base/profile.md]" in out
     assert "  required origin (warn, code FRAGMENT_NO_FIELD)  [built-in]" in out
+    assert "  fixed okf_lang = 'en' (error)  [base/profile.md]" in out
+    assert "  forbidden draft_notes (warn)  [base/profile.md]" in out
     assert "rule distilled-names-client" in out and "alias (type) Reunión con cliente → Client Meeting" in out
     assert okf_lint.main([str(k), "--profiles", str(k / "base" / "clients"), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["path"] == "/base/clients/" and data["types_allowed"] == ["Knowledge Fragment", "Term", "Client Meeting"]
     assert data["types"]["Client Meeting"]["fields"]["client"]["source"] == OWN_REL
     assert data["aliases"]["fields"]["cliente"] == {"to": "client", "source": OWN_REL}
+    for t in data["types_allowed"]:
+        assert data["types"][t]["fixed"]["okf_lang"] == {"value": "en", "source": OWN_REL}, t
+        assert data["types"][t]["forbidden"]["draft_notes"] == {"reason": "drafts stay out", "level": "warn",
+                                                                "source": OWN_REL}, t
+    assert okf_lint.main([str(k), "--profiles", "/base/", "--json"]) == 0  # the family's forbidden applies only under it
+    assert "draft_notes" not in json.loads(capsys.readouterr().out)["types"]["Term"]["forbidden"]
     assert okf_lint.main([str(k), "--profiles", "--no-profile"]) == 2
 
 

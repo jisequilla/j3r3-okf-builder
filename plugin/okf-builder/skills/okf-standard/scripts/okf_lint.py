@@ -55,7 +55,8 @@ from okf_common import (  # noqa: E402
     to_dt,
     walk_bundle,
 )
-from okf_profile import IGNORED_20_NOTICE, bundle_path, format_in_force, ignored_in_20, in_force, load_profile, misplaced  # noqa: E402
+from okf_profile import (IGNORED_20_NOTICE, Resolved, bundle_path, format_in_force, ignored_in_20, in_force,  # noqa: E402
+                         load_profile, misplaced)
 
 
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
@@ -345,11 +346,12 @@ def check_layers(docs: list[Doc], rep: Report) -> None:
                       f"profile {PROFILE_30}: {parts[0]}/ is not a layer; move it under base/")
 
 
-def check_domain_profile(bundle: Path, docs: list[Doc], rep: Report) -> None:
-    """knowledge/3.0: the Domain Profile is well formed (§7 rule 14); concepts are not checked against it here."""
-    prof = load_profile(bundle, read_own=True)
-    for i in prof.findings + misplaced(docs, prof):
-        rep.add(i["level"], i["code"], i["path"], i["message"])
+def profile_structure(bundle: Path, docs: list[Doc]) -> tuple[Resolved, list[dict], list[str]]:
+    """The Domain Profile in force, its structural findings (§7 rule 14) and its notices; lint and --profiles share it."""
+    if declared_profile(bundle) == PROFILE_30:
+        prof = load_profile(bundle, read_own=True)
+        return prof, prof.findings + misplaced(docs, prof), []
+    return load_profile(bundle, read_own=False), [], [IGNORED_20_NOTICE.format(rel=rel) for rel in ignored_in_20(docs)]
 
 
 def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Report, str, str]:
@@ -363,9 +365,10 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
         rep.profile_outdated = pname == PROFILE_20
         if declared == PROFILE_30:
             check_layers(docs, rep)
-            check_domain_profile(bundle, docs, rep)
-        else:
-            rep.notices += [IGNORED_20_NOTICE.format(rel=rel) for rel in ignored_in_20(docs)]
+        _, findings, notices = profile_structure(bundle, docs)
+        for i in findings:
+            rep.add(i["level"], i["code"], i["path"], i["message"])
+        rep.notices += notices
 
     detected, origin = detect_version(bundle, docs)
     if version == "auto":
@@ -431,10 +434,10 @@ def main(argv=None) -> int:
             print("ERROR: --profiles lists the Domain Profile and --no-profile turns every one off; pass one of them",
                   file=sys.stderr)
             return 2
-        prof = load_profile(bundle)
-        info = in_force(prof, bundle_path(bundle, args.profiles))
+        prof, findings, notices = profile_structure(bundle, walk_bundle(bundle))
+        info = {**in_force(prof, bundle_path(bundle, args.profiles)), "findings": findings, "notices": notices}
         print(json.dumps(info, ensure_ascii=False, indent=2, default=str) if args.json else format_in_force(info))
-        return 1 if prof.findings else 0
+        return 1 if findings else 0
 
     rep, version, origin = lint(bundle, profile=not args.no_profile, version=args.okf_version)
     n_docs = len([d for d in walk_bundle(bundle) if not d.is_reserved])
@@ -677,6 +680,60 @@ def test_20_bundle_has_no_layer_check(tmp_path):
                                 encoding="utf-8")
     rep, _, _ = lint(k)
     assert not [i for i in rep.items if i["code"] == "PROFILE_OUTSIDE_LAYER"]
+
+
+def _domain_profile(keys: str) -> str:
+    return ("---\ntype: Domain Profile\ntitle: Domain Profile\ndescription: The taxonomy.\nstatus: draft\n" + keys
+            + _GEN + "---\n\n# What this bundle holds\n\nText.\n")
+
+
+_BROKEN_PROFILES = {
+    "PROFILE_INVALID": ("types:\n  T:\n    fields:\n      f: { type: text }\n", {}),
+    "PROFILE_DUPLICATE_ID": ("types:\n  Term: {}\n", {}),
+    "PROFILE_REDEFINED": ("types:\n  Contract:\n    extends: Term\n    fields:\n      signed_on: { type: date }\n"
+                          "  Supplier Contract:\n    extends: Contract\n    fields:\n      signed_on: { type: date }\n", {}),
+    "PROFILE_UNREADABLE": ('extends: ["https://example.com/acme/profile.md"]\n', {}),
+    "PROFILE_MISPLACED": ("types: {}\n", {"base/other/profile.md": "types: {}\n"}),
+}
+
+
+def test_lint_and_profiles_report_each_structural_finding_of_the_domain_profile(tmp_path, capsys):
+    import json as _json
+
+    for code, (keys, extra) in _BROKEN_PROFILES.items():
+        (tmp_path / code).mkdir()
+        k = _bundle_30(tmp_path / code)
+        for rel, text in {"base/profile.md": keys, **extra}.items():
+            (k / rel).parent.mkdir(parents=True, exist_ok=True)
+            (k / rel).write_text(_domain_profile(text), encoding="utf-8")
+        rep, _, _ = lint(k)
+        assert ("ERROR", code) in {(i["level"], i["code"]) for i in rep.items}, (code, rep.items)
+        capsys.readouterr()
+        assert main([str(k)]) == 1, code
+        assert f"ERROR {code}" in capsys.readouterr().out, code
+        assert main([str(k), "--json"]) == 1, code
+        assert code in {i["code"] for i in _json.loads(capsys.readouterr().out)["findings"]}, code
+        # --profiles reports the same structural findings, so the two agree on the exit code
+        assert main([str(k), "--profiles"]) == 1, code
+        assert f"ERROR {code}" in capsys.readouterr().out, code
+        assert main([str(k), "--profiles", "--json"]) == 1, code
+        found = {(i["code"], i["path"]) for i in _json.loads(capsys.readouterr().out)["findings"]}
+        assert found == {(i["code"], i["path"]) for i in rep.items if i["code"].startswith("PROFILE_")}, code
+
+
+def test_profiles_in_a_20_bundle_gives_the_ignore_notice(tmp_path, capsys):
+    import json as _json
+
+    k = _fragment_bundle(tmp_path, _FRAGMENT_FIELDS)
+    (k / "base").mkdir()
+    (k / "base" / "profile.md").write_text(_domain_profile("types:\n  T:\n    fields:\n      f: { type: text }\n"),
+                                           encoding="utf-8")
+    capsys.readouterr()
+    assert main([str(k), "--profiles"]) == 0
+    assert "NOTICE Domain Profile base/profile.md ignored" in capsys.readouterr().out
+    assert main([str(k), "--profiles", "--json"]) == 0
+    data = _json.loads(capsys.readouterr().out)
+    assert data["findings"] == [] and data["notices"] == [IGNORED_20_NOTICE.format(rel="base/profile.md")]
 
 
 def test_30_projections_are_skipped(tmp_path, capsys):
