@@ -8,9 +8,11 @@
 Usage:
     uv run okf_profile.py [path/to/bundle] [--json]      # the structural findings and the sources in force
     uv run okf_lint.py <bundle> --profiles [<path>]      # what is in force at a path, and which source declared it
+    uv run okf_profile.py --check-builtin <OKF-STANDARD.md>   # the built-in profile against the §4 type table
 
 Layers merge from general to specific: the built-in Domain Profile
-(<skills>/okf-standard/profiles/knowledge-3.0.md), each profile `extends` names
+(<skills>/okf-standard/profiles/knowledge-3.0.md, or the copy an exported
+package inlines in BUILTIN_TEXT), each profile `extends` names
 in order (depth first), the bundle's own base/profile.md, then `families`, then
 `by_type`. References are read locally only: a bundle path (`/base/...`) from
 the bundle's working tree, `<repo-path>@<commit>` with `git show` from the
@@ -49,8 +51,10 @@ BY_TYPE_KEYS = {"required", "fixed", "forbidden", "values", "fields"}
 DOMAIN_PROFILE = "Domain Profile"
 OWN_REL = "base/profile.md"
 BUILTIN_LABEL = "<skills>/okf-standard/profiles/knowledge-3.0.md"
-# scripts/ sits beside profiles/ in okf-standard; a copy without profiles/ falls back to the names of §4
+# scripts/ sits beside profiles/ in okf-standard. A copy without profiles/ reads BUILTIN_TEXT, the copy of that
+# file an exported package inlines here (tools/export_m365.py), and without either falls back to the names of §4
 BUILTIN_PATH = Path(__file__).resolve().parent.parent / "profiles" / "knowledge-3.0.md"
+BUILTIN_TEXT: str | None = None
 STANDARD_TYPE_NAMES = ("Project", "Architecture View", "Architecture Decision", "Term", "Glossary", "System", "API",
                        "Dataset", "Table", "Metric", "Attested Computation", "Runbook", "Playbook", "Policy",
                        "Reference", "Knowledge Fragment", "Open Question", "Conflict Log", DOMAIN_PROFILE, "Log")
@@ -316,7 +320,7 @@ class Resolved:
     aliases: dict = field(default_factory=lambda: {"types": {}, "fields": {}, "values": []})
     findings: list = field(default_factory=list)
     has_own: bool = False                            # base/profile.md is in force (3.0, not deprecated)
-    builtin_file: bool = False                       # the built-in layer came from its file, not the §4 names
+    builtin_file: bool = False                       # the built-in layer came from its file or its inlined copy
     extended: set = field(default_factory=set)       # bundle rels of the working-tree profiles extends reaches
 
     def add(self, code: str, path: str, msg: str) -> None:
@@ -454,15 +458,23 @@ class _Reader:
         self.layers.append(Layer(label, fm))
 
 
+def builtin_text(builtin: Path | None = None) -> str | None:
+    """The built-in Domain Profile: the given file; by default its file, else the inlined copy."""
+    path = BUILTIN_PATH if builtin is None else builtin
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return BUILTIN_TEXT if builtin is None else None
+
+
 def load_profile(bundle: Path, read_own: bool | None = None, builtin: Path | None = None) -> Resolved:
     """Compose the Domain Profile of a bundle. read_own defaults to: the bundle is knowledge/3.0."""
     r = Resolved()
     if read_own is None:
         read_own = declared_profile(bundle) == PROFILE_30
-    builtin = BUILTIN_PATH if builtin is None else builtin
+    text = builtin_text(builtin)
     layers: list[Layer] = []
-    if builtin.is_file():
-        fm, err = _fm_of(builtin.read_text(encoding="utf-8"))
+    if text is not None:
+        fm, err = _fm_of(text)
         errs = [err] if fm is None else validate_schema(fm)
         for e in errs:
             r.add("PROFILE_INVALID", BUILTIN_LABEL, e)
@@ -513,10 +525,12 @@ def _lvl(e: dict) -> str:
 
 
 def _raise_into(dst: dict, src: dict) -> None:
-    """Combine requirements, fixed or forbidden keys: the highest level wins; on a tie the first one stays."""
+    """Combine requirements, fixed or forbidden keys: the highest level wins; on a tie the first one stays.
+    A raised entry without a code keeps the code it raises, so lint reports it under the same code."""
     for k, e in src.items():
         if k not in dst or RANK[_lvl(e)] > RANK[_lvl(dst[k])]:
-            dst[k] = dict(e)
+            kept = {"code": dst[k]["code"]} if k in dst and "code" in dst[k] and "code" not in e else {}
+            dst[k] = {**kept, **e}
 
 
 def ancestors(r: Resolved, t: str) -> list[str]:
@@ -528,6 +542,11 @@ def ancestors(r: Resolved, t: str) -> list[str]:
         seen.add(cur)
         cur = r.types[cur].get("extends")
     return out
+
+
+def is_a(r: Resolved, t: str, base: str) -> bool:
+    """t is base or a type that extends it."""
+    return t == base or base in ancestors(r, t)
 
 
 def _subtypes(r: Resolved, t: str) -> list[str]:
@@ -847,11 +866,84 @@ def format_in_force(info: dict) -> str:
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------
+# The built-in profile against the standard's §4 table (make test [7])
+# --------------------------------------------------------------------------
+def _section_4_rows(standard_text: str) -> list[list[str]]:
+    m = re.search(r"^## 4\. .*?$(.*?)^### 4\.1 ", standard_text, re.M | re.S)
+    rows, body = [], False
+    for line in (m.group(1) if m else "").splitlines():
+        if line.startswith("|---"):
+            body = True
+        elif body and line.startswith("| `"):
+            rows.append([c.strip() for c in line.strip().strip("|").split("|")])
+    return rows
+
+
+def _extra_fields(description: str) -> list[str]:
+    """The field names after 'Extra fields:' or 'Requires', outside parentheses, up to the next 'Body:'."""
+    flat, depth = "", 0
+    for ch in description:
+        depth += ch == "("
+        if depth == 0:
+            flat += ch
+        depth -= ch == ")" and depth > 0
+    out = []
+    for m in re.finditer(r"(?:Extra fields:|Requires)(.*?)(?:Body:|$)", flat):
+        out += re.findall(r"`([a-z][a-z0-9_]*)`", m.group(1))
+    return out
+
+
+def standard_types(standard_text: str) -> dict:
+    """type → { directory, fields } from the §4 table: shared rows split, root as /, a file or — as no directory."""
+    out = {}
+    for row in _section_4_rows(standard_text):
+        names = re.findall(r"`([^`]+)`", row[0])
+        cell = row[1]
+        path = re.fullmatch(r"`([^`]+/)`(?:\s*\(.*\))?", cell)
+        directory = "/" if cell.startswith("root") else ("/" + path.group(1) if path else None)
+        for n in names:
+            out[n] = {"directory": directory, "fields": sorted(_extra_fields(row[2]))}
+    return out
+
+
+def check_builtin(standard: Path, builtin: Path | None = None) -> list[str]:
+    """Every §4 type has an entry in the built-in profile, with its usual directory and extra fields, and no other."""
+    text = builtin_text(builtin)
+    fm, err = _fm_of(text) if text is not None else (None, "the built-in profile cannot be read")
+    if fm is None:
+        return [err]
+    want = standard_types(standard.read_text(encoding="utf-8"))
+    have = fm.get("types") or {}
+    problems = [f"§4 type '{t}' has no entry in the built-in profile" for t in want if t not in have]
+    problems += [f"built-in type '{t}' is not in the §4 table" for t in have if t not in want]
+    for t in (x for x in want if x in have):
+        d = have[t] or {}
+        if d.get("directory") != want[t]["directory"]:
+            problems.append(f"{t}: directory {d.get('directory')!r}, §4 says {want[t]['directory']!r}")
+        fields = sorted((d.get("fields") or {}))
+        if fields != want[t]["fields"]:
+            problems.append(f"{t}: fields {', '.join(fields) or '-'}, §4 names {', '.join(want[t]['fields']) or '-'}")
+    if not want:
+        problems.append(f"{standard}: no §4 type table found")
+    return problems
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
     ap.add_argument("--json", action="store_true", help="JSON output")
+    ap.add_argument("--check-builtin", metavar="STANDARD",
+                    help="check the built-in Domain Profile against the §4 type table of STANDARD (OKF-STANDARD.md)")
     args = ap.parse_args(argv)
+    if args.check_builtin:
+        problems = check_builtin(Path(args.check_builtin))
+        for p in problems:
+            print(f"ERROR {p}")
+        if not problems:
+            print(f"built-in Domain Profile matches §4 of {args.check_builtin}: "
+                  f"{len(standard_types(Path(args.check_builtin).read_text(encoding='utf-8')))} types")
+        return 1 if problems else 0
     bundle = Path(args.bundle).resolve() if args.bundle else find_bundle()
     if bundle is None or not bundle.is_dir():
         print("ERROR: bundle not found (knowledge/index.md). Pass its path.", file=sys.stderr)
@@ -950,6 +1042,82 @@ def test_builtin_layer_from_file_or_names_of_section_4(tmp_path):
     assert type_in_force(r, "Knowledge Fragment")["fields"]["distillation_status"]["code"] == "BAD_DISTILLATION_STATUS"
     r = load_profile(_bundle(tmp_path / "b"), builtin=tmp_path / "missing.md")
     assert not r.builtin_file and r.findings == [] and set(STANDARD_TYPE_NAMES) == set(r.types)
+
+
+def _standard() -> Path:
+    return Path(__file__).resolve().parent.parent / "references" / "OKF-STANDARD.md"
+
+
+def test_the_shipped_builtin_profile_loads_and_matches_section_4():
+    import pytest
+
+    if not BUILTIN_PATH.is_file() or not _standard().is_file():
+        pytest.skip("okf-standard's profiles/ or references/ not beside this script")
+    r = load_profile(Path("/nonexistent"), read_own=False)
+    assert r.builtin_file and r.findings == [] and set(r.types) == set(STANDARD_TYPE_NAMES)
+    assert check_builtin(_standard()) == []
+    fragment = type_in_force(r, "Knowledge Fragment")
+    assert {k: (e["level"], e["code"]) for k, e in fragment["required"].items()} == {
+        k: ("warn", "FRAGMENT_NO_FIELD") for k in ("occurred_at", "origin", "participants", "distillation_status")}
+    assert [x["code"] for x in r.rules] == ["QUESTION_NO_ANSWER"]
+
+
+def test_check_builtin_names_each_type_or_field_that_differs_from_section_4(tmp_path):
+    std = tmp_path / "OKF-STANDARD.md"
+    std.write_text("## 4. Profile type vocabulary\n\n| `type` | Usual directory | Description |\n|---|---|---|\n"
+                   "| `Term` / `Glossary` | `base/domain/` | A term. |\n"
+                   "| `Knowledge Fragment` | `fragments/` | Extra fields: `occurred_at` (`YYYY-MM-DD`), `origin`, "
+                   "`participants` (list), `distillation_status` (`pending` / `distilled`). Body: `# Record`. |\n"
+                   "| `Conflict Log` | root (`conflict-log.md`) | The register. |\n| `Log` | — | log.md. |\n\n### 4.1 Next\n",
+                   encoding="utf-8")
+    assert standard_types(std.read_text(encoding="utf-8"))["Conflict Log"] == {"directory": "/", "fields": []}
+    assert standard_types(std.read_text(encoding="utf-8"))["Log"] == {"directory": None, "fields": []}
+    problems = check_builtin(std, _builtin(tmp_path))
+    assert "§4 type 'Glossary' has no entry in the built-in profile" in problems
+    assert "§4 type 'Conflict Log' has no entry in the built-in profile" in problems
+    assert "built-in type 'Open Question' is not in the §4 table" in problems
+    assert "Knowledge Fragment: directory 'fragments/', §4 says '/fragments/'" in problems
+    assert "Term: directory None, §4 says '/base/domain/'" in problems
+    assert not any(p.startswith("Knowledge Fragment: fields") for p in problems)  # parentheses are not fields
+    assert main(["--check-builtin", str(std)]) == 1
+
+
+def test_inlined_copy_is_read_when_the_file_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], "BUILTIN_PATH", tmp_path / "missing.md")
+    monkeypatch.setattr(sys.modules[__name__], "BUILTIN_TEXT", _STAND_IN)
+    r = load_profile(_bundle(tmp_path))
+    assert r.builtin_file and r.findings == [] and "Open Question" in r.types and "Glossary" not in r.types
+    # a built-in file named by the caller is never replaced by the inlined copy
+    assert not load_profile(_bundle(tmp_path / "b"), builtin=tmp_path / "missing.md").builtin_file
+
+
+def test_the_builtin_file_wins_over_the_inlined_copy(tmp_path, monkeypatch):
+    shipped = tmp_path / "profiles" / "knowledge-3.0.md"
+    shipped.parent.mkdir()
+    shipped.write_text("---\ntype: Domain Profile\ntitle: B\ndescription: B.\ntypes:\n  Glossary: {}\n  Domain Profile: {}\n"
+                       "---\n\n# Why\n\nText.\n", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "BUILTIN_PATH", shipped)
+    monkeypatch.setattr(sys.modules[__name__], "BUILTIN_TEXT", _STAND_IN)
+    assert builtin_text() == shipped.read_text(encoding="utf-8")
+    r = load_profile(_bundle(tmp_path))
+    assert r.builtin_file and r.findings == [] and set(r.types) == {"Glossary", "Domain Profile"}
+
+
+def test_check_builtin_names_a_type_whose_fields_differ_from_section_4(tmp_path):
+    std = tmp_path / "OKF-STANDARD.md"
+    std.write_text("## 4. Profile type vocabulary\n\n| `type` | Usual directory | Description |\n|---|---|---|\n"
+                   "| `Open Question` | `base/questions/` | Extra fields: `owner`, `asked_in` (a path). |\n\n### 4.1 Next\n",
+                   encoding="utf-8")
+    problems = check_builtin(std, _builtin(tmp_path))
+    assert "Open Question: fields owner, question_status, §4 names asked_in, owner" in problems
+
+
+def test_raising_a_coded_requirement_keeps_its_code(tmp_path):
+    k = _bundle(tmp_path, "by_type:\n  Open Question: { required: { owner: { level: error } } }\n")
+    r = load_profile(k, builtin=_builtin(tmp_path))
+    assert r.findings == []
+    owner = type_in_force(r, "Open Question")["required"]["owner"]
+    assert (owner["level"], owner["code"], owner["source"]) == ("error", "QUESTION_NO_FIELD", OWN_REL)
 
 
 def test_30_bundle_without_profile_has_only_the_builtin_layer(tmp_path, capsys):
