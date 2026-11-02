@@ -23,6 +23,10 @@ except ImportError:
     raise SystemExit(2)
 
 RESERVED = {"index.md", "log.md"}
+PROFILE_20 = "knowledge/2.0"
+PROFILE_30 = "knowledge/3.0"
+FRAGMENTS_DIR, BASE_DIR, PROJECTIONS_DIR = "fragments", "base", "projections"
+LAYER_DIRS = (FRAGMENTS_DIR, BASE_DIR, PROJECTIONS_DIR)
 ISO_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$"
 )
@@ -96,9 +100,11 @@ def load_doc(bundle: Path, path: Path) -> Doc:
 
 
 def walk_bundle(bundle: Path) -> list[Doc]:
+    """Every .md of the bundle; hidden dirs and the root projections/ (not OKF, ADR-0019) are skipped."""
     docs = []
     for root, dirs, files in os.walk(bundle):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        at_root = Path(root) == bundle
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and not (at_root and d == PROJECTIONS_DIR))
         for f in sorted(files):
             if f.endswith(".md"):
                 docs.append(load_doc(bundle, Path(root) / f))
@@ -167,7 +173,7 @@ CITATIONS_RE = re.compile(r"^#\s+Citations\s*$", re.M)
 SUPPORTED_VERSIONS = ("0.1", "0.2")
 
 
-def declared_version(bundle: Path) -> str | None:
+def _root_key(bundle: Path, key: str) -> str | None:
     idx = bundle / "index.md"
     if not idx.exists():
         return None
@@ -175,10 +181,33 @@ def declared_version(bundle: Path) -> str | None:
     if raw is None:
         return None
     try:
-        v = parse_yaml(raw).get("okf_version")
+        v = parse_yaml(raw).get(key)
     except Exception:  # noqa: BLE001
         return None
     return str(v) if v is not None else None
+
+
+def declared_version(bundle: Path) -> str | None:
+    return _root_key(bundle, "okf_version")
+
+
+def declared_profile(bundle: Path) -> str | None:
+    """okf_profile of the root index.md, or None."""
+    return _root_key(bundle, "okf_profile")
+
+
+def knowledge_root(bundle: Path) -> Path:
+    """Directory that holds the typed directories: base/ in knowledge/3.0, the bundle root otherwise."""
+    return bundle / BASE_DIR if declared_profile(bundle) == PROFILE_30 else bundle
+
+
+def knowledge_dirs(bundle: Path) -> list[Path]:
+    """The typed directories of the bundle (under base/ in knowledge/3.0, at the root in knowledge/2.0)."""
+    root = knowledge_root(bundle)
+    if not root.is_dir():
+        return []
+    return [p for p in sorted(root.iterdir()) if p.is_dir() and not p.name.startswith(".")
+            and not (root == bundle and p.name in LAYER_DIRS)]
 
 
 def version_signals(docs: list[Doc]) -> tuple[int, int]:

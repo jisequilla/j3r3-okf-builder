@@ -12,6 +12,8 @@ Usage:
 - Lists subdirectories with the first sentence of their own index.md, or their name.
 - Keeps the root frontmatter (okf_version, okf_profile) and any section whose
   heading starts with "# Notes" (or "# Notas").
+- Never writes into or below the root projections/ (not OKF, ADR-0019); the root
+  index lists it only if projections/index.md exists.
 - --check: writes nothing; exit 1 if any index.md would change.
 """
 from __future__ import annotations
@@ -22,9 +24,18 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from okf_common import RESERVED, find_bundle, load_doc, split_frontmatter  # noqa: E402
+from okf_common import (  # noqa: E402
+    PROFILE_30,
+    PROJECTIONS_DIR,
+    RESERVED,
+    find_bundle,
+    load_doc,
+    split_frontmatter,
+)
 
 DIR_DESCRIPTIONS = {
+    "fragments": "Records of events, distilled into the base.",
+    "base": "The project's knowledge, in typed directories.",
     "architecture": "Architecture views and principles.",
     "decisions": "Architecture decision records (ADR).",
     "domain": "Glossary and business concepts.",
@@ -103,7 +114,8 @@ def build_index(bundle: Path, d: Path) -> str:
             concepts.append((str(fm.get("type") or "Other"), fm.get("title") or p.stem,
                              fm.get("description") or "", p.name, fm.get("status")))
     subdirs = [p for p in sorted(d.iterdir()) if p.is_dir() and not p.name.startswith(".")
-               and any(q.suffix == ".md" for q in p.rglob("*.md"))]
+               and (bool(list(p.rglob("*.md"))) if not (is_root and p.name == PROJECTIONS_DIR)
+                    else (p / "index.md").is_file())]
 
     groups: dict[str, list] = {}
     for c in concepts:
@@ -115,7 +127,7 @@ def build_index(bundle: Path, d: Path) -> str:
     if is_root:
         fm_prefix, notes = existing_root_fm_and_notes(d / "index.md")
         if not fm_prefix:
-            fm_prefix = '---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n'
+            fm_prefix = f'---\nokf_version: "0.2"\nokf_profile: "{PROFILE_30}"\n---\n\n'
     else:
         _, notes = existing_root_fm_and_notes(d / "index.md")
         out.append(f"> {dir_description(d)}\n")
@@ -143,6 +155,39 @@ def build_index(bundle: Path, d: Path) -> str:
     return fm_prefix + body
 
 
+def in_projections(bundle: Path, d: Path) -> bool:
+    rel = d.resolve().relative_to(bundle.resolve()).parts
+    return bool(rel) and rel[0] == PROJECTIONS_DIR
+
+
+def index_targets(bundle: Path, sub: Path | None = None) -> list[Path]:
+    """Directories whose index.md is regenerated: `sub` (default: the bundle) and every directory below it
+    holding a .md, without hidden directories and never inside the root projections/."""
+    top = sub or bundle
+    below = [p for p in sorted(top.rglob("*")) if p.is_dir() and not any(
+        part.startswith(".") for part in p.relative_to(bundle).parts)]
+    return [d for d in [top, *below] if not in_projections(bundle, d)
+            and (d == bundle or any(q.suffix == ".md" for q in d.rglob("*.md")))]
+
+
+def regenerate(bundle: Path, targets: list[Path], check: bool = False) -> int:
+    """Write (or, with check, report) each out-of-date index.md of `targets`; return how many differ."""
+    changed = 0
+    for d in targets:
+        new = build_index(bundle, d)
+        idx = d / "index.md"
+        old = idx.read_text(encoding="utf-8") if idx.exists() else None
+        if old != new:
+            changed += 1
+            rel = idx.relative_to(bundle).as_posix()
+            if check:
+                print(f"OUT OF DATE {rel}")
+            else:
+                idx.write_text(new, encoding="utf-8")
+                print(f"WROTE {rel}")
+    return changed
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
@@ -155,23 +200,15 @@ def main(argv=None) -> int:
         print("ERROR: bundle not found (knowledge/index.md). Pass its path.", file=sys.stderr)
         return 2
 
-    targets = [bundle / args.dir] if args.dir else [bundle, *[p for p in bundle.rglob("*") if p.is_dir() and not any(
-        part.startswith(".") for part in p.relative_to(bundle).parts)]]
-    changed = 0
-    for d in targets:
-        if not any(q.suffix == ".md" for q in d.rglob("*.md")) and d != bundle:
-            continue
-        new = build_index(bundle, d)
-        idx = d / "index.md"
-        old = idx.read_text(encoding="utf-8") if idx.exists() else None
-        if old != new:
-            changed += 1
-            rel = idx.relative_to(bundle).as_posix()
-            if args.check:
-                print(f"OUT OF DATE {rel}")
-            else:
-                idx.write_text(new, encoding="utf-8")
-                print(f"WROTE {rel}")
+    if args.dir:
+        d = bundle / args.dir
+        if in_projections(bundle, d):
+            print(f"ERROR: {PROJECTIONS_DIR}/ is not OKF; okf-index does not write there.", file=sys.stderr)
+            return 2
+        targets = [d] if d == bundle or any(q.suffix == ".md" for q in d.rglob("*.md")) else []
+    else:
+        targets = index_targets(bundle)
+    changed = regenerate(bundle, targets, args.check)
     if args.check:
         print(f"{changed} index.md out of date")
         return 1 if changed else 0
@@ -218,6 +255,52 @@ def test_check_reports_then_clears(tmp_path):
     assert main([str(k), "--check"]) == 1
     main([str(k)])
     assert main([str(k), "--check"]) == 0
+
+
+def _bundle_30(tmp: Path) -> Path:
+    k = tmp / "knowledge"
+    (k / "base" / "decisions").mkdir(parents=True)
+    (k / "fragments").mkdir()
+    (k / "projections" / "deck").mkdir(parents=True)
+    (k / "index.md").write_text(f'---\nokf_version: "0.2"\nokf_profile: "{PROFILE_30}"\n---\n\n# Project\n\n_(empty)_\n',
+                                encoding="utf-8")
+    (k / "fragments" / "index.md").write_text("# fragments\n\n_(empty)_\n", encoding="utf-8")
+    (k / "base" / "decisions" / "ADR-0001-x.md").write_text(
+        "---\ntype: Architecture Decision\ntitle: X\ndescription: The X decision.\n---\n\n# Context\n", encoding="utf-8")
+    (k / "projections" / "deck" / "content.md").write_text("Not OKF.\n", encoding="utf-8")
+    return k
+
+
+def test_30_root_lists_layers_and_base_lists_typed_dirs(tmp_path):
+    k = _bundle_30(tmp_path)
+    assert main([str(k)]) == 0
+    root = (k / "index.md").read_text(encoding="utf-8")
+    assert "* [fragments](fragments/index.md) - Records of events, distilled into the base." in root
+    assert "* [base](base/index.md) - The project's knowledge, in typed directories." in root
+    assert "projections" not in root and "decisions" not in root
+    base = (k / "base" / "index.md").read_text(encoding="utf-8")
+    assert base.startswith("> The project's knowledge, in typed directories.\n")
+    assert "* [decisions](decisions/index.md) - Architecture decision records (ADR)." in base
+    assert "* [X](ADR-0001-x.md) - The X decision." in (k / "base" / "decisions" / "index.md").read_text(encoding="utf-8")
+    assert sorted(p.name for p in (k / "projections").rglob("*")) == ["content.md", "deck"]
+    assert main([str(k), "--check"]) == 0
+
+
+def test_30_projections_listed_only_with_its_index(tmp_path):
+    k = _bundle_30(tmp_path)
+    (k / "projections" / "index.md").write_text("# projections\n\n> Derived views.\n", encoding="utf-8")
+    main([str(k)])
+    assert "* [projections](projections/index.md) - Derived views." in (k / "index.md").read_text(encoding="utf-8")
+    assert (k / "projections" / "index.md").read_text(encoding="utf-8") == "# projections\n\n> Derived views.\n"
+    assert not (k / "projections" / "deck" / "index.md").exists()
+    assert main([str(k), "--dir", "projections/deck"]) == 2
+
+
+def test_default_root_frontmatter_is_30(tmp_path):
+    k = tmp_path / "knowledge"
+    (k / "base").mkdir(parents=True)
+    main([str(k)])
+    assert f'okf_profile: "{PROFILE_30}"' in (k / "index.md").read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":

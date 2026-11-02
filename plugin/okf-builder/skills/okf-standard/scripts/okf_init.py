@@ -3,13 +3,15 @@
 # requires-python = ">=3.9"
 # dependencies = ["pyyaml"]
 # ///
-"""okf_init.py — Create the knowledge/ structure of the knowledge/2.0 profile (OKF v0.2).
+"""okf_init.py — Create the knowledge/ structure of the knowledge/3.0 profile (OKF v0.2).
 
 Usage:
     uv run okf_init.py --root /path/to/repo --title "My project" \
         --description "One sentence" --actor human:jisequilla [--repo-url URL] \
         [--dirs architecture,decisions,...] [--force]
 
+Creates the three layers: fragments/ (with its index.md), base/ with one typed
+directory per --dirs entry, and projections/ (with only a .gitkeep: it is not OKF).
 Existing files are not overwritten unless --force is given. Idempotent.
 """
 from __future__ import annotations
@@ -20,12 +22,20 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from okf_common import now_iso, parse_yaml, split_frontmatter  # noqa: E402
+from okf_common import (  # noqa: E402
+    BASE_DIR,
+    FRAGMENTS_DIR,
+    PROFILE_30,
+    PROJECTIONS_DIR,
+    now_iso,
+    parse_yaml,
+    split_frontmatter,
+)
 
 _HERE = Path(__file__).resolve().parent
 TEMPLATES = _HERE.parent / "templates"   # okf-standard/scripts/ → okf-standard/templates/
 DEFAULT_DIRS = ["architecture", "decisions", "domain", "systems", "apis", "data",
-                "metrics", "computations", "runbooks", "playbooks", "policies", "references", "fragments"]
+                "metrics", "computations", "runbooks", "playbooks", "policies", "references"]
 DIR_DESC = {
     "architecture": "Architecture views and principles.",
     "decisions": "Architecture decision records (ADR).",
@@ -39,7 +49,8 @@ DIR_DESC = {
     "playbooks": "Team and business procedures.",
     "policies": "Rules, standards and compliance.",
     "references": "Mirrored external material, execution skills and attesters.",
-    "fragments": "Knowledge fragments: records of events, before and after distillation.",
+    "fragments": "Records of events, distilled into the base.",
+    "base": "The project's knowledge, in typed directories.",
     "skills": "Execution instructions (executors) for computations.",
     "attesters": "Deterministic receipt verification code.",
 }
@@ -68,7 +79,7 @@ def main(argv=None) -> int:
     ap.add_argument("--actor", required=True, help="human:<id> | process:<id> | <agent>/<version>")
     ap.add_argument("--repo-url", default="", help="repository URL for project.md")
     ap.add_argument("--tags", default="", help="comma-separated tags for project.md")
-    ap.add_argument("--dirs", default=",".join(DEFAULT_DIRS), help="comma-separated directories to create")
+    ap.add_argument("--dirs", default=",".join(DEFAULT_DIRS), help="comma-separated typed directories to create under base/")
     ap.add_argument("--force", action="store_true", help="overwrite existing files")
     ap.add_argument("--okf-version", default="0.2", choices=("0.1", "0.2"),
                     help="OKF version of the bundle (0.1 only to interoperate with older consumers)")
@@ -83,22 +94,27 @@ def main(argv=None) -> int:
         "project.md", title=args.title, one_sentence_description=args.description,
         repo_url=args.repo_url, tags=args.tags, actor=args.actor, now=now), args.force))
 
-    root_idx = ['---', f'okf_version: "{args.okf_version}"', 'okf_profile: "knowledge/2.0"', '---', '',
+    root_idx = ['---', f'okf_version: "{args.okf_version}"', f'okf_profile: "{PROFILE_30}"', '---', '',
                 '# Project', '', f'* [{args.title}](project.md) - {args.description}', '',
                 '# Subdirectories', '']
-    for d in dirs:
-        root_idx.append(f"* [{d}]({d}/index.md) - {DIR_DESC.get(d, f'Concepts in {d}.')}")
+    for d in (FRAGMENTS_DIR, BASE_DIR):
+        root_idx.append(f"* [{d}]({d}/index.md) - {DIR_DESC[d]}")
     log.append(write(k / "index.md", "\n".join(root_idx) + "\n", args.force))
 
     log.append(write(k / "log.md", render("log.md", date=date.today().isoformat()), args.force))
 
+    def empty_index(path: Path, name: str) -> None:
+        desc = DIR_DESC.get(name, f"Concepts in {name}.")
+        log.append(write(path / "index.md", f"# {name}\n\n> {desc}\n\n_(empty)_\n", args.force))
+
+    empty_index(k / FRAGMENTS_DIR, FRAGMENTS_DIR)
+    empty_index(k / BASE_DIR, BASE_DIR)
     for d in dirs:
-        desc = DIR_DESC.get(d, f"Concepts in {d}.")
-        log.append(write(k / d / "index.md", f"# {d}\n\n> {desc}\n\n_(empty)_\n", args.force))
+        empty_index(k / BASE_DIR / d, d)
         if d == "references":
             for sub in ("skills", "attesters"):
-                log.append(write(k / d / sub / "index.md",
-                                 f"# {sub}\n\n> {DIR_DESC[sub]}\n\n_(empty)_\n", args.force))
+                empty_index(k / BASE_DIR / d / sub, sub)
+    log.append(write(k / PROJECTIONS_DIR / ".gitkeep", "", args.force))
     print("\n".join(log))
     # Normalize the indexes with the same generator as okf-index
     from okf_index import main as index_main  # noqa: E402
@@ -121,8 +137,8 @@ def test_creates_profile_structure(tmp_path):
     k = tmp_path / "knowledge"
     assert (k / "project.md").is_file()
     for d in ("decisions", "policies", "references/skills", "references/attesters"):
-        assert (k / d / "index.md").is_file(), d
-    assert 'okf_profile: "knowledge/2.0"' in (k / "index.md").read_text(encoding="utf-8")
+        assert (k / "base" / d / "index.md").is_file(), d
+    assert 'okf_profile: "knowledge/3.0"' in (k / "index.md").read_text(encoding="utf-8")
     raw, _ = split_frontmatter((k / "project.md").read_text(encoding="utf-8"))
     fm = parse_yaml(raw)
     assert (fm["type"], fm["title"], fm["description"]) == ("Project", "T", "D")
@@ -134,6 +150,32 @@ def test_creates_empty_fragments_without_conflict_log(tmp_path):
     k = tmp_path / "knowledge"
     assert (k / "fragments" / "index.md").is_file()
     assert not (k / "conflict-log.md").exists()
+
+
+def test_creates_3_0_layout(tmp_path):
+    assert main(["--root", str(tmp_path), *_ARGS, "--dirs", "decisions,integrations"]) == 0
+    k = tmp_path / "knowledge"
+    assert sorted(p.name for p in k.iterdir()) == ["base", "fragments", "index.md", "log.md", "project.md",
+                                                   "projections"]
+    assert sorted(p.name for p in (k / "base").iterdir()) == ["decisions", "index.md", "integrations"]
+    assert [p.name for p in (k / "projections").iterdir()] == [".gitkeep"]
+    index = (k / "index.md").read_text(encoding="utf-8")
+    assert "* [base](base/index.md) - The project's knowledge, in typed directories." in index
+    assert "* [fragments](fragments/index.md) - Records of events, distilled into the base." in index
+    assert "projections" not in index
+    assert "* [decisions](decisions/index.md)" in (k / "base" / "index.md").read_text(encoding="utf-8")
+    assert "> The project's knowledge, in typed directories." in (k / "base" / "index.md").read_text(encoding="utf-8")
+
+
+def test_default_3_0_init_lints_clean(tmp_path):
+    from okf_lint import lint
+
+    assert main(["--root", str(tmp_path), *_ARGS]) == 0
+    k = tmp_path / "knowledge"
+    assert sorted(p.name for p in (k / "base").iterdir()) == sorted(["index.md", *DEFAULT_DIRS])
+    assert not (k / "fragments" / "fragments").exists() and not (k / "base" / "fragments").exists()
+    rep, _, _ = lint(k)
+    assert rep.items == []
 
 
 def test_does_not_overwrite_without_force(tmp_path):
