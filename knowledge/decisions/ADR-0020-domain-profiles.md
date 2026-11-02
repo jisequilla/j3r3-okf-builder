@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0020: A domain declares its own taxonomy in a Domain Profile concept, which lint and the skills read"
 description: A directory under base/ may hold a profile.md of type Domain Profile that declares the domain's types (each extending a profile type), their typed fields, the questions the domain answers, its dependencies and aliases for local names; it applies to its directory and below, and the tools read it instead of a fixed list.
 tags: [adr, standard, profile, taxonomy]
-status: draft
+status: deprecated
 adr_id: ADR-0020
-decision_status: accepted
+decision_status: superseded
+superseded_by: /decisions/ADR-0023-domain-profile-per-bundle.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T21:45:00Z }
 sources:
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }

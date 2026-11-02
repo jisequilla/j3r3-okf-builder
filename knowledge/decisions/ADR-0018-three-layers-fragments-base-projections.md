@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0018: A bundle has three layers, fragments, base and projections, in profile knowledge/3.0"
 description: The bundle separates what was said (fragments/), what is known (base/, holding the typed directories) and what is derived for a reader (projections/); moving the typed directories under base/ is a breaking change, so the profile becomes knowledge/3.0 with a migration from 2.0.
 tags: [adr, standard, profile, layers]
-status: draft
+status: deprecated
 adr_id: ADR-0018
-decision_status: accepted
+decision_status: superseded
+superseded_by: /decisions/ADR-0021-three-layers-with-open-questions.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T21:10:00Z }
 sources:
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }
