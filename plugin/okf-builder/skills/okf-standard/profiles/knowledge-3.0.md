@@ -35,15 +35,21 @@ types:
   API:
     directory: /base/apis/
     description: A contract; resource points to the OpenAPI, Proto or AsyncAPI document
+    fields:
+      owner: { type: actor, note: Who answers for the contract }
   Dataset:
     directory: /base/data/
     description: A data asset
   Table:
     directory: /base/data/
     description: A data asset
+    fields:
+      owner: { type: actor, note: Who answers for the table }
   Metric:
     directory: /base/metrics/
     description: A business definition that links to its Attested Computation
+    fields:
+      owner: { type: actor, note: Who answers for the definition }
   Attested Computation:
     directory: /base/computations/
     description: The sanctioned computation of a value, a type the OKF spec names (§10)
@@ -52,12 +58,18 @@ types:
   Runbook:
     directory: /base/runbooks/
     description: "Operational procedure: trigger, diagnosis, steps, rollback, escalation"
+    fields:
+      owner: { type: actor, note: Who answers for the procedure }
   Playbook:
     directory: /base/playbooks/
     description: Team or business procedure
+    fields:
+      owner: { type: actor, note: Who answers for the procedure }
   Policy:
     directory: /base/policies/
     description: A rule or standard
+    fields:
+      owner: { type: actor, note: Who answers for the rule }
   Reference:
     directory: /base/references/
     description: Mirrored external material or execution instructions
@@ -86,7 +98,7 @@ types:
   Log: {}
 rules:
   - { name: answered-question-names-its-answer, when: { type: Open Question, question_status: answered }, require: [answered_by], level: warn, code: QUESTION_NO_ANSWER }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T15:35:27Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T21:00:00Z }
 sources:
   - { id: types, resource: references/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }
   - { id: domain-profile, resource: references/OKF-STANDARD.md, title: "OKF standard §4.1: Domain Profile" }
@@ -103,7 +115,9 @@ The types of the standard's type vocabulary, each with its usual directory and t
 
 # What lint reports from it
 
-A field's value is checked when the field declares a `code`, and a missing field when its `required` declares one; a rule is checked when it declares a `code`. Each breach is reported under that code at its declared level, so the per-field checks of a Knowledge Fragment and an Open Question keep the codes and levels they had in code[^domain-profile]: `FRAGMENT_NO_FIELD` and `QUESTION_NO_FIELD` (warnings), `BAD_DISTILLATION_STATUS` and `BAD_QUESTION_STATUS` (errors), `BAD_ACTOR` and `BAD_ISO` (warnings). A blank value (empty text, list or map) counts as missing. Fields without a code are listed by `okf-lint --profiles` with their type and note.
+A requirement that declares a `code` is reported under that code at its declared level, so the per-field checks of a Knowledge Fragment and an Open Question keep the codes and levels they had in code[^domain-profile]: `FRAGMENT_NO_FIELD` and `QUESTION_NO_FIELD` (warnings), `BAD_DISTILLATION_STATUS` and `BAD_QUESTION_STATUS` (errors), `BAD_ACTOR` and `BAD_ISO` (warnings). These are reported in every bundle. A blank value (empty text, list or map) counts as missing.
+
+A field without a code is checked in a bundle that has a `base/profile.md`, like every item of that bundle's own profile: at its declared level, `error` when absent, under the generic code of §4.1 (`PROFILE_ENUM` for a value outside an enum, `PROFILE_FIELD_TYPE` for a value of another type), with `built-in` as its source[^domain-profile]. A bundle without a `base/profile.md` gets no finding from them. `okf-lint --profiles` lists every field with its type and note.
 
 The keys every concept may carry stay with the spec-level checks, in code, because they apply to every type, an undeclared one included[^frontmatter]: `generated` (`PROFILE_NO_GENERATED` in a 0.2 bundle, `PROFILE_NO_TIMESTAMP` for `timestamp` in a 0.1 one, `BAD_GENERATED`), `verified` (`BAD_VERIFIED`), `status` (`BAD_STATUS`), `stale_after` (`STALE`), `sources` (`BAD_SOURCES`), and the `BAD_ACTOR` and `BAD_ISO` checks of their actors and timestamps.
 
@@ -115,9 +129,13 @@ So do the checks across concepts or over a body (ADR-0026, decision 6)[^domain-p
 
 At the root of the bundle: `project.md`, exactly one, and `conflict-log.md`, zero or one, created with the first conflict[^types]. That there is one of each is checked across concepts, in code.
 
-## Architecture View, Term, Glossary, API, Dataset, Table, Metric, Runbook, Playbook, Policy, Reference
+## Architecture View, Term, Glossary, Dataset, Reference
 
-No extra fields: the common keys of §3.1 and the body headings of their templates are enough[^types]. `Term` and `Glossary`, and `Dataset` and `Table`, share a directory.
+No extra fields: the common keys of §3.1 and the body headings of their templates are enough[^types]. `Term` and `Glossary` share a directory.
+
+## API, Table, Metric, Runbook, Playbook, Policy
+
+- `owner`: who answers for the contract, the table, the definition, the procedure or the rule[^types]. It is an actor (§3.1). `Table` shares its directory with `Dataset`.
 
 ## Architecture Decision
 

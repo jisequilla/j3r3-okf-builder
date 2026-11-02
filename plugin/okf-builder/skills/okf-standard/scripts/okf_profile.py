@@ -705,6 +705,13 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
     for name, a in r.aliases["fields"].items():
         if name in all_fields:
             r.add("PROFILE_DUPLICATE_ID", a["source"], f"alias '{name}' is named like a field declared by {all_fields[name]}")
+    # a type alias in a rule's when.type or a validator's types stands for the declared type
+    for rule in r.rules:
+        if isinstance(rule.get("when"), dict) and "type" in rule["when"]:
+            rule["when"] = {**rule["when"], "type": canonical_type(r, rule["when"]["type"])}
+    for v in r.validators:
+        if v.get("types"):
+            v["types"] = [canonical_type(r, t) for t in v["types"]]
     # 2. by_type, a type before its subtypes (then layer order), so the order of declaration does not matter
     entries = [(lay.source, tid, e or {}) for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
     entries.sort(key=lambda x: len(ancestors(r, x[1])))
@@ -740,7 +747,10 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
                 r.add("PROFILE_DUPLICATE_ID", lay.source, f"family '{dr}' declared by {declared[dr]} and by {lay.source}")
                 continue
             declared[dr] = lay.source
-            fams.append((lay.source, dr, f or {}))
+            f = dict(f or {})
+            if f.get("types"):  # a type alias in a family's types stands for the declared type
+                f["types"] = [canonical_type(r, t) for t in f["types"]]
+            fams.append((lay.source, dr, f))
     fams.sort(key=lambda x: x[1].count("/"))
     for src, dr, f in fams:
         req_in: dict = {}
@@ -1630,6 +1640,18 @@ def test_resolve_aliases_reads_local_names_as_the_declared_ones(tmp_path):
     assert resolve_aliases(r, {"type": "Term", "ingerido": False}) == {"type": "Term", "ingerido": False}
     assert canonical_type(r, "Reunión con cliente") == "Client Meeting" and canonical_type(None, "X") == "X"
     assert alias_keys(r) == {"cliente", "ingerido"}
+
+
+def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_type(tmp_path):
+    own = (_OWN.replace("types: [Term, Knowledge Fragment]", "types: [Term, Reunión con cliente]")
+           .replace("when: { type: Client Meeting,", "when: { type: Reunión con cliente,")
+           + "validator:\n  - { name: meetings, types: [Reunión con cliente], command: \"true\" }\n")
+    r = load_profile(_bundle(tmp_path, own), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    assert r.families["/base/clients/"]["types"] == ["Term", "Client Meeting"]
+    assert r.rules[-1]["when"] == {"type": "Client Meeting", "distillation_status": "distilled"}
+    assert r.validators[0]["types"] == ["Client Meeting"]
+    assert "Client Meeting" in in_force(r, "/base/clients/")["types_allowed"]
 
 
 if __name__ == "__main__":
