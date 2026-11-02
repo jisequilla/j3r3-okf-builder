@@ -4,12 +4,12 @@ title: Knowledge architect
 description: How okf-builder serves the KDD knowledge architect role, which the KDD bundle defines; this concept fixes the skills its agent carries, what it hands to a person and its fragment contract with the functional architect.
 tags: [role, knowledge-architect, agents, kdd]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T12:27:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T12:36:45Z }
 sources:
-  - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/5a6412d/knowledge/base/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.3, human-verified" }
-  - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/5a6412d/knowledge/base/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, ten skills" }
+  - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.3, human-verified" }
+  - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, ten skills" }
   - { id: kdd-agent-v2, resource: "https://github.com/jisequilla/kdd-knowledge/blob/e4afa95/knowledge/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, five distillation kinds" }
-  - { id: kdd-af, resource: "https://github.com/jisequilla/kdd-knowledge/blob/5a6412d/knowledge/base/roles/arquitecto-funcional-ti.md", title: "KDD bundle: functional architect role profile" }
+  - { id: kdd-af, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/roles/arquitecto-funcional-ti.md", title: "KDD bundle: functional architect role profile" }
   - { id: adr-0025, resource: /base/decisions/ADR-0025-verification-recorded-by-question.md }
   - { id: adr-0017, resource: /base/decisions/ADR-0017-agent-skills-per-platform.md }
   - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }
@@ -39,7 +39,7 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 
 The Claude agent preloads all 10 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `tools/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0017].
 
-The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds); a person verified v1.3 at kdd-knowledge commit `5a6412d`[^kdd-role]. `make m365` generates the M365 declarative agent from the same file ([Exporters](/base/systems/exporters.md)).
+The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds); a person verified v1.3 at kdd-knowledge commit `5a6412d`, and its agent under ADR-0025 at `929515c`[^kdd-role]. `make m365` generates the M365 declarative agent from the same file ([Exporters](/base/systems/exporters.md)).
 
 In the M365 agent package none of its 8 skills reads `okf-standard`'s references or templates: each carries the scripts and templates it uses. Only `okf-capture` names the `okf-standard` type table when it classifies a concept, and its templates cover the same types.
 
@@ -68,7 +68,7 @@ The two agents live in separate repositories. As long as both keep to the fragme
 # Differences with the KDD bundle
 
 - The KDD agent definition lists all 10 skills[^kdd-agent], as the Claude agent preloads them. The Microsoft 365 agent carries 8, without `okf-standard` and `okf-migrate`[^adr-0017].
-- The KDD agent definition says it never writes `verified` with a `human:` actor[^kdd-agent]; the okf-builder agent writes it from a person's recorded answer ([ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md)).
+- The KDD bundle's validation policy also accepts a person's written chat confirmation when the changes apply that person's answers literally, as a local exception to [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md) decided by its owner[^kdd-agent]. The okf-builder agent never applies it.
 - The KDD bundle keeps its own agent definition next to the okf-builder agent. The two are kept in step by hand: a change to one is carried to the other in the same piece of work.
 
 # Not verified
