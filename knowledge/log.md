@@ -1,6 +1,9 @@
 # Bundle history
 
 ## 2026-11-02
+* **Creation**: [ADR-0024](/base/decisions/ADR-0024-fragment-capture-field-backfill.md): a fragment's record stays immutable, and a missing `occurred_at`, `origin` or `participants` may be backfilled once from the record itself, approved by a person and logged; asked for by the KDD bundle, approved by human:jisequilla.
+* **Deprecation**: [ADR-0016](/base/decisions/ADR-0016-refutation-as-a-distillation-kind.md), superseded by ADR-0024.
+* **Update**: [Knowledge architect](/base/roles/knowledge-architect.md) and the [Conflict log](/conflict-log.md) cite ADR-0024.
 * **Update**: okf-builder 0.6.0 released: profile knowledge/3.0, with concepts under `base/`, `fragments/` and `projections/` as the other layers, and `okf-migrate --profile knowledge/3.0` to move a 2.0 bundle ([ADR-0021](/base/decisions/ADR-0021-three-layers-with-open-questions.md)).
 * **Migration**: Bundle migrated to profile knowledge/3.0 (8 directories and 0 root concepts moved under base/; links rewritten in 49 files) with okf-migrate.
 * **Creation**: [ADR-0021](/base/decisions/ADR-0021-three-layers-with-open-questions.md): three layers in profile knowledge/3.0, with open questions as `Open Question` concepts in `base/` and action items in the team's tracker; distilled from the [migration-tool fragment](/fragments/2026-11-02-migration-tool-okf-review.md), approved by human:jisequilla.

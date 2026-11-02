@@ -12,7 +12,7 @@ sources:
   - { id: kdd-af, resource: "https://github.com/jisequilla/kdd-knowledge/blob/81828dd/knowledge/roles/arquitecto-funcional-ti.md", title: "KDD bundle: functional architect role profile" }
   - { id: adr-0005, resource: /base/decisions/ADR-0005-required-generated-human-verified.md }
   - { id: adr-0017, resource: /base/decisions/ADR-0017-agent-skills-per-platform.md }
-  - { id: adr-0016, resource: /base/decisions/ADR-0016-refutation-as-a-distillation-kind.md }
+  - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }
 ---
 
 # Definition
@@ -26,7 +26,7 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 | KDD responsibility[^kdd-role] | okf-builder skill | State |
 |---|---|---|
 | AC-R1 Knowledge architecture (structure, types, conventions) | `okf-init`, `okf-standard` | exists |
-| AC-R2 Receiving fragments | `okf-fragment` | to build ([ADR-0016](/base/decisions/ADR-0016-refutation-as-a-distillation-kind.md)) |
+| AC-R2 Receiving fragments | `okf-fragment` | to build ([ADR-0024](/base/decisions/ADR-0024-fragment-capture-field-backfill.md)) |
 | AC-R3 Distillation | `okf-distill`; `okf-capture` for new concepts | `okf-distill` to build |
 | AC-R4 Double check and lifecycle (log, conflict register, deprecation) | `okf-review`, `okf-lint` | `okf-review` to build |
 | AC-R5 Indexing, search and answers | `okf-index`, `okf-ask` | exists |
@@ -37,7 +37,7 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 
 # The agent's skills
 
-The Claude agent preloads all 10 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `tools/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0016].
+The Claude agent preloads all 10 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `tools/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0017].
 
 The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds) and awaits a person's re-verification. `make m365` generates the M365 declarative agent from the same file ([Exporters](/base/systems/exporters.md)).
 
@@ -47,16 +47,16 @@ In the M365 agent package none of its 8 skills reads `okf-standard`'s references
 
 | Decides alone | Proposes; a person decides |
 |---|---|
-| Folders, file names, links, indexes and log entries | Each distillation change set, before it is applied[^adr-0016] |
-| Classifying each item of a fragment (addition, confirmation, update, refutation, conflict)[^adr-0016] | The resolution of every conflict in the [conflict log](/conflict-log.md) |
+| Folders, file names, links, indexes and log entries | Each distillation change set, before it is applied[^adr-0024] |
+| Classifying each item of a fragment (addition, confirmation, update, refutation, conflict)[^adr-0024] | The resolution of every conflict in the [conflict log](/conflict-log.md) |
 | When `okf-lint` must run, and fixing what it reports | Domains and bounded contexts, restructurings and deprecations[^kdd-role] |
 | | Moving a concept to human-verified: it never writes `verified: human:`[^adr-0005] |
 
-Approving a change set does not verify a concept. Verification is a separate act by a person[^adr-0016].
+Approving a change set does not verify a concept. Verification is a separate act by a person[^adr-0024].
 
 # Working with the functional architect
 
-The functional architect asks the business questions and captures functional knowledge. The knowledge architect does not capture business knowledge[^kdd-role][^kdd-af]. The interface between them is the fragment format of [ADR-0016](/base/decisions/ADR-0016-refutation-as-a-distillation-kind.md): a `Knowledge Fragment` in `fragments/` with `occurred_at`, `origin`, `participants` and `distillation_status: pending`.
+The functional architect asks the business questions and captures functional knowledge. The knowledge architect does not capture business knowledge[^kdd-role][^kdd-af]. The interface between them is the fragment format of [ADR-0024](/base/decisions/ADR-0024-fragment-capture-field-backfill.md): a `Knowledge Fragment` in `fragments/` with `occurred_at`, `origin`, `participants` and `distillation_status: pending`.
 
 | Direction | What is handed over |
 |---|---|
@@ -77,7 +77,7 @@ The two agents live in separate repositories. As long as both keep to the fragme
 # Related
 
 * [ADR-0017: The Claude agent preloads every skill it needs; the M365 agent takes a configured subset](/base/decisions/ADR-0017-agent-skills-per-platform.md)
-* [ADR-0016: Distillation adds refutation](/base/decisions/ADR-0016-refutation-as-a-distillation-kind.md)
+* [ADR-0024: Fragment record immutable, capture fields backfilled from it](/base/decisions/ADR-0024-fragment-capture-field-backfill.md)
 * [Actor](/base/domain/actor.md)
 
 [^kdd-role]: KDD bundle, knowledge architect role profile v1.1.
@@ -86,4 +86,4 @@ The two agents live in separate repositories. As long as both keep to the fragme
 [^kdd-af]: KDD bundle, functional architect role profile.
 [^adr-0005]: ADR-0005, `generated` required and `verified` only by people.
 [^adr-0017]: ADR-0017, decisions 3 and 5.
-[^adr-0016]: ADR-0016, decisions 5, 6, 9 and 10.
+[^adr-0024]: ADR-0024, decisions 6, 7 and 10.
