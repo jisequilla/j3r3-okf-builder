@@ -129,7 +129,7 @@ sources:
 | `status` | Recommended | `draft` on creation; `stable` after review; `deprecated` is never deleted, it links to its replacement. |
 | `stale_after` | Recommended in runbooks, metrics, policies | ISO 8601 with an explicit offset. |
 | `generated` | **Required in the profile** | `{ by: <actor>, at: <ISO 8601> }`. Who/what wrote the current content. |
-| `verified` | Recommended | List of `{ by, at }`. A single map is read as a one-item list. |
+| `verified` | Recommended | List of `{ by, at }`. A single map is read as a one-item list. A `human:` entry is written by that person, or by an agent from the person's recorded answer (§6). |
 | `sources` | Recommended if the content derives from something | Each entry with a required `resource`; `id` if the body cites it with a `[^id]` footnote. |
 
 **Actor convention (§7 of the spec):** `human:<id>` for people, `process:<id>` for automated processes, `<producer>/<version>` for agents (e.g. `okf-builder/claude-fable-5-1`). The `human:` prefix is what raises the trust level to *human-reviewed*.
@@ -226,7 +226,7 @@ okf_profile: "knowledge/3.0"
 | Event | Action | Frontmatter |
 |---|---|---|
 | Create a concept | `okf-capture` with a template | `status: draft`, `generated` with the actor who writes it |
-| Human review | A person reads and approves | `status: stable`, add `verified: { by: human:<id>, at }` |
+| Human review | A person reviews the concept as it stands at a named version, and writes `verified` by hand or answers an agent's structured question that names each concept by bundle path, repository commit and `generated.at` (never a chat reply, never for someone else); the agent keeps the question and the answer verbatim as a `Knowledge Fragment`. A concept edited afterwards is asked again | `status: stable`, add `verified: { by: human:<id>, at }` (`at`: the time of the answer); a **Verification** entry in `log.md`, linking the fragment when an agent wrote it |
 | Content change | Edit | Update `generated.at`; `verified` is **not** touched (it can end up older than `generated.at`; that gap is information) |
 | Reconfirm without changes | Periodic review | Add a new entry to `verified` |
 | Staleness | `now >= stale_after` | `okf-lint` warns; review and renew `stale_after` or deprecate |
