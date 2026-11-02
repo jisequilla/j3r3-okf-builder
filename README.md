@@ -26,7 +26,7 @@ The skills live once, in `plugin/okf-builder/skills/`. Each platform gets a proj
 
 | Path | What it is |
 |---|---|
-| `standard/OKF-STANDARD.md` | The standard: the `knowledge/2.0` profile (structure, frontmatter, types, lifecycle, conformance). |
+| `standard/OKF-STANDARD.md` | The standard: the `knowledge/3.0` profile (structure, frontmatter, types, lifecycle, conformance). |
 | `standard/OKF-COMPATIBILITY.md` | OKF v0.1 ↔ v0.2 differences, field matrix, mapping rules and versioning policy. |
 | `templates/` | Concept templates (`{{placeholders}}`): ADR, runbook, playbook, system, API, table, metric, computation, term, policy, view, reference, project, fragment, conflict log. Canonical copy of `okf-standard/templates/`; `make test` checks they match. |
 | `knowledge/` | The project's own knowledge (a conformant OKF bundle with the ADRs behind every decision). |
@@ -52,7 +52,7 @@ claude --plugin-dir ./plugin/okf-builder
 
 In Cowork: load the `.plugin` file built by `make plugin` (or the one delivered in the chat).
 
-The plugin also ships the **`knowledge-architect`** agent (`plugin/okf-builder/agents/knowledge-architect.md`): it works through the skills to capture fragments, distill them with you approving each change set, keep the Conflict Log, and answer from the bundle. It never marks a concept as verified ([ADR-0013](knowledge/decisions/ADR-0013-agent-projections.md)).
+The plugin also ships the **`knowledge-architect`** agent (`plugin/okf-builder/agents/knowledge-architect.md`): it works through the skills to capture fragments, distill them with you approving each change set, keep the Conflict Log, and answer from the bundle. It never marks a concept as verified ([ADR-0013](knowledge/base/decisions/ADR-0013-agent-projections.md)).
 
 ## Using it in a project
 
@@ -70,7 +70,7 @@ okf-migrate     → detects the version and migrates 0.1 ↔ 0.2 (always --dry-r
 
 ### Fragments and distillation
 
-A meeting, transcript or chat is first kept as a **fragment** in `knowledge/fragments/`, exactly as it happened, with its date, origin and participants. `okf-distill` then reads the fragment against the concepts it touches and proposes a change set: additions, confirmations, updates, refutations (an outdated concept is deprecated and linked to its replacement) and conflicts. Nothing is applied until a person approves it, and conflicts go to the bundle's one Conflict Log, where `okf-review` records who decided each one. Approving a change set never marks a concept as verified ([ADR-0016](knowledge/decisions/ADR-0016-refutation-as-a-distillation-kind.md)).
+A meeting, transcript or chat is first kept as a **fragment** in `knowledge/fragments/`, exactly as it happened, with its date, origin and participants. `okf-distill` then reads the fragment against the concepts it touches and proposes a change set: additions, confirmations, updates, refutations (an outdated concept is deprecated and linked to its replacement) and conflicts. Nothing is applied until a person approves it, and conflicts go to the bundle's one Conflict Log, where `okf-review` records who decided each one. Approving a change set never marks a concept as verified ([ADR-0016](knowledge/base/decisions/ADR-0016-refutation-as-a-distillation-kind.md)).
 
 ## Running the scripts directly
 
@@ -99,7 +99,7 @@ M365 Copilot (Cowork, Copilot Studio, Agent Builder) accepts Agent Skills in the
 - `dist/m365/okf-knowledge-architect-m365.zip` — the **knowledge-architect declarative agent**, generated from the plugin agent, with its own copy of the 8 skills chosen in `tools/m365-agent.json`; the Claude agent preloads all 10. A separate package, installed the same way; not yet tested in a tenant.
 - `dist/m365/skills/okf-*.zip` — one zip per skill for **Copilot Studio / Agent Builder** → Build → Skills → Upload a skill (GA).
 
-M365 Copilot reads the knowledge (`knowledge/`) from its one source ([ADR-0014](knowledge/decisions/ADR-0014-knowledge-repository-storage.md)): a Git repository through the GitHub Cloud Knowledge connector, which indexes `.md`, or a SharePoint library for teams without Git. Microsoft does not document `.md` as a SharePoint knowledge file type, so check it in your tenant.
+M365 Copilot reads the knowledge (`knowledge/`) from its one source ([ADR-0014](knowledge/base/decisions/ADR-0014-knowledge-repository-storage.md)): a Git repository through the GitHub Cloud Knowledge connector, which indexes `.md`, or a SharePoint library for teams without Git. Microsoft does not document `.md` as a SharePoint knowledge file type, so check it in your tenant.
 
 ## References
 

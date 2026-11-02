@@ -1,11 +1,11 @@
 ---
 okf_version: "0.2"
-okf_profile: "knowledge/2.0"
+okf_profile: "knowledge/3.0"
 ---
 
 # Project
 
-* [OKF Builder](project.md) - OKF standard (profile knowledge/2.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini _(draft)_
+* [OKF Builder](project.md) - OKF standard (profile knowledge/3.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini _(draft)_
 
 # Conflict Log
 
@@ -13,12 +13,5 @@ okf_profile: "knowledge/2.0"
 
 # Subdirectories
 
-* [architecture](architecture/index.md) - Architecture views and principles.
-* [decisions](decisions/index.md) - Architecture decision records (ADR).
-* [domain](domain/index.md) - Glossary and business concepts.
+* [base](base/index.md) - The project's knowledge, in typed directories.
 * [fragments](fragments/index.md) - Concepts in fragments.
-* [policies](policies/index.md) - Rules, standards and compliance.
-* [references](references/index.md) - Mirrored external material, execution skills and attesters.
-* [roles](roles/index.md) - Concepts in roles.
-* [runbooks](runbooks/index.md) - Operational and incident procedures.
-* [systems](systems/index.md) - Services, modules and deployable components.

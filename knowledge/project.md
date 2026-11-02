@@ -1,7 +1,7 @@
 ---
 type: Project
 title: OKF Builder
-description: OKF standard (profile knowledge/2.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini
+description: OKF standard (profile knowledge/3.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini
 resource: https://github.com/jisequilla/j3r3-okf-builder
 tags: [okf, knowledge, plugin]
 status: draft
@@ -32,9 +32,9 @@ Define a standard per-repository knowledge structure (`knowledge/`) based on Goo
 
 # Knowledge map
 
-* [Architecture](/architecture/index.md) — single source and projections
-* [Decisions](/decisions/index.md) — ADRs for the standard and the plugin
-* [Domain](/domain/index.md) — OKF glossary
-* [Systems](/systems/index.md) — plugin, scripts, exporters
-* [Runbooks](/runbooks/index.md) — release, export, spec update
-* [Policies](/policies/index.md) — rules every agent must follow in this repo
+* [Architecture](/base/architecture/index.md) — single source and projections
+* [Decisions](/base/decisions/index.md) — ADRs for the standard and the plugin
+* [Domain](/base/domain/index.md) — OKF glossary
+* [Systems](/base/systems/index.md) — plugin, scripts, exporters
+* [Runbooks](/base/runbooks/index.md) — release, export, spec update
+* [Policies](/base/policies/index.md) — rules every agent must follow in this repo

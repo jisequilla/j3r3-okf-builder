@@ -35,8 +35,8 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:44Z }
 
 # Knowledge map
 
-* [Architecture](/architecture/index.md)
-* [Decisions](/decisions/index.md)
-* [Domain](/domain/index.md)
-* [Systems](/systems/index.md)
-* [Runbooks](/runbooks/index.md)
+* [Architecture](/base/architecture/index.md)
+* [Decisions](/base/decisions/index.md)
+* [Domain](/base/domain/index.md)
+* [Systems](/base/systems/index.md)
+* [Runbooks](/base/runbooks/index.md)
