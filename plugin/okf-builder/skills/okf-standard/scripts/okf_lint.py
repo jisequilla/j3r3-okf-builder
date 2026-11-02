@@ -6,7 +6,7 @@
 """okf_lint.py — Validate an OKF v0.2 bundle and its knowledge profile (3.0, or the outdated 2.0).
 
 Usage:
-    uv run okf_lint.py [path/to/bundle] [--json] [--strict] [--no-profile]
+    uv run okf_lint.py [path/to/bundle] [--json] [--strict] [--no-profile] [--run-validators]
     uv run okf_lint.py <bundle> --profiles [<path>] [--json]
 
 Output: a list of findings with level ERROR / WARN and a code. Exit 1 if there
@@ -14,10 +14,16 @@ are errors (or warnings with --strict). Notices are neither and never fail.
 
 In a knowledge/3.0 bundle the Domain Profile (built-in layer, extends,
 base/profile.md) must be well formed (okf_profile.py); --profiles lists what is
-in force at a path and which source declared each item. Each concept is checked
-against the requirements in force for its type that carry their own code: the
-built-in profile keeps the per-field checks of a Knowledge Fragment and an Open
-Question under their codes and levels. --no-profile applies no Domain Profile.
+in force at a path and which source declared each item. Each concept is checked,
+aliases resolved first, against what is in force for its type and its directory:
+a requirement with its own code under that code (the built-in profile keeps the
+per-field checks of a Knowledge Fragment and an Open Question that way), one a
+bundle's layers declare without a code under PROFILE_REQUIRED, PROFILE_ENUM,
+PROFILE_FORBIDDEN, PROFILE_FIXED, PROFILE_RULE, PROFILE_TYPE_NOT_ALLOWED or
+PROFILE_FIELD_TYPE, and, with a base/profile.md, each undeclared key as
+PROFILE_UNKNOWN_KEY; --json names the source of each. A validator's command runs
+only with --run-validators (PROFILE_VALIDATOR when it fails, its output masked);
+without it each one is a notice. --no-profile applies no Domain Profile.
 
 The profile is the okf_profile of the root index.md; a bundle without one is
 treated as knowledge/2.0. A knowledge/2.0 bundle stays valid, and lint prints a
@@ -29,6 +35,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
+import subprocess
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -57,8 +65,9 @@ from okf_common import (  # noqa: E402
     to_dt,
     walk_bundle,
 )
-from okf_profile import (IGNORED_20_NOTICE, Resolved, _lvl, bundle_path, format_in_force, ignored_in_20,  # noqa: E402
-                         in_force, is_a, load_profile, misplaced, type_in_force)
+from okf_profile import (BUILTIN, DOMAIN_PROFILE, IGNORED_20_NOTICE, OWN_REL, PROFILE_KEYS, SPEC_KEYS,  # noqa: E402
+                         Resolved, _lvl, alias_keys, bundle_path, canonical_type, concept_force, families_at,
+                         format_in_force, ignored_in_20, in_force, is_a, load_profile, misplaced, resolve_aliases)
 
 
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
@@ -70,8 +79,10 @@ class Report:
         self.notices: list[str] = []  # neither warnings nor errors; they never fail --strict
         self.profile_outdated = False
 
-    def add(self, level: str, code: str, path: str, msg: str) -> None:
-        self.items.append({"level": level, "code": code, "path": path, "message": msg})
+    def add(self, level: str, code: str, path: str, msg: str, source: str | None = None) -> None:
+        """source: the layer that declared the broken item; the PROFILE_* codes of a concept carry it."""
+        self.items.append({"level": level, "code": code, "path": path, "message": msg,
+                           **({"source": source} if source is not None else {})})
 
     def error(self, code, path, msg):
         self.add("ERROR", code, path, msg)
@@ -150,14 +161,16 @@ def check_log(doc: Doc, rep: Report) -> None:
 def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datetime, version: str = "0.2",
                   pname: str = PROFILE_20, prof: Resolved | None = None, forces: dict | None = None) -> None:
     """One concept: the spec-level checks, then, when prof is given, the Domain Profile in force for its type
-    (forces caches type_in_force per type)."""
+    and its directory (forces caches it per type and covering families). With prof, aliases are resolved
+    first, so every check reads the type, field or value a local name stands for."""
     if not doc.has_fm_block:
         rep.error("NO_FRONTMATTER", doc.rel, "concept has no YAML frontmatter block (§11.1)")
         return
     if doc.fm_error:
         rep.error("BAD_YAML", doc.rel, f"YAML frontmatter cannot be parsed: {doc.fm_error}")
         return
-    fm = doc.frontmatter or {}
+    raw = doc.frontmatter or {}
+    fm = resolve_aliases(prof, raw) if prof is not None else raw
     t = fm.get("type")
     if not t or not str(t).strip():
         rep.error("NO_TYPE", doc.rel, "frontmatter has no non-empty 'type' (§11.2)")
@@ -255,12 +268,13 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
             if not isinstance(p, dict) or not p.get("name") or not p.get("type"):
                 rep.error("AC_BAD_PARAM", doc.rel, "parameters[] requires { name, type, required } (§10.2)")
 
-    if prof is not None and str(t) in prof.types:
-        force = forces.get(str(t)) if forces is not None else None
+    if prof is not None and t is not None and str(t).strip():
+        key = (str(t), tuple(f["dir"] for f in families_at(prof, "/" + doc.rel)))
+        force = forces.get(key) if forces is not None else None
         if force is None:
-            force = type_in_force(prof, str(t))
+            force = concept_force(prof, str(t), "/" + doc.rel)
             if forces is not None:
-                forces[str(t)] = force
+                forces[key] = force
         check_profile_fields(doc, fm, str(t), prof, force, rep)
         if is_a(prof, str(t), "Open Question"):
             check_review_due(doc, fm, rep, now)
@@ -286,7 +300,9 @@ def _blank(v) -> bool:
 
 
 def value_ok(ftype: str, v, values: list | None = None) -> bool:
-    """A value of one of the field types of §4.1 other than list (a list is checked item by item)."""
+    """A value of one of the field types of §4.1 other than list (a list is checked item by item). A string is
+    any scalar: YAML reads `3`, `no` or `2026-01-01` as a number, a boolean or a date, and what the author
+    wrote is still text."""
     if ftype == "actor":
         return bool(ACTOR_RE.match(str(v)))
     if ftype == "enum":
@@ -304,7 +320,7 @@ def value_ok(ftype: str, v, values: list | None = None) -> bool:
         return isinstance(v, int) and not isinstance(v, bool)
     if ftype == "boolean":
         return isinstance(v, bool)
-    return isinstance(v, str)
+    return isinstance(v, (str, int, float, date))
 
 
 ITEM_LABELS = {"participants": "participant"}  # what one item of a list field is called in a message
@@ -325,20 +341,42 @@ def _rule_applies(prof: Resolved, t: str, fm: dict, when: dict) -> bool:
     return all(is_a(prof, t, str(v)) if k == "type" else str(fm.get(k)) == str(v) for k, v in when.items())
 
 
-def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict, rep: Report) -> None:
-    """The requirements of the Domain Profile in force for type t that carry their own code (§4.1).
+def _checked(item: dict) -> bool:
+    """An item lint reports: one with its own code, or one a layer other than the built-in declares. The built-in
+    profile's items without a code are listed by --profiles and not checked, so a bundle without a profile of
+    its own gets no PROFILE_* finding for a concept."""
+    return bool(item.get("code")) or item.get("source") != BUILTIN
 
-    Two passes. First each required field that is missing, a blank value included, in declaration order.
-    Then each field's value in declaration order, each field followed by the rules whose first required
-    field it is; the rules that require no declared field come last. A blank value of a scalar field
-    required in force with a code (by_type and families included) is reported once, as missing. A list is checked item by item, a single value as a one-item list,
-    so a blank text or map given as a list is missing and also an item of the wrong form."""
+
+def _generic_breach(fid: str, ftype: str, v, values: list, item: bool) -> str:
+    label = f"an item of {fid}" if item else fid
+    if ftype == "enum":
+        return f"{label} '{v}' is not one of {'|'.join(str(x) for x in values)} (§4.1)"
+    return f"{label} '{v}' is not a{'n' if ftype[0] in 'aeiou' else ''} {ftype} (§4.1)"
+
+
+def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict, rep: Report) -> None:
+    """The Domain Profile in force for the concept's type and directory (§4.1, §7 rule 15).
+
+    A requirement with its own code is reported under it with the message it always had; one a bundle's
+    layers declare without a code is reported under the generic PROFILE_* code with the source that declared
+    it. Order: each required field that is missing, a blank value included, in declaration order; then each
+    field's value in declaration order, each field followed by the rules whose first required field it is,
+    and the rules that require no declared field; then fixed and forbidden keys, the types the covering
+    families allow, and, in a bundle with a base/profile.md, the keys no layer declares. A blank value of a
+    scalar field reported as missing is not checked again. A list is checked item by item, a single value as
+    a one-item list. A type no layer declares gets only fixed, forbidden, rules and the families' types."""
     fields, required = force["fields"], force["required"]
     for fid, req in required.items():
-        if req.get("code") and _blank(fm.get(fid)):
-            owner = fields[fid]["declared_by"] if fid in fields else t
+        if not _blank(fm.get(fid)) or not _checked(req):
+            continue
+        owner = fields[fid]["declared_by"] if fid in fields else t
+        if req.get("code"):
             rep.add(req["level"].upper(), req["code"], doc.rel, f"{owner} has no '{fid}' (§4)")
-    rules = [r for r in prof.rules if r.get("code") and _rule_applies(prof, t, fm, r["when"])]
+        else:
+            rep.add(req["level"].upper(), "PROFILE_REQUIRED", doc.rel,
+                    f"{owner} has no '{fid}', required by {req['source']} (§4.1)", req["source"])
+    rules = [r for r in prof.rules if _checked(r) and _rule_applies(prof, t, fm, r["when"])]
 
     def check_rules(at: str | None) -> None:
         for r in rules:
@@ -346,21 +384,56 @@ def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict
                 continue
             cond = " and ".join(f"{k} is {v}" for k, v in r["when"].items() if k != "type")
             for f in r["require"]:
-                if _blank(fm.get(f)):
+                if not _blank(fm.get(f)):
+                    continue
+                if r.get("code"):
                     rep.add(_lvl(r).upper(), r["code"], doc.rel, f"{cond} but '{f}' is missing (§4)")
+                else:
+                    when = f"{cond} but " if cond else ""
+                    rep.add(_lvl(r).upper(), "PROFILE_RULE", doc.rel,
+                            f"rule '{r['name']}': {when}'{f}' is missing (§4.1)", r["source"])
 
     for fid, d in fields.items():
         v = fm.get(fid)
         item = d.get("type") == "list"
-        reported_missing = bool(required.get(fid, {}).get("code")) and _blank(v)
-        if d.get("code") and v is not None and (item or not reported_missing):
+        reported_missing = fid in required and _checked(required[fid]) and _blank(v)
+        if _checked(d) and v is not None and (item or not reported_missing):
             ftype = d.get("of") if item else d.get("type")
             values = [x["value"] for x in d.get("values") or []]
             for x in (as_list(v) if item else [v]):
-                if not value_ok(ftype, x, values):
+                if value_ok(ftype, x, values):
+                    continue
+                if d.get("code"):
                     rep.add(_lvl(d).upper(), d["code"], doc.rel, _breach(fid, ftype, x, values, item))
+                else:
+                    rep.add(_lvl(d).upper(), "PROFILE_ENUM" if ftype == "enum" else "PROFILE_FIELD_TYPE", doc.rel,
+                            _generic_breach(fid, ftype, x, values, item), d["source"])
         check_rules(fid)
     check_rules(None)
+
+    for k, e in force["fixed"].items():
+        if k in fm and _checked(e) and not (fm[k] == e.get("value") or str(fm[k]) == str(e.get("value"))):
+            rep.add(_lvl(e).upper(), e.get("code") or "PROFILE_FIXED", doc.rel,
+                    f"'{k}' is {fm[k]!r}, fixed to {e.get('value')!r} by {e['source']} (§4.1)", e["source"])
+    for k, e in force["forbidden"].items():
+        if k in fm and _checked(e):
+            reason = f": {e['reason']}" if e.get("reason") else ""
+            rep.add(_lvl(e).upper(), e.get("code") or "PROFILE_FORBIDDEN", doc.rel,
+                    f"'{k}' is forbidden by {e['source']}{reason} (§4.1)", e["source"])
+    for f in force["families"]:
+        if f["types"] and not any(is_a(prof, t, x) for x in f["types"]):
+            rep.add("ERROR", "PROFILE_TYPE_NOT_ALLOWED", doc.rel,
+                    f"type '{t}' is not allowed in family {f['dir']}, which allows {', '.join(f['types'])} (§4.1)",
+                    f["source"])
+    if prof.has_own and t in prof.types:
+        known = (SPEC_KEYS | set(fields) | set(required) | set(force["fixed"]) | set(force["forbidden"])
+                 | alias_keys(prof))
+        if is_a(prof, t, DOMAIN_PROFILE):
+            known |= set(PROFILE_KEYS)
+        for k in fm:
+            if k not in known:
+                rep.add("WARN", "PROFILE_UNKNOWN_KEY", doc.rel, f"key '{k}' is declared by no layer for {t} (§4.1)",
+                        OWN_REL)
 
 
 def utc_date(v) -> date | None:
@@ -387,12 +460,12 @@ def check_review_due(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
         rep.warn("QUESTION_REVIEW_DUE", doc.rel, f"open question due for review since {due.isoformat()}")
 
 
-def check_layers(docs: list[Doc], rep: Report) -> None:
+def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None) -> None:
     """knowledge/3.0: concepts live in base/ or fragments/; the root holds project.md and the Conflict Log."""
     for d in docs:
         parts = d.rel.split("/")
         if len(parts) == 1:
-            t = (d.frontmatter or {}).get("type")
+            t = canonical_type(prof, (d.frontmatter or {}).get("type"))
             if d.is_reserved or (d.rel == "project.md" and t == "Project") or t == "Conflict Log":
                 continue
             rep.error("PROFILE_OUTSIDE_LAYER", d.rel,
@@ -410,7 +483,70 @@ def profile_structure(bundle: Path, docs: list[Doc]) -> tuple[Resolved, list[dic
     return load_profile(bundle, read_own=False), [], [IGNORED_20_NOTICE.format(rel=rel) for rel in ignored_in_20(docs)]
 
 
-def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Report, str, str]:
+VALIDATOR_TIMEOUT = 300  # seconds
+VALIDATOR_OUTPUT_MAX = 2000  # characters of a failing validator's output kept in its finding
+_SECRET_RES = (
+    (re.compile(r"(?i)(token|key|password|secret)=\S+"), r"\1=[masked]"),
+    (re.compile(r"(?i)(authorization:\s*)\S+(?:\s+(?!\[masked\])\S+)?"), r"\1[masked]"),
+    (re.compile(r"(?i)\b(bearer\s+)\S+"), r"\1[masked]"),
+    (re.compile(r"[A-Za-z0-9+/]{32,}={0,2}"), "[masked]"),
+)
+
+
+def mask_secrets(text: str) -> str:
+    """Values after token=, key=, password=, secret=, Authorization: and Bearer, and every run of 32 or more
+    base64 or hex characters, become [masked]."""
+    for rx, sub in _SECRET_RES:
+        text = rx.sub(sub, text)
+    return text
+
+
+def _validator_paths(v: dict, docs: list[Doc], prof: Resolved) -> list[str]:
+    """The concepts a validator covers, as paths from the bundle root: those whose type (an alias resolved) is
+    or extends one of its types, or that a family it names covers; every concept when it names neither."""
+    out = []
+    for d in docs:
+        if d.is_reserved or not d.frontmatter:
+            continue
+        t = str(canonical_type(prof, d.frontmatter.get("type")))
+        by_type = any(is_a(prof, t, x) for x in v.get("types") or [])
+        by_family = any(("/" + d.rel).startswith(f) for f in v.get("families") or [])
+        if by_type or by_family or not (v.get("types") or v.get("families")):
+            out.append(d.rel)
+    return out
+
+
+def run_validators(bundle: Path, docs: list[Doc], prof: Resolved, rep: Report, run: bool) -> None:
+    """Each validator of the Domain Profile (§4.1): a notice unless run is set; with it, its command (split like
+    a shell would, never run through one) from the bundle root with the matching paths as arguments, and a
+    failure as PROFILE_VALIDATOR with its output masked and truncated. One that matches no concept is not run."""
+    for v in prof.validators:
+        if not run:
+            rep.notices.append(f"validator {v['name']} not run (use --run-validators)")
+            continue
+        paths = _validator_paths(v, docs, prof)
+        if not paths:
+            continue
+        try:
+            p = subprocess.run([*shlex.split(v["command"]), *paths], cwd=bundle, capture_output=True, text=True,
+                               stdin=subprocess.DEVNULL, timeout=VALIDATOR_TIMEOUT)
+            if p.returncode == 0:
+                continue
+            why, out = f"exit {p.returncode}", (p.stdout + p.stderr).strip()
+        except subprocess.TimeoutExpired:
+            why, out = f"timed out after {VALIDATOR_TIMEOUT}s", ""
+        except (OSError, ValueError) as e:
+            why, out = "could not start", str(e)
+        out = mask_secrets(out)
+        if len(out) > VALIDATOR_OUTPUT_MAX:
+            out = out[:VALIDATOR_OUTPUT_MAX] + " [truncated]"
+        rep.add("ERROR", "PROFILE_VALIDATOR", v["source"],
+                f"validator {v['name']} failed ({why})" + (f": {out}" if out else ""), v["source"])
+
+
+def lint(bundle: Path, profile: bool = True, version: str = "auto",
+         validators: bool = False) -> tuple[Report, str, str]:
+    """validators: run the Domain Profile's validator commands (--run-validators); otherwise each one is a notice."""
     rep = Report()
     now = datetime.now(timezone.utc)
     docs = walk_bundle(bundle)
@@ -420,9 +556,9 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
     prof = None  # --no-profile: no Domain Profile, the built-in one included
     if profile:
         rep.profile_outdated = pname == PROFILE_20
-        if declared == PROFILE_30:
-            check_layers(docs, rep)
         prof, findings, notices = profile_structure(bundle, docs)
+        if declared == PROFILE_30:
+            check_layers(docs, rep, prof)
         for i in findings:
             rep.add(i["level"], i["code"], i["path"], i["message"])
         rep.notices += notices
@@ -447,14 +583,14 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
             rep.error("PROFILE_NO_PROJECT", "project.md", "knowledge/project.md with type: Project is missing (profile §7.4)")
         else:
             d = by_path.get(proj.resolve())
-            if d and d.frontmatter and d.frontmatter.get("type") != "Project":
+            if d and d.frontmatter and canonical_type(prof, d.frontmatter.get("type")) != "Project":
                 rep.error("PROFILE_PROJECT_TYPE", "project.md", "project.md must have type: Project")
-        types = [d.frontmatter.get("type") for d in docs if d.frontmatter and not d.is_reserved]
+        typed = [(d, canonical_type(prof, d.frontmatter.get("type"))) for d in docs if d.frontmatter and not d.is_reserved]
+        types = [t for _, t in typed]
         if types.count("Project") > 1:
             rep.error("PROFILE_MANY_PROJECTS", "project.md", "more than one concept has type: Project")
         if types.count("Conflict Log") > 1:
-            logs = ", ".join(d.rel for d in docs if d.frontmatter and not d.is_reserved
-                             and d.frontmatter.get("type") == "Conflict Log")
+            logs = ", ".join(d.rel for d, t in typed if t == "Conflict Log")
             rep.error("PROFILE_MANY_CONFLICT_LOGS", "conflict-log.md", f"more than one concept has type: Conflict Log ({logs})")
 
     forces: dict = {}
@@ -467,6 +603,8 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
             check_log(d, rep)
         else:
             check_concept(d, bundle, rep, profile, now, version, pname, prof, forces)
+    if prof is not None:
+        run_validators(bundle, docs, prof, rep, validators)
     return rep, version, origin
 
 
@@ -481,6 +619,8 @@ def main(argv=None) -> int:
     ap.add_argument("--profiles", nargs="?", const="/", metavar="PATH",
                     help="list the Domain Profile in force at PATH (a bundle path such as /base/clients/, or a "
                          "file or directory inside the bundle; default /) and which source declared each item")
+    ap.add_argument("--run-validators", action="store_true",
+                    help="run the commands the Domain Profile's validator entries declare (never run without it)")
     args = ap.parse_args(argv)
 
     bundle = Path(args.bundle).resolve() if args.bundle else find_bundle()
@@ -497,7 +637,8 @@ def main(argv=None) -> int:
         print(json.dumps(info, ensure_ascii=False, indent=2, default=str) if args.json else format_in_force(info))
         return 1 if findings else 0
 
-    rep, version, origin = lint(bundle, profile=not args.no_profile, version=args.okf_version)
+    rep, version, origin = lint(bundle, profile=not args.no_profile, version=args.okf_version,
+                                validators=args.run_validators)
     n_docs = len([d for d in walk_bundle(bundle) if not d.is_reserved])
     if args.json:
         print(json.dumps({"bundle": str(bundle), "okf_version": version, "version_origin": origin, "concepts": n_docs, "errors": len(rep.errors),
@@ -974,7 +1115,8 @@ def test_value_ok_for_each_field_type():
     from datetime import date as _date
 
     cases = {
-        "string": (["x"], [1, None]), "integer": ([3], [True, "3"]), "boolean": ([False], ["no"]),
+        # a string is any scalar YAML may have read as a number, a boolean or a date
+        "string": (["x", 3, 2.5, False, _date(2026, 1, 1)], [None, ["x"], {"a": 1}]), "integer": ([3], [True, "3"]), "boolean": ([False], ["no"]),
         "date": ([_date(2026, 11, 2), "2026-11-02"], ["2026-02-30", "2026-11-02T10:00:00Z", datetime(2026, 11, 2)]),
         "datetime": (["2026-11-02T10:00:00+01:00"], ["2026-11-02", "2026-11-02T10:00:00"]),
         "date_or_datetime": (["2026-11-02", "2026-11-02T10:00:00Z"], ["2026-11-02T10:00:00", "next week"]),
@@ -1091,6 +1233,360 @@ def test_every_per_field_breach_keeps_its_level_code_message_and_order(tmp_path,
         got = [(i["level"], i["code"], i["path"], i["message"])
                for i in _json.loads(capsys.readouterr().out)["findings"]]
         assert got == want
+
+
+# --------------------------------------------------------------------------
+# Concepts against the Domain Profile (ticket D4): one test per row
+# --------------------------------------------------------------------------
+_CONCEPT_CODES = ("PROFILE_REQUIRED", "PROFILE_ENUM", "PROFILE_FORBIDDEN", "PROFILE_FIXED", "PROFILE_RULE",
+                  "PROFILE_TYPE_NOT_ALLOWED", "PROFILE_FIELD_TYPE", "PROFILE_UNKNOWN_KEY", "PROFILE_VALIDATOR")
+_MEETING = ("types:\n  Client Meeting:\n    extends: Knowledge Fragment\n    fields:\n"
+            "      client: { type: string, required: true }\n"
+            "      kind: { type: enum, values: [call, visit] }\n"
+            "      attendees: { type: integer, level: warn }\n"
+            "      billable: { type: boolean }\n"
+            "      signed_on: { type: date }\n"
+            "      contacts: { type: list, of: actor }\n"
+            "      contract: { type: path }\n")
+_MEETING_FIELDS = _FRAGMENT_FIELDS + "client: Acme\n"
+
+
+def _concept(t: str, fields: str = "") -> str:
+    return f"---\ntype: {t}\ntitle: C\ndescription: C.\nstatus: draft\n" + fields + _GEN + "---\n\nText.\n"
+
+
+def _list_in_indexes(k: Path, rel: str) -> None:
+    """List a concept in its directory's index.md, and each new directory in its parent's."""
+    parts = rel.split("/")
+    for i, name in enumerate(parts):
+        idx = k.joinpath(*parts[:i], "index.md")
+        text = idx.read_text(encoding="utf-8") if idx.exists() else f"# {parts[i - 1]}\n\n"
+        target = name if i == len(parts) - 1 else f"{name}/index.md"
+        if f"]({target})" not in text:
+            idx.write_text(text.rstrip("\n") + f"\n* [{name}]({target}) - X.\n", encoding="utf-8")
+
+
+def _profiled(tmp_path, keys: str, fragment: str | None = None, extra: dict | None = None) -> Path:
+    """A clean 3.0 bundle with base/profile.md; fragment replaces the fragment's frontmatter fields and type line."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    k = _with_own_profile(_bundle_30(tmp_path), keys)
+    if fragment is not None:
+        (k / _FRAGMENT).write_text(fragment, encoding="utf-8")
+    for rel, text in (extra or {}).items():
+        (k / rel).parent.mkdir(parents=True, exist_ok=True)
+        (k / rel).write_text(text, encoding="utf-8")
+        _list_in_indexes(k, rel)
+    return k
+
+
+def _profile_items(rep: Report) -> list[tuple]:
+    return [(i["level"], i["code"], i["path"], i["message"]) for i in rep.items if i["code"] in _CONCEPT_CODES]
+
+
+def _meeting(fields: str) -> str:
+    return _concept("Client Meeting", fields)
+
+
+def test_a_concept_of_a_local_type_missing_a_required_field_is_profile_required(tmp_path):
+    rep, _, _ = lint(_profiled(tmp_path, _MEETING, _meeting(_FRAGMENT_FIELDS)))
+    assert _profile_items(rep) == [("ERROR", "PROFILE_REQUIRED", _FRAGMENT,
+                                    "Client Meeting has no 'client', required by base/profile.md (§4.1)")]
+    assert [i["code"] for i in rep.items] == ["PROFILE_REQUIRED"]
+    warn = _MEETING.replace("client: { type: string, required: true }", "client: { type: string, required: { level: warn } }")
+    rep, _, _ = lint(_profiled(tmp_path / "w", warn, _meeting(_FRAGMENT_FIELDS + 'client: ""\n')))
+    assert [(i["level"], i["code"]) for i in rep.items] == [("WARN", "PROFILE_REQUIRED")]  # blank is missing, once
+
+
+def test_a_value_outside_a_declared_enum_is_profile_enum(tmp_path):
+    rep, _, _ = lint(_profiled(tmp_path, _MEETING, _meeting(_MEETING_FIELDS + "kind: lunch\n")))
+    assert _profile_items(rep) == [("ERROR", "PROFILE_ENUM", _FRAGMENT, "kind 'lunch' is not one of call|visit (§4.1)")]
+    assert lint(_profiled(tmp_path / "ok", _MEETING, _meeting(_MEETING_FIELDS + "kind: visit\n")))[0].items == []
+
+
+def test_a_forbidden_key_global_per_family_or_per_type_names_its_reason(tmp_path):
+    cases = {
+        "global": "forbidden:\n  internal_notes: { reason: Internal notes stay out }\n",
+        "family": "families:\n  /base/questions/: { forbidden: { internal_notes: { reason: Internal notes stay out } } }\n",
+        "type": "by_type:\n  Open Question: { forbidden: { internal_notes: { reason: Internal notes stay out, level: warn } } }\n",
+    }
+    for case, keys in cases.items():
+        k = _question_bundle(tmp_path / case, _QUESTION_FIELDS + "internal_notes: ask Bob\n")
+        _with_own_profile(k, keys)
+        (k / "base" / "index.md").write_text("# base\n\n* [Profile](profile.md) - P.\n\n# Subdirectories\n\n"
+                                             "* [questions](questions/index.md) - Q.\n", encoding="utf-8")
+        level = "WARN" if case == "type" else "ERROR"
+        assert _profile_items(lint(k)[0]) == [(level, "PROFILE_FORBIDDEN", _QUESTION,
+                                               "'internal_notes' is forbidden by base/profile.md: Internal notes stay out (§4.1)")], case
+    # a family's forbidden key applies only under its directory
+    k = _profiled(tmp_path / "elsewhere", cases["family"], _concept("Knowledge Fragment", _FRAGMENT_FIELDS + "internal_notes: x\n"))
+    assert [i for i in lint(k)[0].items if i["code"] == "PROFILE_FORBIDDEN"] == []
+
+
+def test_a_fixed_key_with_another_value_is_profile_fixed(tmp_path):
+    keys = "fixed:\n  okf_lang: { value: en, level: warn }\n"
+    k = _profiled(tmp_path, keys, _concept("Knowledge Fragment", _FRAGMENT_FIELDS + "okf_lang: es\n"))
+    assert _profile_items(lint(k)[0]) == [("WARN", "PROFILE_FIXED", _FRAGMENT,
+                                           "'okf_lang' is 'es', fixed to 'en' by base/profile.md (§4.1)")]
+    # where the key is absent, or holds the value, nothing is reported
+    assert lint(_profiled(tmp_path / "ok", keys, _concept("Knowledge Fragment", _FRAGMENT_FIELDS + "okf_lang: en\n")))[0].items == []
+
+
+def test_a_rule_whose_when_holds_and_a_required_field_is_missing_names_the_rule(tmp_path):
+    keys = _MEETING + ("rules:\n  - { name: distilled-names-contract, when: { type: Client Meeting, "
+                       "distillation_status: distilled }, require: [contract] }\n")
+    fields = _MEETING_FIELDS.replace("distillation_status: pending", "distillation_status: distilled")
+    assert _profile_items(lint(_profiled(tmp_path, keys, _meeting(fields)))[0]) == [
+        ("ERROR", "PROFILE_RULE", _FRAGMENT,
+         "rule 'distilled-names-contract': distillation_status is distilled but 'contract' is missing (§4.1)")]
+    assert lint(_profiled(tmp_path / "pending", keys, _meeting(_MEETING_FIELDS)))[0].items == []
+    # a rule applies to a type no layer declares as well
+    loose = "rules:\n  - { name: memos-name-an-author, when: { type: Memo }, require: [author], level: warn }\n"
+    k = _profiled(tmp_path / "memo", loose, extra={"fragments/2026-10-31-memo.md": _concept("Memo")})
+    assert _profile_items(lint(k)[0]) == [("WARN", "PROFILE_RULE", "fragments/2026-10-31-memo.md",
+                                           "rule 'memos-name-an-author': 'author' is missing (§4.1)")]
+
+
+def test_a_type_its_directory_family_does_not_allow_is_profile_type_not_allowed(tmp_path):
+    keys = _MEETING + "families:\n  /base/questions/: { types: [Open Question] }\n  /base/clients/: { types: [Knowledge Fragment] }\n"
+    extra = {"base/questions/refund.md": _concept("Term"), "base/questions/deep/memo.md": _concept("Memo"),
+             "base/questions/ok.md": _concept("Open Question", _QUESTION_FIELDS),
+             "base/clients/acme.md": _meeting(_MEETING_FIELDS)}  # a local type extending an allowed one is allowed
+    found = sorted(_profile_items(lint(_profiled(tmp_path, keys, extra=extra))[0]))
+    msg = "type '{}' is not allowed in family /base/questions/, which allows Open Question (§4.1)"
+    assert found == [("ERROR", "PROFILE_TYPE_NOT_ALLOWED", "base/questions/deep/memo.md", msg.format("Memo")),
+                     ("ERROR", "PROFILE_TYPE_NOT_ALLOWED", "base/questions/refund.md", msg.format("Term"))]
+
+
+def test_a_value_of_the_wrong_declared_field_type_is_profile_field_type(tmp_path):
+    cases = {
+        "attendees: three\n": ("WARN", "attendees 'three' is not an integer (§4.1)"),
+        "billable: maybe\n": ("ERROR", "billable 'maybe' is not a boolean (§4.1)"),
+        'signed_on: "2026-02-30"\n': ("ERROR", "signed_on '2026-02-30' is not a date (§4.1)"),
+        "contacts: [human:ann, Bob]\n": ("ERROR", "an item of contacts 'Bob' is not an actor (§4.1)"),
+        "contract: base/contracts/acme.md\n": ("ERROR", "contract 'base/contracts/acme.md' is not a path (§4.1)"),
+    }
+    for n, (line, (level, msg)) in enumerate(cases.items()):
+        k = _profiled(tmp_path / str(n), _MEETING, _meeting(_MEETING_FIELDS + line))
+        assert _profile_items(lint(k)[0]) == [(level, "PROFILE_FIELD_TYPE", _FRAGMENT, msg)], line
+    good = "attendees: 3\nbillable: false\nsigned_on: 2026-02-28\ncontacts: [human:ann]\ncontract: /base/c.md\nclient: 42\n"
+    k = _profiled(tmp_path / "good", _MEETING, _meeting(_FRAGMENT_FIELDS + good))  # client: 42 is still text
+    assert lint(k)[0].items == []
+
+
+def test_a_key_no_source_declares_warns_only_in_a_bundle_with_a_profile(tmp_path):
+    fields = _MEETING_FIELDS + "mood: calm\n"
+    k = _profiled(tmp_path, _MEETING, _meeting(fields))
+    assert _profile_items(lint(k)[0]) == [("WARN", "PROFILE_UNKNOWN_KEY", _FRAGMENT,
+                                           "key 'mood' is declared by no layer for Client Meeting (§4.1)")]
+    # keys a required, fixed or forbidden names, and the profile's own keys, are declared; a type no layer
+    # declares is tolerated, so its keys are not reported
+    keys = _MEETING + "by_type:\n  Knowledge Fragment: { required: [mood] }\nfixed:\n  okf_lang: { value: en }\n"
+    k = _profiled(tmp_path / "declared", keys, _meeting(fields + "okf_lang: en\n"),
+                  extra={"fragments/2026-10-31-memo.md": _concept("Memo", "anything: 1\n")})
+    assert lint(k)[0].items == []
+    # without a base/profile.md, no key is unknown
+    (tmp_path / "none").mkdir()
+    k = _bundle_30(tmp_path / "none")
+    (k / _FRAGMENT).write_text(_concept("Knowledge Fragment", _FRAGMENT_FIELDS + "mood: calm\n"), encoding="utf-8")
+    assert lint(k)[0].items == []
+
+
+def test_the_builtin_profile_items_without_a_code_add_no_finding(tmp_path):
+    """decision_status, supersedes, owner, repo, asked_in and the like carry no code: --profiles lists them and
+    lint does not report them, with or without a base/profile.md (the built-in profile's own text)."""
+    adr = _concept("Architecture Decision", "decision_status: deprecated\nsupersedes: ADR-0001\nadr_id: 7\n")
+    system = _concept("System", "owner: The payments team\nruntime: 3\n")
+    question = _QUESTION_FIELDS.replace("/fragments/2026-10-31-meeting.md", "fragments/x.md") + "blocks: nothing\n"
+    for n, own in enumerate((None, "fixed: {}\n")):
+        k = _question_bundle(tmp_path / str(n), question)
+        for rel, text in {"base/decisions/ADR-0002-x.md": adr, "base/systems/pay.md": system}.items():
+            (k / rel).parent.mkdir(parents=True, exist_ok=True)
+            (k / rel).write_text(text, encoding="utf-8")
+        if own is not None:
+            (k / "base" / "profile.md").write_text(_domain_profile(own), encoding="utf-8")
+        assert _profile_items(lint(k)[0]) == [], own
+        assert not [i for i in lint(k)[0].items if i["code"].startswith("PROFILE_")], own
+
+
+def test_a_type_alias_is_treated_as_the_type_it_stands_for_by_every_check(tmp_path):
+    keys = "aliases:\n  types: { Fragmento: Knowledge Fragment, Registro de conflictos: Conflict Log }\n"
+    frag = _concept("Fragmento", "occurred_at: 2026-10-31\ndistillation_status: done\nmood: calm\n")
+    k = _profiled(tmp_path, keys, frag)
+    found = [(i["level"], i["code"], i["path"]) for i in lint(k)[0].items]
+    assert found == [("WARN", "FRAGMENT_NO_FIELD", _FRAGMENT)] * 2 + [
+        ("ERROR", "BAD_DISTILLATION_STATUS", _FRAGMENT), ("WARN", "PROFILE_UNKNOWN_KEY", _FRAGMENT)]
+    # a second Conflict Log under its local name: the cross-concept count and the layer rule see the alias
+    k = _profiled(tmp_path / "logs", keys)
+    (k / "conflicts-2.md").write_text(_CONFLICT_LOG.replace("type: Conflict Log", "type: Registro de conflictos"),
+                                      encoding="utf-8")
+    (k / "index.md").write_text((k / "index.md").read_text(encoding="utf-8")
+                                .replace("* [base]", "* [C2](conflicts-2.md) - C.\n* [base]"), encoding="utf-8")
+    assert [(i["code"], i["path"]) for i in lint(k)[0].items] == [("PROFILE_MANY_CONFLICT_LOGS", "conflict-log.md")]
+    # an open question under a local name gets its review check
+    keys_q = "aliases:\n  types: { Pregunta: Open Question }\n"
+    k = _question_bundle(tmp_path / "q", _QUESTION_FIELDS + "review_on: 2020-01-01\n")
+    (k / _QUESTION).write_text((k / _QUESTION).read_text(encoding="utf-8").replace("type: Open Question", "type: Pregunta"),
+                               encoding="utf-8")
+    (k / "base" / "profile.md").write_text(_domain_profile(keys_q), encoding="utf-8")
+    assert ("WARN", "QUESTION_REVIEW_DUE") in _codes(lint(k)[0], _QUESTION)
+    # --no-profile applies no alias
+    k = _profiled(tmp_path / "np", keys, frag)
+    assert lint(k, profile=False)[0].items == []
+
+
+def test_a_value_alias_is_read_as_the_value_it_stands_for(tmp_path):
+    keys = (_MEETING + "aliases:\n  fields: { cliente: client }\n"
+            "  values: [{ from: { ingerido: true }, to: { distillation_status: distilled } }]\n"
+            "rules:\n  - { name: distilled-names-contract, when: { distillation_status: distilled }, require: [contract] }\n")
+    fields = _FRAGMENT_FIELDS.replace("distillation_status: pending\n", "ingerido: true\n") + "cliente: Acme\n"
+    rep, _, _ = lint(_profiled(tmp_path, keys, _meeting(fields)))
+    # distillation_status is present (no FRAGMENT_NO_FIELD) and distilled (the rule holds); neither the
+    # local field name nor the alias's key is unknown, and client is not missing
+    assert [(i["code"], i["message"]) for i in rep.items] == [
+        ("PROFILE_RULE", "rule 'distilled-names-contract': distillation_status is distilled but 'contract' is missing (§4.1)")]
+    # the concept's own value under the declared name wins
+    own = fields + "distillation_status: pending\n"
+    assert lint(_profiled(tmp_path / "own", keys, _meeting(own)))[0].items == []
+    # an alias whose from does not hold reads nothing, and its key is still a declared local name
+    no = fields.replace("ingerido: true", "ingerido: false")
+    assert [i["code"] for i in lint(_profiled(tmp_path / "no", keys, _meeting(no)))[0].items] == ["FRAGMENT_NO_FIELD"]
+
+
+_VALIDATOR_SCRIPT = ('printf "%s\\n" "$PWD" "$@" > ran.txt\n'
+                     'echo "token=FAKE-TOKEN-0001 password=hunter2-FAKE secret=FAKE-SECRET-0002 api_key=FAKE-KEY-0003"\n'
+                     'echo "Authorization: Bearer FAKE-AUTH-0004" >&2\necho "Bearer FAKE-BEARER-0005"\n'
+                     'echo "blob 0123456789abcdef0123456789abcdef01234567 and QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo0NTY3ODk="\n'
+                     'exit 3\n')
+_FAKE_SECRETS = ("FAKE-TOKEN-0001", "hunter2-FAKE", "FAKE-SECRET-0002", "FAKE-KEY-0003", "FAKE-AUTH-0004",
+                 "FAKE-BEARER-0005", "0123456789abcdef0123456789abcdef01234567",
+                 "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo0NTY3ODk=", "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo0NTY3ODk")
+
+
+def _validator_bundle(tmp_path, families: str = "") -> Path:
+    keys = (_MEETING + "validator:\n  - { name: meetings-check, types: [Knowledge Fragment], " + families
+            + "command: \"sh check.sh --strict\" }\n")
+    k = _profiled(tmp_path, keys, _meeting(_MEETING_FIELDS), extra={
+        "base/questions/q.md": _concept("Open Question", _QUESTION_FIELDS)})
+    (k / "check.sh").write_text(_VALIDATOR_SCRIPT, encoding="utf-8")
+    return k
+
+
+def test_a_validator_without_the_flag_is_a_notice_and_never_runs(tmp_path, capsys):
+    k = _validator_bundle(tmp_path)
+    rep, _, _ = lint(k)
+    assert rep.notices == ["validator meetings-check not run (use --run-validators)"]
+    assert not [i for i in rep.items if i["code"] in _CONCEPT_CODES]
+    assert rep.items == []
+    capsys.readouterr()
+    assert main([str(k), "--strict"]) == 0  # a notice never changes the exit code
+    assert "NOTICE validator meetings-check not run (use --run-validators)" in capsys.readouterr().out
+    assert main([str(k), "--json"]) == 0 and not (k / "ran.txt").exists()
+    assert json.loads(capsys.readouterr().out)["notices"] == rep.notices
+
+
+def test_run_validators_runs_from_the_bundle_root_and_masks_its_failure(tmp_path, capsys):
+    k = _validator_bundle(tmp_path, "families: [/base/questions/], ")
+    capsys.readouterr()
+    assert main([str(k), "--run-validators"]) == 1
+    text = capsys.readouterr().out
+    ran = (k / "ran.txt").read_text(encoding="utf-8").splitlines()
+    assert Path(ran[0]).resolve() == k.resolve()
+    assert ran[1:] == ["--strict", "base/questions/q.md", _FRAGMENT]  # its types (subtypes too) and its families
+    assert main([str(k), "--run-validators", "--json"]) == 1
+    out = capsys.readouterr().out
+    [f] = [i for i in json.loads(out)["findings"] if i["code"] == "PROFILE_VALIDATOR"]
+    assert (f["level"], f["path"], f["source"]) == ("ERROR", OWN_REL, OWN_REL)
+    assert f["message"].startswith("validator meetings-check failed (exit 3): token=[masked] password=[masked]")
+    assert "Authorization: [masked]" in f["message"] and "Bearer [masked]" in f["message"]
+    for s in _FAKE_SECRETS:
+        assert s not in text and s not in out, s
+    assert "NOTICE" not in text
+
+
+def test_validator_output_is_truncated_and_a_command_that_cannot_start_fails(tmp_path):
+    long = "x" * 5000
+    assert mask_secrets(long) == "[masked]"
+    k = _validator_bundle(tmp_path)
+    (k / "check.sh").write_text("for i in $(seq 1 600); do printf 'line %s. ' $i; done\nexit 1\n", encoding="utf-8")
+    [f] = [i for i in lint(k, validators=True)[0].items if i["code"] == "PROFILE_VALIDATOR"]
+    assert f["message"].endswith(" [truncated]") and len(f["message"]) < VALIDATOR_OUTPUT_MAX + 100
+    (k / "base" / "profile.md").write_text((k / "base" / "profile.md").read_text(encoding="utf-8")
+                                           .replace("sh check.sh", "no-such-validator-binary"), encoding="utf-8")
+    [f] = [i for i in lint(k, validators=True)[0].items if i["code"] == "PROFILE_VALIDATOR"]
+    assert "failed (could not start)" in f["message"]
+    # a validator that passes, or that matches no concept, adds nothing
+    (k / "base" / "profile.md").write_text((k / "base" / "profile.md").read_text(encoding="utf-8")
+                                           .replace("no-such-validator-binary", "true"), encoding="utf-8")
+    assert not [i for i in lint(k, validators=True)[0].items if i["code"] == "PROFILE_VALIDATOR"]
+
+
+def _every_violation_bundle(tmp_path) -> Path:
+    keys = (_MEETING + "families:\n  /base/questions/: { types: [Open Question], required: [tags] }\n"
+            "forbidden:\n  internal_notes: { reason: Internal notes stay out }\nfixed:\n  okf_lang: { value: en }\n"
+            "rules:\n  - { name: distilled-names-contract, when: { distillation_status: distilled }, require: [contract] }\n"
+            "validator:\n  - { name: meetings-check, types: [Client Meeting], command: \"sh check.sh\" }\n")
+    fields = (_FRAGMENT_FIELDS.replace("pending", "distilled") + "kind: lunch\nattendees: many\nmood: calm\n"
+              "internal_notes: x\nokf_lang: es\n")
+    k = _profiled(tmp_path, keys, _meeting(fields), extra={"base/questions/t.md": _concept("Term")})
+    (k / "check.sh").write_text(_VALIDATOR_SCRIPT, encoding="utf-8")
+    return k
+
+
+def test_no_profile_reports_no_profile_check_at_all(tmp_path, capsys):
+    k = _every_violation_bundle(tmp_path)
+    rep, _, _ = lint(k, profile=False, validators=True)
+    assert rep.items == [] and rep.notices == [] and not (k / "ran.txt").exists()
+    capsys.readouterr()
+    main([str(k), "--no-profile", "--run-validators", "--json"])
+    assert json.loads(capsys.readouterr().out)["findings"] == []
+
+
+def test_json_gives_every_new_code_its_level_and_the_source_that_declared_it(tmp_path, capsys):
+    k = _every_violation_bundle(tmp_path)
+    capsys.readouterr()
+    assert main([str(k), "--json", "--run-validators"]) == 1
+    found = {(i["code"], i["level"], i.get("source")) for i in json.loads(capsys.readouterr().out)["findings"]
+             if i["code"] in _CONCEPT_CODES}
+    assert found == {(c, "WARN" if c in ("PROFILE_FIELD_TYPE", "PROFILE_UNKNOWN_KEY") else "ERROR", OWN_REL)
+                     for c in _CONCEPT_CODES}
+
+
+def test_family_requirements_with_their_own_code_apply_under_the_family_only(tmp_path):
+    keys = ("families:\n  /base/questions/:\n    required: { review_on: { level: warn, code: MY_REVIEW } }\n"
+            "    fixed: { okf_lang: { value: en, code: MY_LANG } }\n"
+            "    forbidden: { draft_notes: { reason: no drafts, level: warn, code: MY_DRAFTS } }\n"
+            "  /base/questions/legal/: { required: [tags] }\n")
+    k = _profiled(tmp_path, keys, _concept("Knowledge Fragment", _FRAGMENT_FIELDS + "okf_lang: es\ndraft_notes: x\n"),
+                  extra={"base/questions/a.md": _concept("Open Question", _QUESTION_FIELDS + "okf_lang: es\ndraft_notes: x\n"),
+                         "base/questions/legal/b.md": _concept("Open Question", _QUESTION_FIELDS + "review_on: 2999-01-01\n")})
+    found = sorted((i["path"], i["level"], i["code"]) for i in lint(k)[0].items if i["path"].startswith("base/"))
+    assert found == [("base/questions/a.md", "ERROR", "MY_LANG"), ("base/questions/a.md", "WARN", "MY_DRAFTS"),
+                     ("base/questions/a.md", "WARN", "MY_REVIEW"),
+                     ("base/questions/legal/b.md", "ERROR", "PROFILE_REQUIRED")]  # nested families: both apply
+
+
+def test_examples_knowledge_lints_with_its_profile_and_its_two_known_warnings():
+    import pytest
+
+    bundle = next((p / "examples" / "knowledge" for p in Path(__file__).resolve().parents
+                   if (p / "examples" / "knowledge" / "base" / "profile.md").is_file()), None)
+    if bundle is None:
+        pytest.skip("examples/knowledge with its base/profile.md not beside this script")
+    rep, _, _ = lint(bundle)
+    assert [(i["level"], i["code"]) for i in rep.items] == [("WARN", "BROKEN_LINK"), ("WARN", "STALE")]
+    prof = load_profile(bundle)
+    assert prof.has_own and any(t.get("extends") for t in prof.types.values() if t["source"] == OWN_REL)
+    assert prof.families and prof.rules[-1]["source"] == OWN_REL and prof.aliases["types"]
+    local = {t for t, d in prof.types.items() if d["source"] == OWN_REL}
+    assert any(str(d.frontmatter.get("type")) in local for d in walk_bundle(bundle) if d.frontmatter)
+
+
+def test_mask_secrets():
+    assert mask_secrets("token=abc key=def password=p secret=s") == "token=[masked] key=[masked] password=[masked] secret=[masked]"
+    assert mask_secrets("Authorization: Bearer xyz rest") == "Authorization: [masked] rest"
+    assert mask_secrets("Bearer abc.def") == "Bearer [masked]"
+    assert mask_secrets("id " + "a1" * 16 + " end") == "id [masked] end"
+    assert mask_secrets("short abcdef0123 ok") == "short abcdef0123 ok"
 
 
 if __name__ == "__main__":
