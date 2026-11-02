@@ -57,7 +57,7 @@ NEEDS = {
     "okf-review":   {"scripts": ["okf_index.py", "okf_lint.py", "okf_common.py"], "templates": False},
     "okf-lint":     {"scripts": ["okf_lint.py", "okf_common.py"], "templates": False},
     "okf-index":    {"scripts": ["okf_index.py", "okf_common.py"], "templates": False},
-    "okf-migrate":  {"scripts": ["okf_migrate.py", "okf_common.py", "okf_lint.py"], "templates": False},
+    "okf-migrate":  {"scripts": ["okf_migrate.py", "okf_common.py", "okf_lint.py", "okf_index.py"], "templates": False},
     "okf-ask":      {"scripts": ["okf_lint.py", "okf_common.py"], "templates": False},
 }
 MAX_COMPANIONS = 20

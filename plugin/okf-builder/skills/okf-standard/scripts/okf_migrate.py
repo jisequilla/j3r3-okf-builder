@@ -3,11 +3,13 @@
 # requires-python = ">=3.9"
 # dependencies = ["pyyaml"]
 # ///
-"""okf_migrate.py — Migrate an OKF bundle between v0.1 and v0.2 (both directions).
+"""okf_migrate.py — Migrate an OKF bundle between v0.1 and v0.2 (both directions),
+and from the knowledge/2.0 profile to knowledge/3.0.
 
 Usage:
     uv run okf_migrate.py [bundle] --to 0.2 [--actor process:okf-migrate] [--dry-run] [--out DIR]
     uv run okf_migrate.py [bundle] --to 0.1 [--keep-extensions] [--dry-run] [--out DIR]
+    uv run okf_migrate.py [bundle] --profile knowledge/3.0 [--to 0.2] [--dry-run] [--out DIR]
 
 0.1 → 0.2 (lossless):
   - timestamp            → generated: { by: <actor>, at: <timestamp> }
@@ -21,6 +23,17 @@ Usage:
     (with --keep-extensions they are kept as extra keys, legal in both specs)
   - okf_version "0.1" in the root index.md; an entry in log.md
 
+knowledge/2.0 → knowledge/3.0 (--profile; okf_version is not changed):
+  - every non-hidden root directory except fragments/ and projections/, and every root
+    .md other than index.md, log.md, project.md and the Conflict Log, move under base/
+  - links in every .md (reserved files included) and sources[].resource are rewritten:
+    a bundle path into a moved path (/decisions/x.md → /base/decisions/x.md), and a
+    relative path whose target is on the other side of the move (recomputed); any
+    other path (/standard/..., a repo-relative resource) is left as it is
+  - the root index.md, base/index.md and every index below base/ are regenerated
+    (# Notes kept); okf_profile "knowledge/3.0" in the root index.md; an entry in log.md
+  With --to as well, the profile step runs first and the version step walks its result.
+
 --out DIR writes a migrated copy and leaves the source bundle untouched (recommended for 0.2→0.1).
 It edits the frontmatter text by key blocks to keep order, comments and unknown keys;
 it never re-serializes the whole YAML.
@@ -28,6 +41,7 @@ it never re-serializes the whole YAML.
 from __future__ import annotations
 
 import argparse
+import posixpath
 import re
 import shutil
 import sys
@@ -36,14 +50,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from okf_common import (  # noqa: E402
+    BASE_DIR,
     CITATIONS_RE,
+    LAYER_DIRS,
+    PROFILE_30,
     SUPPORTED_VERSIONS,
+    declared_profile,
     detect_version,
     find_bundle,
+    load_doc,
     parse_yaml,
     split_frontmatter,
     walk_bundle,
 )
+from okf_index import index_targets, regenerate  # noqa: E402
 
 DROP_ON_DOWNGRADE = ["verified", "status", "stale_after", "usage_window"]
 
@@ -246,21 +266,27 @@ def migrate_concept(text: str, to: str, actor: str, keep_ext: bool, notes: list[
     return "---\n" + blocks_to_raw(blocks) + "\n---\n\n" + body.lstrip("\n")
 
 
-def set_root_version(index_path: Path, to: str) -> None:
+def set_root_key(index_path: Path, key: str, value: str) -> None:
+    """Set `key: "value"` in the root index.md frontmatter; a missing key goes first."""
     text = index_path.read_text(encoding="utf-8") if index_path.exists() else "# Index\n"
     raw, body = split_frontmatter(text)
+    line = f'{key}: "{value}"'
     if raw is None:
-        raw = f'okf_version: "{to}"'
-    elif re.search(r"^okf_version\s*:", raw, re.M):
-        raw = re.sub(r"^okf_version\s*:.*$", f'okf_version: "{to}"', raw, flags=re.M)
+        raw = line
+    elif re.search(rf"^{key}\s*:", raw, re.M):
+        raw = re.sub(rf"^{key}\s*:.*$", line, raw, flags=re.M)
     else:
-        raw = f'okf_version: "{to}"\n' + raw
+        raw = line + "\n" + raw
     index_path.write_text("---\n" + raw.strip("\n") + "\n---\n\n" + body.lstrip("\n").rstrip("\n") + "\n", encoding="utf-8")
 
 
-def append_log(log_path: Path, to: str, n: int) -> None:
+def set_root_version(index_path: Path, to: str) -> None:
+    set_root_key(index_path, "okf_version", to)
+
+
+def append_log(log_path: Path, to: str, n: int, entry: str | None = None) -> None:
     today = date.today().isoformat()
-    entry = f"* **Migration**: Bundle migrated to OKF v{to} ({n} concepts) with okf-migrate."
+    entry = entry or f"* **Migration**: Bundle migrated to OKF v{to} ({n} concepts) with okf-migrate."
     if log_path.exists():
         text = log_path.read_text(encoding="utf-8")
         if f"## {today}" in text:
@@ -273,25 +299,146 @@ def append_log(log_path: Path, to: str, n: int) -> None:
     log_path.write_text(text, encoding="utf-8")
 
 
+# --------------------------------------------------------------------------
+# Profile knowledge/2.0 -> knowledge/3.0
+# --------------------------------------------------------------------------
+ROOT_KEEP = {"index.md", "log.md", "project.md"}
+EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:")
+MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)")
+RESOURCE_RE = re.compile(r"(\bresource\s*:\s*)([\"']?)([^\s\"',}\]]+)")
+
+
+class Move:
+    """The 2.0 -> 3.0 move, as bundle-relative posix paths (lexical: nothing is read from disk)."""
+
+    def __init__(self, dirs: list[str], files: list[str]):
+        self.dirs, self.files = set(dirs), set(files)
+
+    def moved(self, rel: str) -> bool:
+        if rel == ".." or rel.startswith("../"):
+            return False
+        return rel.split("/")[0] in self.dirs or rel in self.files
+
+    def new(self, rel: str) -> str:
+        return f"{BASE_DIR}/{rel}" if self.moved(rel) else rel
+
+    def target(self, target: str, doc_rel: str) -> str | None:
+        """The rewritten link target, or None when it stays as it is."""
+        if EXTERNAL_RE.match(target) or target.startswith("#"):
+            return None
+        path, sep, anchor = target.partition("#")
+        if not path:
+            return None
+        slash = "/" if path.endswith("/") and path != "/" else ""
+        if path.startswith("/"):
+            rel = posixpath.normpath(path.lstrip("/"))
+            return f"/{self.new(rel)}{slash}{sep}{anchor}" if self.moved(rel) else None
+        doc_dir = posixpath.dirname(doc_rel)
+        rel = posixpath.normpath(posixpath.join(doc_dir, path))
+        if self.moved(rel) == self.moved(doc_rel):
+            return None
+        new_dir = posixpath.dirname(self.new(doc_rel)) or "."
+        return posixpath.relpath(self.new(rel), new_dir) + slash + sep + anchor
+
+
+def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
+    """(root directories, root concepts) that move under base/."""
+    dirs = [p.name for p in sorted(bundle.iterdir())
+            if p.is_dir() and not p.name.startswith(".") and p.name not in LAYER_DIRS]
+    files = [p.name for p in sorted(bundle.iterdir())
+             if p.is_file() and p.suffix == ".md" and p.name not in ROOT_KEEP
+             and (load_doc(bundle, p).frontmatter or {}).get("type") != "Conflict Log"]
+    return dirs, files
+
+
+def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
+    """Rewrite the body links and the sources[].resource of one .md, keeping every other byte."""
+    def sub(m: re.Match, group: int) -> str:
+        new = move.target(m.group(group), doc_rel)
+        if new is None:
+            return m.group(0)
+        start, end = m.start(group) - m.start(0), m.end(group) - m.start(0)
+        return m.group(0)[:start] + new + m.group(0)[end:]
+
+    lines = text.split("\n")
+    body_start = 0
+    if lines and lines[0].strip() == "---":
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+        if end is not None:
+            in_sources = False
+            for i in range(1, end):
+                key = re.match(r"^([A-Za-z_][\w-]*)\s*:", lines[i])
+                if key:
+                    in_sources = key.group(1) == "sources"
+                if in_sources:
+                    lines[i] = RESOURCE_RE.sub(lambda m: sub(m, 3), lines[i])
+            body_start = end + 1
+    body = MD_LINK_RE.sub(lambda m: sub(m, 2), "\n".join(lines[body_start:]))
+    return "\n".join([*lines[:body_start], body])
+
+
+def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
+    dirs, files = profile_moves(bundle)
+    clash = [n for n in dirs + files if (bundle / BASE_DIR / n).exists()]
+    if clash:
+        print(f"ERROR: base/ already holds {', '.join(clash)}; move them by hand first.", file=sys.stderr)
+        return 1
+    move = Move(dirs, files)
+    rewritten = {}
+    for doc in walk_bundle(bundle):
+        text = doc.path.read_text(encoding="utf-8")
+        new = rewrite_paths(text, doc.rel, move)
+        if new != text:
+            rewritten[doc.rel] = new
+    dry = "(dry) " if dry_run else ""
+    for n in dirs:
+        print(f"{dry}move {n}/ → {BASE_DIR}/{n}/")
+    for n in files:
+        print(f"{dry}move {n} → {BASE_DIR}/{n}")
+    for rel in rewritten:
+        print(f"{dry}rewrote links in {move.new(rel)}")
+    if not dry_run:
+        (bundle / BASE_DIR).mkdir(exist_ok=True)
+        for n in dirs + files:
+            shutil.move(str(bundle / n), str(bundle / BASE_DIR / n))
+        for rel, text in rewritten.items():
+            (bundle / move.new(rel)).write_text(text, encoding="utf-8")
+        set_root_key(bundle / "index.md", "okf_profile", target)
+        regenerate(bundle, [bundle, *index_targets(bundle, bundle / BASE_DIR)])
+        append_log(bundle / "log.md", "", 0, entry=(
+            f"* **Migration**: Bundle migrated to profile {target} ({len(dirs)} directories and {len(files)} "
+            f"root concepts moved under base/; links rewritten in {len(rewritten)} files) with okf-migrate."))
+    print(f"\nProfile {target}: {len(dirs)} directories and {len(files)} root concepts moved under base/, "
+          f"links rewritten in {len(rewritten)} files{' (dry-run)' if dry_run else ''} → {bundle}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
-    ap.add_argument("--to", required=True, choices=SUPPORTED_VERSIONS, help="target OKF version")
+    ap.add_argument("--to", choices=SUPPORTED_VERSIONS, help="target OKF version")
+    ap.add_argument("--profile", choices=(PROFILE_30,), help="target knowledge profile (moves the typed directories under base/)")
     ap.add_argument("--actor", default="process:okf-migrate", help="generated.by for concepts without an author (0.1→0.2)")
     ap.add_argument("--keep-extensions", action="store_true", help="0.2→0.1: keep v0.2 keys as extensions")
     ap.add_argument("--out", help="write a migrated copy to this directory (the source is left untouched)")
     ap.add_argument("--dry-run", action="store_true", help="report the changes without writing them")
-    ap.add_argument("--force", action="store_true", help="migrate even if the detected version already is the target")
+    ap.add_argument("--force", action="store_true", help="migrate even if the bundle already is at the target")
     ap.add_argument("--file", action="append", default=[],
                     help="migrate only this concept (path relative to the bundle); repeatable. Leaves index/log alone")
     args = ap.parse_args(argv)
+    if args.file and args.profile:
+        ap.error("--profile migrates the whole bundle; it cannot be combined with --file")
+    if args.file and not args.to:
+        ap.error("--file needs --to")
+    if not args.to and not args.profile:
+        ap.error("at least one of --to or --profile is required")
 
     src = Path(args.bundle).resolve() if args.bundle else find_bundle()
     if src is None or not src.is_dir():
         print("ERROR: bundle not found (knowledge/index.md). Pass its path.", file=sys.stderr)
         return 2
-    detected, origin = detect_version(src)
     if args.file:
+        detected, origin = detect_version(src)
         notes: list[str] = []
         for rel in args.file:
             fp = src / rel
@@ -303,9 +450,20 @@ def main(argv=None) -> int:
         for n in notes:
             print("  note:", n)
         return 0
-    print(f"Source: {src} · detected version {detected} ({origin}) → target {args.to}")
-    if detected == args.to and origin == "declared" and not args.force:
-        print("Already at the target version; nothing to do (use --force to rewrite).")
+    profile_todo = version_todo = False
+    if args.profile:
+        current = declared_profile(src)
+        print(f"Source: {src} · profile {current or 'none (knowledge/2.0)'} → target {args.profile}")
+        profile_todo = current != args.profile or args.force
+        if not profile_todo:
+            print(f"Already {args.profile}; nothing to do for the profile (use --force to rewrite).")
+    if args.to:
+        detected, origin = detect_version(src)
+        print(f"Source: {src} · detected version {detected} ({origin}) → target {args.to}")
+        version_todo = not (detected == args.to and origin == "declared" and not args.force)
+        if not version_todo:
+            print("Already at the target version; nothing to do (use --force to rewrite).")
+    if not profile_todo and not version_todo:
         return 0
 
     dst = src
@@ -315,19 +473,26 @@ def main(argv=None) -> int:
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+    # Every step reads and writes `work`: the copy when --out, the source otherwise (read-only under --dry-run)
+    work = dst if not args.dry_run else src
+
+    if profile_todo:
+        rc = migrate_profile(work, args.profile, args.dry_run)
+        if rc or not version_todo:
+            return rc
 
     notes: list[str] = []
     changed = 0
-    for doc in walk_bundle(src):
+    for doc in walk_bundle(work):
         if doc.is_reserved:
             continue
         new = migrate_concept(doc.path.read_text(encoding="utf-8"), args.to, args.actor, args.keep_extensions, notes, doc.rel,
-                              bundle=src, doc_path=doc.path)
+                              bundle=work, doc_path=doc.path)
         if new != doc.path.read_text(encoding="utf-8"):
             changed += 1
             print(f"{'(dry) ' if args.dry_run else ''}migrated {doc.rel}")
             if not args.dry_run:
-                (dst / doc.rel).write_text(new, encoding="utf-8")
+                (work / doc.rel).write_text(new, encoding="utf-8")
     if not args.dry_run:
         set_root_version(dst / "index.md", args.to)
         append_log(dst / "log.md", args.to, changed)
@@ -420,6 +585,176 @@ def test_main_out_leaves_source_untouched(tmp_path):
     assert (src / "orders.md").read_text(encoding="utf-8") == _V01
     assert "generated:" in (out / "orders.md").read_text(encoding="utf-8")
     assert 'okf_version: "0.2"' in (out / "index.md").read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------
+# Profile tests
+# --------------------------------------------------------------------------
+_GEN = "generated: { by: okf-builder/test, at: 2026-10-31T18:00:00Z }\n"
+
+
+def _concept(t: str, title: str, extra: str = "", body: str = "Text.\n") -> str:
+    return f"---\ntype: {t}\ntitle: {title}\ndescription: {title}.\n{_GEN}{extra}---\n\n{body}"
+
+
+def _bundle_20(tmp: Path) -> Path:
+    """A knowledge/2.0 bundle with every kind of path the profile migration must (or must not) touch."""
+    k = tmp / "knowledge"
+    for d in ("decisions", "references/skills", "fragments", ".obsidian"):
+        (k / d).mkdir(parents=True)
+    (k / "index.md").write_text('---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n# Project\n\n'
+                                "* [P](project.md) - P.\n\n# Notes\n\nKept by hand.\n", encoding="utf-8")
+    (k / "log.md").write_text("# Bundle history\n\n## 2026-10-31\n"
+                              "* **Creation**: [ADR-0001](decisions/ADR-0001-x.md) and [glossary](glossary.md).\n",
+                              encoding="utf-8")
+    (k / "project.md").write_text(_concept(
+        "Project", "P",
+        "sources:\n  - id: s1\n    resource: /standard/OKF-STANDARD.md\n  - { id: s2, resource: /tools }\n"
+        "  - id: s3\n    resource: tools/export_m365.py\n",
+        "See [the ADR](/decisions/ADR-0001-x.md#context), [decisions](decisions/index.md), "
+        "[site](https://example.com/decisions/x.md) and [top](#purpose).\n"), encoding="utf-8")
+    (k / "conflict-log.md").write_text(_concept("Conflict Log", "Conflicts", body="[ADR](decisions/ADR-0001-x.md)\n"),
+                                       encoding="utf-8")
+    (k / "glossary.md").write_text(_concept("Glossary", "Glossary", body="Back to [P](project.md).\n"), encoding="utf-8")
+    (k / "decisions" / "index.md").write_text("# decisions\n\n> Decisions.\n\n* [X](ADR-0001-x.md) - X.\n",
+                                              encoding="utf-8")
+    (k / "decisions" / "ADR-0001-x.md").write_text(_concept(
+        "Architecture Decision", "X",
+        "sources:\n  - id: f\n    resource: /fragments/2026-10-31-m.md\n  - id: r\n    resource: \"../fragments/2026-10-31-m.md\"\n"
+        "  - id: d\n    resource: docs/bench.md\n",
+        "[P](../project.md), [ref](../references/okf.md), [abs](/references/okf.md), [frag](../fragments/2026-10-31-m.md)"
+        " and ![img](../references/okf.md).\n"), encoding="utf-8")
+    (k / "references" / "index.md").write_text("# references\n\n* [OKF](okf.md) - OKF.\n", encoding="utf-8")
+    (k / "references" / "okf.md").write_text(_concept("Reference", "OKF"), encoding="utf-8")
+    (k / "references" / "skills" / "index.md").write_text("# skills\n\n_(empty)_\n", encoding="utf-8")
+    (k / "fragments" / "index.md").write_text("# fragments\n\n* [M](2026-10-31-m.md) - M.\n", encoding="utf-8")
+    (k / "fragments" / "2026-10-31-m.md").write_text(_concept(
+        "Knowledge Fragment", "M",
+        "occurred_at: 2026-10-31\norigin: Weekly\nparticipants: [human:alice]\ndistillation_status: distilled\n"
+        "sources:\n  - { id: a, resource: /decisions/ADR-0001-x.md, title: X }\n",
+        "Distilled into [X](../decisions/ADR-0001-x.md).\n"), encoding="utf-8")
+    (k / ".obsidian" / "notes.md").write_text("[x](/decisions/ADR-0001-x.md)\n", encoding="utf-8")
+    return k
+
+
+def _tree(k: Path) -> dict[str, str]:
+    return {p.relative_to(k).as_posix(): p.read_text(encoding="utf-8") for p in sorted(k.rglob("*")) if p.is_file()}
+
+
+def test_profile_moves_dirs_and_root_concepts(tmp_path):
+    k = _bundle_20(tmp_path)
+    assert main([str(k), "--profile", "knowledge/3.0"]) == 0
+    assert sorted(p.name for p in k.iterdir()) == [".obsidian", "base", "conflict-log.md", "fragments", "index.md",
+                                                   "log.md", "project.md"]
+    assert sorted(p.name for p in (k / "base").iterdir()) == ["decisions", "glossary.md", "index.md", "references"]
+    assert (k / "base" / "references" / "skills" / "index.md").is_file()
+    root = (k / "index.md").read_text(encoding="utf-8")
+    assert 'okf_profile: "knowledge/3.0"' in root and 'okf_version: "0.2"' in root
+    assert "* [base](base/index.md) - The project's knowledge, in typed directories." in root
+    assert "* [fragments](fragments/index.md) - " in root and "Kept by hand." in root
+    base = (k / "base" / "index.md").read_text(encoding="utf-8")
+    assert "* [decisions](decisions/index.md) - Decisions." in base and "* [Glossary](glossary.md)" in base
+    log = (k / "log.md").read_text(encoding="utf-8")
+    assert log.count("**Migration**") == 1
+
+
+def test_profile_rewrites_absolute_links(tmp_path):
+    k = _bundle_20(tmp_path)
+    main([str(k), "--profile", "knowledge/3.0"])
+    project = (k / "project.md").read_text(encoding="utf-8")
+    assert "[the ADR](/base/decisions/ADR-0001-x.md#context)" in project
+    assert "[decisions](base/decisions/index.md)" in project
+    assert "(https://example.com/decisions/x.md)" in project and "[top](#purpose)" in project
+    adr = (k / "base" / "decisions" / "ADR-0001-x.md").read_text(encoding="utf-8")
+    assert "[abs](/base/references/okf.md)" in adr and "[ref](../references/okf.md)" in adr
+    assert "![img](../references/okf.md)" in adr
+    assert "[x](/decisions/ADR-0001-x.md)" in (k / ".obsidian" / "notes.md").read_text(encoding="utf-8")
+
+
+def test_profile_rewrites_relative_links_across_the_move(tmp_path):
+    k = _bundle_20(tmp_path)
+    main([str(k), "--profile", "knowledge/3.0"])
+    frag = (k / "fragments" / "2026-10-31-m.md").read_text(encoding="utf-8")
+    assert "Distilled into [X](../base/decisions/ADR-0001-x.md)." in frag
+    adr = (k / "base" / "decisions" / "ADR-0001-x.md").read_text(encoding="utf-8")
+    assert "[P](../../project.md)" in adr and "[frag](../../fragments/2026-10-31-m.md)" in adr
+    assert "Back to [P](../project.md)." in (k / "base" / "glossary.md").read_text(encoding="utf-8")
+    log = (k / "log.md").read_text(encoding="utf-8")
+    assert "[ADR-0001](base/decisions/ADR-0001-x.md) and [glossary](base/glossary.md)" in log
+    assert "[ADR](base/decisions/ADR-0001-x.md)" in (k / "conflict-log.md").read_text(encoding="utf-8")
+
+
+def test_profile_rewrites_sources_and_leaves_repo_paths(tmp_path):
+    k = _bundle_20(tmp_path)
+    main([str(k), "--profile", "knowledge/3.0"])
+    frag, _ = _parse((k / "fragments" / "2026-10-31-m.md").read_text(encoding="utf-8"))
+    assert frag["sources"] == [{"id": "a", "resource": "/base/decisions/ADR-0001-x.md", "title": "X"}]
+    adr, _ = _parse((k / "base" / "decisions" / "ADR-0001-x.md").read_text(encoding="utf-8"))
+    assert [s["resource"] for s in adr["sources"]] == ["/fragments/2026-10-31-m.md", "../../fragments/2026-10-31-m.md",
+                                                       "docs/bench.md"]
+    proj, _ = _parse((k / "project.md").read_text(encoding="utf-8"))
+    assert [s["resource"] for s in proj["sources"]] == ["/standard/OKF-STANDARD.md", "/tools", "tools/export_m365.py"]
+
+
+def test_profile_result_lints_clean(tmp_path):
+    from okf_lint import lint
+
+    k = _bundle_20(tmp_path)
+    main([str(k), "--profile", "knowledge/3.0"])
+    rep, _, _ = lint(k)
+    assert rep.errors == [] and not rep.profile_outdated
+    assert not [i for i in rep.items if i["code"] in ("BROKEN_LINK", "INDEX_BROKEN", "INDEX_STALE")], rep.items
+
+
+def test_profile_idempotent_on_30(tmp_path, capsys):
+    k = _bundle_20(tmp_path)
+    main([str(k), "--profile", "knowledge/3.0"])
+    before = _tree(k)
+    capsys.readouterr()
+    assert main([str(k), "--profile", "knowledge/3.0"]) == 0
+    assert "Already knowledge/3.0" in capsys.readouterr().out
+    assert _tree(k) == before
+    assert main([str(k), "--profile", "knowledge/3.0", "--to", "0.2"]) == 0
+    assert _tree(k) == before
+
+
+def test_profile_dry_run_and_out_leave_source(tmp_path):
+    k = _bundle_20(tmp_path)
+    before = _tree(k)
+    assert main([str(k), "--profile", "knowledge/3.0", "--dry-run"]) == 0
+    assert _tree(k) == before
+    out = tmp_path / "out"
+    assert main([str(k), "--profile", "knowledge/3.0", "--out", str(out)]) == 0
+    assert _tree(k) == before and (out / "base" / "decisions" / "ADR-0001-x.md").is_file()
+
+
+def test_profile_then_version_walks_the_destination(tmp_path):
+    from okf_lint import lint
+
+    k = _bundle_20(tmp_path)
+    out = tmp_path / "out"
+    assert main([str(k), "--profile", "knowledge/3.0", "--to", "0.1", "--keep-extensions", "--out", str(out)]) == 0
+    assert not (out / "decisions").exists()
+    fm, _ = _parse((out / "base" / "decisions" / "ADR-0001-x.md").read_text(encoding="utf-8"))
+    assert "timestamp" in fm
+    root = (out / "index.md").read_text(encoding="utf-8")
+    assert 'okf_version: "0.1"' in root and 'okf_profile: "knowledge/3.0"' in root
+    assert (out / "log.md").read_text(encoding="utf-8").count("**Migration**") == 2
+    rep, _, _ = lint(out)
+    assert not [i for i in rep.items if i["code"] == "PROFILE_OUTSIDE_LAYER"]
+
+
+def test_option_combinations(tmp_path, capsys):
+    import pytest
+
+    k = _bundle_20(tmp_path)
+    for argv, msg in (([], "at least one of --to or --profile"),
+                      (["--profile", "knowledge/3.0", "--to", "0.2", "--file", "project.md"],
+                       "--profile migrates the whole bundle"),
+                      (["--file", "project.md"], "--file needs --to")):
+        with pytest.raises(SystemExit):
+            main([str(k), *argv])
+        assert msg in capsys.readouterr().err
 
 
 if __name__ == "__main__":

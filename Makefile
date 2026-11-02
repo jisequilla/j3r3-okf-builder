@@ -17,10 +17,10 @@ test:
 	uv run -q --with pytest $(S)/okf_index.py --test
 	uv run -q --with pytest $(S)/okf_lint.py --test
 	uv run -q --with pytest $(S)/okf_migrate.py --test
-	@echo "[2] init 0.2 + index + lint --strict"
+	@echo "[2] init 0.2 (profile knowledge/3.0) + index + lint --strict"
 	rm -rf /tmp/okf-test && uv run -q $(S)/okf_init.py --root /tmp/okf-test --title T --description D --actor human:test >/dev/null
 	uv run -q $(S)/okf_index.py /tmp/okf-test/knowledge --check && uv run -q $(S)/okf_lint.py /tmp/okf-test/knowledge --strict | tail -1
-	test -f /tmp/okf-test/knowledge/project.md && test -d /tmp/okf-test/knowledge/decisions && test -d /tmp/okf-test/knowledge/policies && grep -q 'knowledge/2.0' /tmp/okf-test/knowledge/index.md && test -d /tmp/okf-test/knowledge/fragments
+	test -f /tmp/okf-test/knowledge/project.md && test -d /tmp/okf-test/knowledge/base/decisions && test -d /tmp/okf-test/knowledge/base/policies && grep -q 'knowledge/3.0' /tmp/okf-test/knowledge/index.md && test -d /tmp/okf-test/knowledge/fragments && test -f /tmp/okf-test/knowledge/projections/.gitkeep && test ! -e /tmp/okf-test/knowledge/decisions
 	@echo "[3] init 0.1 + lint --strict"
 	rm -rf /tmp/okf-test1 && uv run -q $(S)/okf_init.py --root /tmp/okf-test1 --title T --description D --actor human:test --okf-version 0.1 >/dev/null
 	uv run -q $(S)/okf_lint.py /tmp/okf-test1/knowledge --strict | tail -1
@@ -33,10 +33,16 @@ test:
 	grep -q '\*\*Migration\*\*' /tmp/okf-m1/log.md
 	uv run -q $(S)/okf_migrate.py examples/fixtures/google-acme-retail-v0.2 --to 0.1 --keep-extensions --out /tmp/okf-m2 >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m2 --no-profile | tail -1
 	uv run -q $(S)/okf_migrate.py /tmp/okf-m2 --to 0.2 --out /tmp/okf-m3 --force >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m3 --no-profile --strict | tail -1
+	@echo "[5b] profile migration knowledge/2.0→3.0 of a copy of examples/knowledge (2 known warnings: 0 errors)"
+	rm -rf /tmp/okf-p3 && uv run -q $(S)/okf_migrate.py examples/knowledge --profile knowledge/3.0 --out /tmp/okf-p3 >/dev/null
+	uv run -q $(S)/okf_lint.py /tmp/okf-p3 | tail -1 | grep ' 0 errors'
+	test -d /tmp/okf-p3/base/decisions && test ! -e /tmp/okf-p3/decisions && grep -q 'knowledge/3.0' /tmp/okf-p3/index.md && grep -q '\*\*Migration\*\*' /tmp/okf-p3/log.md
 	@echo "[6] M365 export: within the companion limit, and each exported skill self-contained"
 	python3 tools/export_m365.py >/dev/null
 	rm -rf /tmp/okf-m365 && uv run -q dist/m365/package/skills/okf-init/scripts/okf_init.py --root /tmp/okf-m365 --title T --description D --actor human:test >/dev/null
 	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
+	rm -rf /tmp/okf-m365p3 && uv run -q dist/m365/package/skills/okf-migrate/scripts/okf_migrate.py examples/knowledge --profile knowledge/3.0 --out /tmp/okf-m365p3 >/dev/null
+	uv run -q dist/m365/package/skills/okf-migrate/scripts/okf_lint.py /tmp/okf-m365p3 | tail -1 | grep ' 0 errors'
 	for s in okf-capture okf-fragment okf-distill; do grep -q 'scripts/okf_migrate.py' dist/m365/package/skills/$$s/SKILL.md && test -f dist/m365/package/skills/$$s/scripts/okf_migrate.py || { echo "$$s: names okf_migrate.py but does not ship it"; exit 1; }; done
 	@echo "[7] canonical copies match the source; M365 agent within its limits and matching tools/m365-agent.json"
 	diff -rq templates $(PLUGIN)/skills/okf-standard/templates

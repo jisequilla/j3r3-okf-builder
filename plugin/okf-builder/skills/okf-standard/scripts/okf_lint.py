@@ -3,13 +3,18 @@
 # requires-python = ">=3.9"
 # dependencies = ["pyyaml"]
 # ///
-"""okf_lint.py — Validate an OKF v0.2 bundle and the knowledge/2.0 profile.
+"""okf_lint.py — Validate an OKF v0.2 bundle and its knowledge profile (3.0, or the outdated 2.0).
 
 Usage:
     uv run okf_lint.py [path/to/bundle] [--json] [--strict] [--no-profile]
 
 Output: a list of findings with level ERROR / WARN and a code. Exit 1 if there
 are errors (or warnings with --strict).
+
+The profile is the okf_profile of the root index.md; a bundle without one is
+treated as knowledge/2.0. A knowledge/2.0 bundle stays valid, and lint prints a
+notice (neither a warning nor an error) before the summary line; --json carries
+it as "profile_outdated". projections/ at the root is not OKF and is skipped.
 """
 from __future__ import annotations
 
@@ -28,10 +33,14 @@ from okf_common import (  # noqa: E402
     V02_KEYS,
     detect_version,
     KEBAB_RE,
+    LAYER_DIRS,
+    PROFILE_20,
+    PROFILE_30,
     VALID_DISTILLATION,
     VALID_STATUS,
     Doc,
     as_list,
+    declared_profile,
     extract_links,
     find_bundle,
     is_iso,
@@ -42,9 +51,13 @@ from okf_common import (  # noqa: E402
 )
 
 
+OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
+
+
 class Report:
     def __init__(self) -> None:
         self.items: list[dict] = []
+        self.profile_outdated = False
 
     def add(self, level: str, code: str, path: str, msg: str) -> None:
         self.items.append({"level": level, "code": code, "path": path, "message": msg})
@@ -123,7 +136,8 @@ def check_log(doc: Doc, rep: Report) -> None:
         rep.warn("LOG_ORDER", doc.rel, "log dates must go from newest to oldest")
 
 
-def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datetime, version: str = "0.2") -> None:
+def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datetime, version: str = "0.2",
+                  pname: str = PROFILE_20) -> None:
     if not doc.has_fm_block:
         rep.error("NO_FRONTMATTER", doc.rel, "concept has no YAML frontmatter block (§11.1)")
         return
@@ -158,7 +172,7 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
         ts = fm.get("timestamp")
         if ts is None:
             if profile:
-                rep.error("PROFILE_NO_TIMESTAMP", doc.rel, "profile knowledge/2.0 in 0.1 mode requires 'timestamp'")
+                rep.error("PROFILE_NO_TIMESTAMP", doc.rel, f"profile {pname} in 0.1 mode requires 'timestamp'")
         elif not is_iso(ts):
             rep.warn("BAD_ISO", doc.rel, f"timestamp '{ts}' is not ISO 8601 with an offset")
         if has_citations:
@@ -177,7 +191,7 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
             if "at" in gen and not is_iso(gen["at"]):
                 rep.warn("BAD_ISO", doc.rel, f"generated.at '{gen['at']}' is not ISO 8601 with an offset")
     elif profile and version == "0.2":
-        rep.error("PROFILE_NO_GENERATED", doc.rel, "profile knowledge/2.0 requires 'generated: { by, at }'")
+        rep.error("PROFILE_NO_GENERATED", doc.rel, f"profile {pname} requires 'generated: {{ by, at }}'")
 
     for v in as_list(fm.get("verified")):
         if not isinstance(v, dict) or not v.get("by"):
@@ -267,11 +281,32 @@ def check_fragment(doc: Doc, fm: dict, rep: Report) -> None:
         rep.error("BAD_DISTILLATION_STATUS", doc.rel, f"distillation_status '{ds}' is not pending|distilled|conflict (§7)")
 
 
+def check_layers(docs: list[Doc], rep: Report) -> None:
+    """knowledge/3.0: concepts live in base/ or fragments/; the root holds project.md and the Conflict Log."""
+    for d in docs:
+        parts = d.rel.split("/")
+        if len(parts) == 1:
+            t = (d.frontmatter or {}).get("type")
+            if d.is_reserved or (d.rel == "project.md" and t == "Project") or t == "Conflict Log":
+                continue
+            rep.error("PROFILE_OUTSIDE_LAYER", d.rel,
+                      f"profile {PROFILE_30}: a concept at the root must live in base/ or fragments/")
+        elif parts[0] not in LAYER_DIRS:
+            rep.error("PROFILE_OUTSIDE_LAYER", d.rel,
+                      f"profile {PROFILE_30}: {parts[0]}/ is not a layer; move it under base/")
+
+
 def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Report, str, str]:
     rep = Report()
     now = datetime.now(timezone.utc)
     docs = walk_bundle(bundle)
     by_path = {d.path.resolve(): d for d in docs}
+    declared = declared_profile(bundle)
+    pname = declared or PROFILE_20
+    if profile:
+        rep.profile_outdated = pname == PROFILE_20
+        if declared == PROFILE_30:
+            check_layers(docs, rep)
 
     detected, origin = detect_version(bundle, docs)
     if version == "auto":
@@ -311,7 +346,7 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
                 rep.warn("LOG_TYPE", d.rel, "log.md with frontmatter should be type: Log, or have no frontmatter")
             check_log(d, rep)
         else:
-            check_concept(d, bundle, rep, profile, now, version)
+            check_concept(d, bundle, rep, profile, now, version, pname)
     return rep, version, origin
 
 
@@ -320,7 +355,7 @@ def main(argv=None) -> int:
     ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
     ap.add_argument("--json", action="store_true", help="JSON output")
     ap.add_argument("--strict", action="store_true", help="warnings also cause exit 1")
-    ap.add_argument("--no-profile", action="store_true", help="validate the OKF spec only, not the knowledge/2.0 profile")
+    ap.add_argument("--no-profile", action="store_true", help="validate the OKF spec only, not the knowledge profile")
     ap.add_argument("--okf-version", default="auto", choices=("auto", *SUPPORTED_VERSIONS),
                     help="spec version to validate against (auto: okf_version of the root index, or heuristic)")
     args = ap.parse_args(argv)
@@ -334,10 +369,13 @@ def main(argv=None) -> int:
     n_docs = len([d for d in walk_bundle(bundle) if not d.is_reserved])
     if args.json:
         print(json.dumps({"bundle": str(bundle), "okf_version": version, "version_origin": origin, "concepts": n_docs, "errors": len(rep.errors),
-                          "warnings": len(rep.warns), "findings": rep.items}, ensure_ascii=False, indent=2))
+                          "warnings": len(rep.warns), "profile_outdated": rep.profile_outdated, "findings": rep.items},
+                         ensure_ascii=False, indent=2))
     else:
         for i in rep.items:
             print(f"{i['level']:5} {i['code']:22} {i['path']}: {i['message']}")
+        if rep.profile_outdated:
+            print(f"NOTICE {OUTDATED_NOTICE}")
         verdict = "CONFORMANT" if not rep.errors else "NOT CONFORMANT"
         print(f"\n{bundle}: OKF {version} ({origin}) · {n_docs} concepts · {len(rep.errors)} errors · {len(rep.warns)} warnings → {verdict}")
     if rep.errors or (args.strict and rep.warns):
@@ -404,11 +442,11 @@ _CONFLICT_LOG = ("---\ntype: Conflict Log\ntitle: Conflict log\ndescription: Con
 
 
 def _fragment_bundle(tmp_path, fields: str, body: str = "# Record\n\nText.\n\n# Distillation\n\nNone yet.\n",
-                     conflict_logs: tuple[str, ...] = ("conflict-log.md",)) -> Path:
+                     conflict_logs: tuple[str, ...] = ("conflict-log.md",), profile: str = "knowledge/2.0") -> Path:
     """A complete 0.2 profile bundle with one Knowledge Fragment and the given Conflict Logs."""
     root_entries = "".join(f"* [Conflicts]({c}) - Conflicts.\n" for c in conflict_logs)
     (tmp_path / "index.md").write_text(
-        '---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n# Project\n\n* [P](project.md) - P.\n'
+        f'---\nokf_version: "0.2"\nokf_profile: "{profile}"\n---\n\n# Project\n\n* [P](project.md) - P.\n'
         + root_entries + "\n# Subdirectories\n\n* [fragments](fragments/index.md) - Fragments.\n", encoding="utf-8")
     (tmp_path / "log.md").write_text("# Bundle history\n\n## 2026-10-31\n* **Creation**: test.\n", encoding="utf-8")
     (tmp_path / "project.md").write_text("---\ntype: Project\ntitle: P\ndescription: P.\n" + _GEN + "---\n\nText.\n",
@@ -509,6 +547,101 @@ def test_kdd_style_fragment_warns_only_for_participants(tmp_path):
     rep, _, _ = lint(_fragment_bundle(tmp_path, fields, body))
     assert [(i["level"], i["code"], i["path"]) for i in rep.items] == [("WARN", "FRAGMENT_NO_FIELD", _FRAGMENT)]
     assert "participants" in rep.items[0]["message"]
+
+
+def _bundle_30(tmp_path) -> Path:
+    """A clean knowledge/3.0 bundle: one fragment, the Conflict Log at the root, an empty base/."""
+    k = _fragment_bundle(tmp_path, _FRAGMENT_FIELDS, profile=PROFILE_30)
+    index = k / "index.md"
+    index.write_text(index.read_text(encoding="utf-8") + "* [base](base/index.md) - Base.\n", encoding="utf-8")
+    (k / "base").mkdir()
+    (k / "base" / "index.md").write_text("# base\n\n_(empty)_\n", encoding="utf-8")
+    return k
+
+
+def test_30_bundle_passes(tmp_path):
+    rep, _, _ = lint(_bundle_30(tmp_path))
+    assert rep.items == [] and not rep.profile_outdated
+
+
+def test_30_concept_outside_layer_errors(tmp_path):
+    k = _bundle_30(tmp_path)
+    (k / "decisions").mkdir()
+    (k / "decisions" / "x.md").write_text("---\ntype: Architecture Decision\ntitle: X\ndescription: X.\n" + _GEN
+                                          + "---\n\nText.\n", encoding="utf-8")
+    (k / "loose.md").write_text("---\ntype: Term\ntitle: L\ndescription: L.\n" + _GEN + "---\n\nText.\n",
+                                encoding="utf-8")
+    (k / ".hidden").mkdir()
+    (k / ".hidden" / "y.md").write_text("no frontmatter\n", encoding="utf-8")
+    (k / "notes.txt").write_text("not markdown\n", encoding="utf-8")
+    rep, _, _ = lint(k)
+    outside = sorted((i["path"], i["level"]) for i in rep.items if i["code"] == "PROFILE_OUTSIDE_LAYER")
+    assert outside == [("decisions/x.md", "ERROR"), ("loose.md", "ERROR")]
+    assert all("knowledge/3.0" in i["message"] for i in rep.items if i["code"] == "PROFILE_OUTSIDE_LAYER")
+
+
+def test_20_bundle_has_no_layer_check(tmp_path):
+    k = _fragment_bundle(tmp_path, _FRAGMENT_FIELDS)
+    (k / "loose.md").write_text("---\ntype: Term\ntitle: L\ndescription: L.\n" + _GEN + "---\n\nText.\n",
+                                encoding="utf-8")
+    rep, _, _ = lint(k)
+    assert not [i for i in rep.items if i["code"] == "PROFILE_OUTSIDE_LAYER"]
+
+
+def test_30_projections_are_skipped(tmp_path, capsys):
+    k = _bundle_30(tmp_path)
+    proj = k / "projections" / "deck"
+    (proj / "render").mkdir(parents=True)
+    (proj / "projection.yaml").write_text("lifecycle: [unclosed\n", encoding="utf-8")
+    (proj / "content.md").write_text("no frontmatter, [broken](/nowhere.md)\n", encoding="utf-8")
+    (proj / "render" / "index.md").write_text("---\nbad: [\n---\n", encoding="utf-8")
+    rep, _, _ = lint(k)
+    assert rep.items == []
+    assert main([str(k), "--strict"]) == 0
+    assert " 3 concepts " in capsys.readouterr().out
+
+
+def test_20_notice_and_profile_outdated(tmp_path, capsys):
+    import json as _json
+
+    k = _fragment_bundle(tmp_path, _FRAGMENT_FIELDS)
+    assert main([str(k), "--strict"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[-3] == "NOTICE profile knowledge/2.0 is outdated: run okf_migrate.py --profile knowledge/3.0"
+    assert " 0 errors " in out[-1]
+    assert main([str(k), "--json"]) == 0
+    assert _json.loads(capsys.readouterr().out)["profile_outdated"] is True
+    assert main([str(k), "--no-profile"]) == 0
+    assert "outdated" not in capsys.readouterr().out
+    assert main([str(k), "--no-profile", "--json"]) == 0
+    assert _json.loads(capsys.readouterr().out)["profile_outdated"] is False
+
+
+def test_missing_profile_is_outdated_20(tmp_path, capsys):
+    import json as _json
+
+    k = _fragment_bundle(tmp_path, _FRAGMENT_FIELDS)
+    index = k / "index.md"
+    index.write_text(index.read_text(encoding="utf-8").replace('okf_profile: "knowledge/2.0"\n', ""), encoding="utf-8")
+    assert main([str(k), "--json"]) == 0
+    assert _json.loads(capsys.readouterr().out)["profile_outdated"] is True
+
+
+def test_30_json_profile_outdated_false(tmp_path, capsys):
+    import json as _json
+
+    assert main([str(_bundle_30(tmp_path)), "--json"]) == 0
+    out = capsys.readouterr().out
+    assert _json.loads(out)["profile_outdated"] is False and "NOTICE" not in out
+
+
+def test_profile_messages_name_the_declared_profile(tmp_path):
+    k = _bundle_30(tmp_path)
+    frag = k / _FRAGMENT
+    frag.write_text(frag.read_text(encoding="utf-8").replace(_GEN, ""), encoding="utf-8")
+    rep, _, _ = lint(k)
+    [msg] = [i["message"] for i in rep.items if i["code"] == "PROFILE_NO_GENERATED"]
+    assert msg == "profile knowledge/3.0 requires 'generated: { by, at }'"
 
 
 if __name__ == "__main__":
