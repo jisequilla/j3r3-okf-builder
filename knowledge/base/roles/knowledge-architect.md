@@ -4,12 +4,12 @@ title: Knowledge architect
 description: How okf-builder serves the KDD knowledge architect role, which the KDD bundle defines; this concept fixes the skills its agent carries, what it hands to a person and its fragment contract with the functional architect.
 tags: [role, knowledge-architect, agents, kdd]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T20:35:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:48:53Z }
 sources:
-  - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/81828dd/knowledge/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.1, human-verified" }
-  - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/81828dd/knowledge/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition (draft)" }
+  - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/bec7695/knowledge/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.2, human-verified" }
+  - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/bec7695/knowledge/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, ten skills" }
   - { id: kdd-agent-v2, resource: "https://github.com/jisequilla/kdd-knowledge/blob/e4afa95/knowledge/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, five distillation kinds" }
-  - { id: kdd-af, resource: "https://github.com/jisequilla/kdd-knowledge/blob/81828dd/knowledge/roles/arquitecto-funcional-ti.md", title: "KDD bundle: functional architect role profile" }
+  - { id: kdd-af, resource: "https://github.com/jisequilla/kdd-knowledge/blob/bec7695/knowledge/roles/arquitecto-funcional-ti.md", title: "KDD bundle: functional architect role profile" }
   - { id: adr-0005, resource: /base/decisions/ADR-0005-required-generated-human-verified.md }
   - { id: adr-0017, resource: /base/decisions/ADR-0017-agent-skills-per-platform.md }
   - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }
@@ -26,9 +26,9 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 | KDD responsibility[^kdd-role] | okf-builder skill | State |
 |---|---|---|
 | AC-R1 Knowledge architecture (structure, types, conventions) | `okf-init`, `okf-standard` | exists |
-| AC-R2 Receiving fragments | `okf-fragment` | to build ([ADR-0024](/base/decisions/ADR-0024-fragment-capture-field-backfill.md)) |
-| AC-R3 Distillation | `okf-distill`; `okf-capture` for new concepts | `okf-distill` to build |
-| AC-R4 Double check and lifecycle (log, conflict register, deprecation) | `okf-review`, `okf-lint` | `okf-review` to build |
+| AC-R2 Receiving fragments | `okf-fragment` | exists; it also backfills missing capture fields ([ADR-0024](/base/decisions/ADR-0024-fragment-capture-field-backfill.md)) |
+| AC-R3 Distillation | `okf-distill`; `okf-capture` for new concepts | exists |
+| AC-R4 Double check and lifecycle (log, conflict register, deprecation) | `okf-review`, `okf-lint` | exists |
 | AC-R5 Indexing, search and answers | `okf-index`, `okf-ask` | exists |
 | AC-R6 Graph visualisation | none yet | outside the plugin's skills |
 | AC-R7 Federation by domain | none; the split rule is [ADR-0014](/base/decisions/ADR-0014-knowledge-repository-storage.md) | — |
@@ -39,7 +39,7 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 
 The Claude agent preloads all 10 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `tools/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0017].
 
-The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds) and awaits a person's re-verification. `make m365` generates the M365 declarative agent from the same file ([Exporters](/base/systems/exporters.md)).
+The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds); a person re-verified v1.2 at kdd-knowledge commit `bec7695`[^kdd-role]. `make m365` generates the M365 declarative agent from the same file ([Exporters](/base/systems/exporters.md)).
 
 In the M365 agent package none of its 8 skills reads `okf-standard`'s references or templates: each carries the scripts and templates it uses. Only `okf-capture` names the `okf-standard` type table when it classifies a concept, and its templates cover the same types.
 
@@ -67,7 +67,8 @@ The two agents live in separate repositories. As long as both keep to the fragme
 
 # Differences with the KDD bundle
 
-- The KDD agent draft lists `okf-migrate` among its tools[^kdd-agent]. Here only the Claude agent carries it.
+- The KDD agent definition lists all 10 skills[^kdd-agent], as the Claude agent preloads them. The Microsoft 365 agent carries 8, without `okf-standard` and `okf-migrate`[^adr-0017].
+- The KDD role lists `okf-fragment`, `okf-distill` and `okf-review` as still to be built[^kdd-role]; they exist in okf-builder.
 - The KDD bundle keeps its own agent definition next to the okf-builder agent. The two are kept in step by hand: a change to one is carried to the other in the same piece of work.
 
 # Not verified
@@ -80,8 +81,8 @@ The two agents live in separate repositories. As long as both keep to the fragme
 * [ADR-0024: Fragment record immutable, capture fields backfilled from it](/base/decisions/ADR-0024-fragment-capture-field-backfill.md)
 * [Actor](/base/domain/actor.md)
 
-[^kdd-role]: KDD bundle, knowledge architect role profile v1.1.
-[^kdd-agent]: KDD bundle, knowledge architect agent definition.
+[^kdd-role]: KDD bundle, knowledge architect role profile v1.2.
+[^kdd-agent]: KDD bundle, knowledge architect agent definition, with the ten skills.
 [^kdd-agent-v2]: KDD bundle, knowledge architect agent definition with the five distillation kinds.
 [^kdd-af]: KDD bundle, functional architect role profile.
 [^adr-0005]: ADR-0005, `generated` required and `verified` only by people.
