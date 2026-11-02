@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0016: Distillation adds refutation: an outdated concept is deprecated without opening a conflict"
 description: Fragments keep the KDD format and one Conflict Log per bundle; distillation classifies each item as an addition, confirmation, update, refutation or conflict, where a refutation proposes deprecating a concept and naming its replacement, and only disputed items open a conflict.
 tags: [adr, standard, capture]
-status: draft
+status: deprecated
 adr_id: ADR-0016
-decision_status: accepted
+decision_status: superseded
+superseded_by: /base/decisions/ADR-0024-fragment-capture-field-backfill.md
 supersedes: /base/decisions/ADR-0015-fragment-format-and-conflict-log.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T12:00:00Z }
 sources:

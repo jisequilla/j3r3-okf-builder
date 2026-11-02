@@ -70,7 +70,7 @@ okf-migrate     → detects the version and migrates 0.1 ↔ 0.2 (always --dry-r
 
 ### Fragments and distillation
 
-A meeting, transcript or chat is first kept as a **fragment** in `knowledge/fragments/`, exactly as it happened, with its date, origin and participants. `okf-distill` then reads the fragment against the concepts it touches and proposes a change set: additions, confirmations, updates, refutations (an outdated concept is deprecated and linked to its replacement) and conflicts. Nothing is applied until a person approves it, and conflicts go to the bundle's one Conflict Log, where `okf-review` records who decided each one. Approving a change set never marks a concept as verified ([ADR-0016](knowledge/base/decisions/ADR-0016-refutation-as-a-distillation-kind.md)).
+A meeting, transcript or chat is first kept as a **fragment** in `knowledge/fragments/`, exactly as it happened, with its date, origin and participants. `okf-distill` then reads the fragment against the concepts it touches and proposes a change set: additions, confirmations, updates, refutations (an outdated concept is deprecated and linked to its replacement) and conflicts. Nothing is applied until a person approves it, and conflicts go to the bundle's one Conflict Log, where `okf-review` records who decided each one. Approving a change set never marks a concept as verified ([ADR-0024](knowledge/base/decisions/ADR-0024-fragment-capture-field-backfill.md)).
 
 ## Running the scripts directly
 
