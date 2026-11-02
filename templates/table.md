@@ -18,7 +18,7 @@ sources: []
 
 # Joins
 
-Joins with [other table](/data/other-table.md) on `key`.
+Joins with [other table](/base/data/other-table.md) on `key`.
 
 # Partitioning and freshness
 

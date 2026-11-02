@@ -11,10 +11,11 @@ Turns what a fragment records into changes to the bundle's concepts. It proposes
 
 ## Steps
 
-1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop) and **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`). Write in that version.
+1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop), **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`) and **its profile** (`okf_profile` in the root `index.md`; if missing, knowledge/2.0, the older profile). Write in that version and in that profile's layout.
+   - **knowledge/2.0 bundle**: the typed directories sit at the root; drop the `base/` prefix from every directory, bundle path and `--dir` below (`/decisions/x.md`, `--dir <dir>` then `--dir .`), never mix the two layouts, and offer the migration (`uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --profile knowledge/3.0 --dry-run`, applied only after the person confirms).
 2. **Pick one fragment.** The one the person names, or list the pending ones (`grep -l "distillation_status: pending" <bundle>/fragments/*.md`) and ask. One fragment per run. If it is `distilled`, say so and stop unless the person asks to distill it again; if it is `conflict`, point to `okf-review`.
-3. **Read the context**: the root `index.md`, the `index.md` of each directory the fragment touches, the concepts it names or contradicts (systems, ADRs, terms, runbooks) and the Conflict Log (`/conflict-log.md` unless the bundle places it elsewhere), so an open conflict is not opened twice. Read the fragment's `# Record`; never edit it.
-4. **Classify each item** of knowledge in the record into one of five kinds, each with its target concept (an existing path, or the type and path of a new one):
+3. **Read the context**: the root `index.md`, `base/index.md`, the `index.md` of each directory the fragment touches, the concepts it names or contradicts (systems, ADRs, terms, runbooks) and the Conflict Log (`/conflict-log.md` unless the bundle places it elsewhere), so an open conflict is not opened twice. Read the fragment's `# Record`; never edit it.
+4. **Classify each item** of knowledge in the record into one of five kinds, each with its target concept (an existing path, or the type and path of a new one under `base/<dir>/`; never a concept in `projections/`, which is derived and not OKF, or at the bundle root, which holds only `project.md` and `conflict-log.md`):
 
    | Kind | When | Proposed change |
    |---|---|---|
@@ -26,7 +27,7 @@ Turns what a fragment records into changes to the bundle's concepts. It proposes
 
    **When in doubt between refutation and conflict, it is a conflict.** Small talk and questions left unanswered are not items; an open question worth keeping is listed with outcome `not distilled`.
 5. **Propose the change set** and stop: one table grouped by kind, with Item · Kind · Target concept · Proposed change · Evidence (speaker and timestamp in the record). Ask the person to approve, change or reject each item. **Apply nothing until the person approves.** Rejected items are not applied and are recorded as `rejected`.
-6. **Apply the approved items** with the `okf-capture` rules (template `<skills>/okf-standard/templates/<type>.md`, `status: draft` on creation, actor `okf-builder/<model>`, one-sentence `description`, bundle-absolute links, no placeholders). Every concept created, confirmed, updated or deprecated cites the fragment in `sources` (`{ id: <id>, resource: /fragments/<file>, title: ... }`) with `[^id]` footnotes on the claims it supports.
+6. **Apply the approved items** with the `okf-capture` rules (template `<skills>/okf-standard/templates/<type>.md`, `status: draft` on creation, actor `okf-builder/<model>`, one-sentence `description`, bundle-absolute links under `/base/...`, no placeholders). Every concept created, confirmed, updated or deprecated cites the fragment in `sources` (`{ id: <id>, resource: /fragments/<file>, title: ... }`) with `[^id]` footnotes on the claims it supports.
    - **Addition**: create the concept, or add the part to an existing one and update its `generated`.
    - **Confirmation**: add the fragment to the concept's `sources` and attach its footnote to the sentence that already states the confirmed claim. Write no new sentence: if no sentence states it, the item is an Update. Update `generated` (`by`, `at`) and leave `verified` as it is, so the gap since the last verification stays visible.
    - **Update**: edit the concept and update `generated` (`by`, `at`); leave `verified` as it is (the gap between `verified` and `generated.at` is information).
@@ -38,9 +39,11 @@ Turns what a fragment records into changes to the bundle's concepts. It proposes
 9. **Log** under today's date in `knowledge/log.md` (and the directory's own `log.md` if it has one), each linking its concept and the fragment: `* **Creation**: ...`, `* **Update**: ...` (also for confirmations), `* **Deprecation**: ... superseded by ...`, `* **Conflict**: C-NNN opened in the conflict log from <fragment>`, linking both. Use only these labels. The person's approval goes inside the entries (`approved by human:<id>`), never under a label of its own.
 10. **Index and validate**:
     ```bash
-    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir <each touched directory>
+    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir base/<dir>     # each touched directory
+    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir fragments
+    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir base
     uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir .
     uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle>
     ```
     Fix any ERROR before finishing.
-11. **Close**: list what was applied, rejected and left open (with the `C-NNN` IDs), describing each change as it is in the files (from `git diff` when the bundle is in Git), never as smaller than it is; remind the person that the new and changed concepts stay `draft` and unverified, and point to `okf-review` to resolve the conflicts and review the concepts.
+11. **Close**: list what was applied, rejected and left open (with the `C-NNN` IDs), describing each change as it is in the files (from `git diff` when the bundle is in Git), never as smaller than it is; remind the person that the new and changed concepts stay `draft` and unverified, and point to `okf-review` to resolve the conflicts and review the concepts. If `projections/` holds projections, read only the `refs` of each `projection.yaml` and list the projections whose refs name a concept this run created, changed or deprecated, for refresh by the projection tools; change nothing in `projections/`.

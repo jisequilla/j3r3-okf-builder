@@ -28,4 +28,4 @@ curl -H "Authorization: Bearer $TOKEN" https://.../v1/...
 
 # Exposed by
 
-* [System](/systems/....md)
+* [System](/base/systems/....md)

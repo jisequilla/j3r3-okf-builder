@@ -18,17 +18,17 @@ generated: { by: {{actor}}, at: {{now}} }
 
 | Direction | Counterpart | Protocol | Contract |
 |---|---|---|---|
-| Exposes | | REST | [API](/apis/....md) |
+| Exposes | | REST | [API](/base/apis/....md) |
 | Consumes | | | |
 
 # Dependencies
 
-* [Dataset](/data/....md)
-* [System](/systems/....md)
+* [Dataset](/base/data/....md)
+* [System](/base/systems/....md)
 
 # Operation
 
-* Runbooks: [Incident X](/runbooks/....md)
+* Runbooks: [Incident X](/base/runbooks/....md)
 * Dashboards:
 * Alerts:
 

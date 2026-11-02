@@ -1,20 +1,21 @@
 ---
 name: okf-standard
-description: 'Knowledge of the OKF standard (Google''s Open Knowledge Format v0.1 and v0.2), the differences between them, and the knowledge/2.0 profile for repos. Load it when the user asks what OKF is, how to structure knowledge/, which fields the frontmatter carries, which type to use, how to write an ADR/runbook/metric in OKF, or when another okf-* skill needs the spec. Triggers: "OKF", "open knowledge format", "knowledge structure", "knowledge/", "OKF frontmatter", "OKF bundle", "OKF ADR template", "OKF 0.1 vs 0.2", "OKF version".'
+description: 'Knowledge of the OKF standard (Google''s Open Knowledge Format v0.1 and v0.2), the differences between them, and the knowledge/3.0 profile for repos (three layers: fragments/, base/, projections/), with the older knowledge/2.0 profile it replaces. Load it when the user asks what OKF is, how to structure knowledge/, which fields the frontmatter carries, which type to use, how to write an ADR/runbook/metric in OKF, or when another okf-* skill needs the spec. Triggers: "OKF", "open knowledge format", "knowledge structure", "knowledge/", "OKF frontmatter", "OKF bundle", "OKF ADR template", "OKF 0.1 vs 0.2", "OKF version".'
 ---
 
-# OKF standard · knowledge/2.0 profile
+# OKF standard · knowledge profile
 
 This skill is the source of truth for the standard inside the plugin. The other skills (`okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate`) assume it.
 
 ## Operating summary (what to always keep in mind)
 
 - A bundle = the `knowledge/` directory at the repo root. Only markdown + YAML frontmatter.
-- Reserved files: `index.md` (listing per directory, no frontmatter except the root one with `okf_version`) and `log.md` (history, `## YYYY-MM-DD` dates, most recent first).
+- Three layers: `fragments/` is the record (events as they happened, immutable after capture); `base/` is the knowledge (the typed directories, concepts in the present tense with their sources); `projections/` is what is derived from the base for a reader. `projections/` is not OKF: no OKF tool lints, indexes, reads as knowledge or writes concepts into it.
+- Reserved files: `index.md` (listing per directory, no frontmatter except the root one with `okf_version` and `okf_profile`) and `log.md` (history, `## YYYY-MM-DD` dates, most recent first).
 - Every non-reserved `.md` is a **concept**. The only required field: `type`.
-- The knowledge/2.0 profile also requires `generated: { by: <actor>, at: <ISO 8601> }` and the presence of `index.md`, `log.md` and `project.md` (`type: Project`).
+- The profile also requires `generated: { by: <actor>, at: <ISO 8601> }` and the presence of `index.md`, `log.md` and `project.md` (`type: Project`).
 - Actors: `human:<id>` · `process:<id>` · `<agent>/<version>`. When this plugin writes content, it uses `okf-builder/<model>` as the actor in `generated.by`; **never** invent a `verified` with `human:`: only the person adds it.
-- Links between concepts: bundle-absolute `[x](/systems/x.md)`. Broken links = pending knowledge, not an error.
+- Links between concepts: bundle-absolute `[x](/base/systems/x.md)`. Broken links = pending knowledge, not an error.
 - Lifecycle: `status: draft|stable|deprecated` (absent ⇒ stable), `stale_after` an absolute instant. Never delete: deprecate and link to the replacement.
 - Provenance: `sources[]` with a required `resource`, and an `id` if the body cites it with `[^id]`.
 
@@ -22,30 +23,33 @@ This skill is the source of truth for the standard inside the plugin. The other 
 
 ```
 knowledge/
-  index.md  log.md  project.md
-  architecture/  decisions/  domain/  systems/  apis/  data/
-  metrics/  computations/  runbooks/  playbooks/  policies/  references/
+  index.md  log.md  project.md  conflict-log.md
+  fragments/
+  base/
+    architecture/  decisions/  domain/  systems/  apis/  data/
+    metrics/  computations/  runbooks/  playbooks/  policies/  references/
+  projections/
 ```
 
-All subdirectories are optional; each one has its own `index.md`.
+The root holds only `index.md`, `log.md`, `project.md`, `conflict-log.md` (created with the first conflict) and the three layers. Concepts live in `base/` (at any depth) and `fragments/`, never at the root or in `projections/`. All typed directories are optional; each OKF directory has its own `index.md`, and `projections/` has none. The root `index.md` lists `fragments/` and `base/`; `base/index.md` lists the typed directories.
 
 ## `type` vocabulary → directory → template
 
 | type | directory | template |
 |---|---|---|
 | Project | root | `<skills>/okf-standard/templates/project.md` |
-| Architecture View | architecture/ | `<skills>/okf-standard/templates/architecture-view.md` |
-| Architecture Decision | decisions/ (`ADR-NNNN-slug.md`) | `<skills>/okf-standard/templates/adr.md` |
-| Term / Glossary | domain/ | `<skills>/okf-standard/templates/term.md` |
-| System | systems/ | `<skills>/okf-standard/templates/system.md` |
-| API | apis/ | `<skills>/okf-standard/templates/api.md` |
-| Table / Dataset | data/ | `<skills>/okf-standard/templates/table.md` |
-| Metric | metrics/ | `<skills>/okf-standard/templates/metric.md` |
-| Attested Computation | computations/ | `<skills>/okf-standard/templates/computation.md` |
-| Runbook | runbooks/ | `<skills>/okf-standard/templates/runbook.md` |
-| Playbook | playbooks/ | `<skills>/okf-standard/templates/playbook.md` |
-| Policy | policies/ | `<skills>/okf-standard/templates/policy.md` |
-| Reference | references/ | `<skills>/okf-standard/templates/reference.md` |
+| Architecture View | base/architecture/ | `<skills>/okf-standard/templates/architecture-view.md` |
+| Architecture Decision | base/decisions/ (`ADR-NNNN-slug.md`) | `<skills>/okf-standard/templates/adr.md` |
+| Term / Glossary | base/domain/ | `<skills>/okf-standard/templates/term.md` |
+| System | base/systems/ | `<skills>/okf-standard/templates/system.md` |
+| API | base/apis/ | `<skills>/okf-standard/templates/api.md` |
+| Table / Dataset | base/data/ | `<skills>/okf-standard/templates/table.md` |
+| Metric | base/metrics/ | `<skills>/okf-standard/templates/metric.md` |
+| Attested Computation | base/computations/ | `<skills>/okf-standard/templates/computation.md` |
+| Runbook | base/runbooks/ | `<skills>/okf-standard/templates/runbook.md` |
+| Playbook | base/playbooks/ | `<skills>/okf-standard/templates/playbook.md` |
+| Policy | base/policies/ | `<skills>/okf-standard/templates/policy.md` |
+| Reference | base/references/ | `<skills>/okf-standard/templates/reference.md` |
 | Knowledge Fragment | fragments/ (`YYYY-MM-DD-slug.md`) | `<skills>/okf-standard/templates/fragment.md` |
 | Conflict Log | root (`conflict-log.md`, created with the first conflict) | `<skills>/okf-standard/templates/conflict-log.md` |
 
@@ -58,6 +62,13 @@ The templates use `{{name}}` placeholders; replace all of them before saving. If
 - **Always write in the bundle's version.** In a 0.1 bundle: `timestamp` instead of `generated`, citations under `# Citations`, no `status`/`verified`/`stale_after`. The templates are 0.2; for a 0.1 bundle fill in the template and run `okf_migrate.py --to 0.1 --file <path>`.
 - A 0.2 consumer reads 0.1 (falling back to `timestamp` and `# Citations`); a 0.1 consumer reads 0.2 by ignoring unknown keys. Never mix forms in one bundle.
 - Full matrix, mapping rules and exchange policy: `references/OKF-COMPATIBILITY.md`. Migration: the `okf-migrate` skill.
+
+## Profiles: knowledge/3.0 (default) and knowledge/2.0
+
+- A bundle's profile is `okf_profile` in the root `index.md`; a bundle without one is knowledge/2.0. `okf-init` writes only 3.0 bundles.
+- knowledge/2.0 is the older profile: the typed directories sit at the root (`decisions/`, bundle paths `/decisions/x.md`) and there is no `base/`. `okf-lint` still validates it and prints a notice that the profile is outdated, which is neither a warning nor an error.
+- **Always write in the bundle's profile layout**, and never mix layouts: in a 2.0 bundle drop the `base/` prefix from every directory and bundle path, and offer the migration to 3.0 (`okf-migrate` skill, `--profile knowledge/3.0`), which runs only after the person confirms.
+- The profile and the OKF version are independent: migrating one never changes the other.
 
 ## Where everything is (`<skills>` convention)
 
