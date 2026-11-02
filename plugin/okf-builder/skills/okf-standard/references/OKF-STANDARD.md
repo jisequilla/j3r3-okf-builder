@@ -167,15 +167,15 @@ The headings of the other templates (§5) are recommendations of the profile, no
 | `Architecture View` | `base/architecture/` | Context, containers, components, deployment, principles. |
 | `Architecture Decision` | `base/decisions/` | ADR. Extra fields: `adr_id`, `decision_status` (proposed/accepted/superseded/rejected), `supersedes`, `superseded_by`. |
 | `Term` / `Glossary` | `base/domain/` | A business term, or the aggregated glossary. |
-| `System` | `base/systems/` | Service, module, job, deployable component. Extra fields: `owner` (an actor, §3.1), `repo`, `runtime`. |
-| `API` | `base/apis/` | Contract; `resource` points to the OpenAPI/Proto/AsyncAPI. Extra fields: `owner` (an actor, §3.1). |
+| `System` | `base/systems/` | Service, module, job, deployable component. Extra fields: `owner` (who owns it: a team or a person, as a string), `repo`, `runtime`. |
+| `API` | `base/apis/` | Contract; `resource` points to the OpenAPI/Proto/AsyncAPI. Extra fields: `owner` (who owns it: a team or a person, as a string). |
 | `Dataset` | `base/data/` | Data asset. Body with `# Schema` and `# Joins`. |
-| `Table` | `base/data/` | Data asset. Extra fields: `owner` (an actor, §3.1). Body with `# Schema` and `# Joins`. |
-| `Metric` | `base/metrics/` | Business definition; links to its `Attested Computation`. Extra fields: `owner` (an actor, §3.1). |
+| `Table` | `base/data/` | Data asset. Extra fields: `owner` (who owns it: a team or a person, as a string). Body with `# Schema` and `# Joins`. |
+| `Metric` | `base/metrics/` | Business definition; links to its `Attested Computation`. Extra fields: `owner` (who owns it: a team or a person, as a string). |
 | `Attested Computation` | `base/computations/` | Name fixed by the spec (§10). Requires `runtime`. |
-| `Runbook` | `base/runbooks/` | Operational procedure: Trigger, Diagnosis, Steps, Rollback, Escalation. Extra fields: `owner` (an actor, §3.1). |
-| `Playbook` | `base/playbooks/` | Team/business procedure. Extra fields: `owner` (an actor, §3.1). |
-| `Policy` | `base/policies/` | Rule or standard; usually carries `stale_after` and a human `verified`. Extra fields: `owner` (an actor, §3.1). |
+| `Runbook` | `base/runbooks/` | Operational procedure: Trigger, Diagnosis, Steps, Rollback, Escalation. Extra fields: `owner` (who owns it: a team or a person, as a string). |
+| `Playbook` | `base/playbooks/` | Team/business procedure. Extra fields: `owner` (who owns it: a team or a person, as a string). |
+| `Policy` | `base/policies/` | Rule or standard; usually carries `stale_after` and a human `verified`. Extra fields: `owner` (who owns it: a team or a person, as a string). |
 | `Reference` | `base/references/` | Mirrored external material or execution instructions. |
 | `Knowledge Fragment` | `fragments/` | Record of an event (meeting, chat, slides, transcript), named `YYYY-MM-DD-slug.md` with the date of the event. Extra fields: `occurred_at` (when it happened: `YYYY-MM-DD` or ISO 8601 with an offset), `origin` (where it happened), `participants` (list of actors, §3.1), `distillation_status` (`pending` / `distilled` / `conflict`). Body: `# Record` (immutable after capture) and `# Distillation`; bundles written in Spanish may title them «Contenido capturado» and «Destilado en». After capture only `distillation_status` and `# Distillation` change, except that a missing `occurred_at`, `origin` or `participants` may be backfilled once (§6). |
 | `Open Question` | `base/questions/` | What the team does not know yet, named `<kebab-slug>.md` (no ID). Extra fields: `owner` (an actor, §3.1, required), `question_status` (`open` / `answered` / `dropped`), `asked_in` (the bundle path of the fragment where it arose, `/fragments/<file>`; absent when it arose outside any fragment, whose origin `sources` then cites), and optionally `blocks` (list of the concepts it holds up), `review_on` (a date `YYYY-MM-DD`) and `answered_by` (the concept that answers it). Body: `# Question`, `# Why it matters`, `# What is known` and `# Answer`. Never deleted: an answered one links its answer. `status` (`draft` / `stable` / `deprecated`) is independent of `question_status`: answering or dropping a question does not deprecate it. |

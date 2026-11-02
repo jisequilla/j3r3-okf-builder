@@ -1403,7 +1403,7 @@ def _builtin_uncoded_bundle(tmp_path, own: str | None) -> Path:
     """A 3.0 bundle whose ADR, System and Open Question break the built-in profile's fields without a code;
     own, when given, is written as its base/profile.md."""
     adr = _concept("Architecture Decision", "decision_status: deprecated\nsupersedes: ADR-0001\nadr_id: 7\n")
-    system = _concept("System", "owner: The payments team\nruntime: 3\n")
+    system = _concept("System", "owner: [payments]\nruntime: 3\n")
     question = _QUESTION_FIELDS.replace("/fragments/2026-10-31-meeting.md", "fragments/x.md") + "blocks: nothing\n"
     k = _question_bundle(tmp_path, question)
     for rel, text in {"base/decisions/ADR-0002-x.md": adr, "base/systems/pay.md": system}.items():
@@ -1422,7 +1422,7 @@ def test_the_builtin_profile_items_without_a_code_are_checked_in_a_bundle_with_a
         ("ERROR", "PROFILE_ENUM", "base/decisions/ADR-0002-x.md",
          "decision_status 'deprecated' is not one of proposed|accepted|superseded|rejected (§4.1)"),
         ("ERROR", "PROFILE_FIELD_TYPE", "base/decisions/ADR-0002-x.md", "supersedes 'ADR-0001' is not a path (§4.1)"),
-        ("ERROR", "PROFILE_FIELD_TYPE", "base/systems/pay.md", "owner 'The payments team' is not an actor (§4.1)"),
+        ("ERROR", "PROFILE_FIELD_TYPE", "base/systems/pay.md", "owner '['payments']' is not a string (§4.1)"),
         ("WARN", "PROFILE_FIELD_TYPE", _QUESTION, "an item of blocks 'nothing' is not a path (§4.1)"),
         ("WARN", "PROFILE_FIELD_TYPE", _QUESTION, "asked_in 'fragments/x.md' is not a path (§4.1)"),
     ]  # adr_id: 7 and runtime: 3 are still text
@@ -1674,20 +1674,15 @@ def _template_sweep(tmp_path) -> list[tuple] | None:
     return sorted(out)
 
 
-# the templates write owner: team:<team>, which is not an actor (§3.1): a template bug, reported to the owner
-_TEMPLATE_OWNER_NOT_AN_ACTOR = [(f"{t}.md", "ERROR", "PROFILE_FIELD_TYPE", "owner 'team:payments' is not an actor (§4.1)")
-                                for t in ("api", "metric", "playbook", "policy", "runbook", "system", "table")]
-
-
-def test_every_template_lints_against_the_builtin_profile_with_no_profile_finding_but_the_known_owner(tmp_path):
+def test_every_template_lints_against_the_builtin_profile_with_no_profile_finding(tmp_path):
     """Each template's keys are declared for its type (no PROFILE_UNKNOWN_KEY) and its values have their declared
-    types, in a bundle with a base/profile.md; the one known exception is owner: team:<team>."""
+    types, in a bundle with a base/profile.md: owner: team:<team> is a string owner (ADR-0027)."""
     import pytest
 
     found = _template_sweep(tmp_path)
     if found is None:
         pytest.skip("templates/ not beside this script")
-    assert found == _TEMPLATE_OWNER_NOT_AN_ACTOR
+    assert found == []
 
 
 def test_json_names_the_layer_each_broken_item_comes_from(tmp_path, capsys):

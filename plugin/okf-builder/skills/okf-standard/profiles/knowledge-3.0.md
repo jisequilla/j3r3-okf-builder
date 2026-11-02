@@ -29,14 +29,14 @@ types:
     directory: /base/systems/
     description: Service, module, job, deployable component
     fields:
-      owner: { type: actor, note: Who answers for the system }
+      owner: { type: string, note: Who answers for the system }
       repo: { type: string, note: The repository that holds its code }
       runtime: { type: string, note: Where and how it runs }
   API:
     directory: /base/apis/
     description: A contract; resource points to the OpenAPI, Proto or AsyncAPI document
     fields:
-      owner: { type: actor, note: Who answers for the contract }
+      owner: { type: string, note: Who answers for the contract }
   Dataset:
     directory: /base/data/
     description: A data asset
@@ -44,12 +44,12 @@ types:
     directory: /base/data/
     description: A data asset
     fields:
-      owner: { type: actor, note: Who answers for the table }
+      owner: { type: string, note: Who answers for the table }
   Metric:
     directory: /base/metrics/
     description: A business definition that links to its Attested Computation
     fields:
-      owner: { type: actor, note: Who answers for the definition }
+      owner: { type: string, note: Who answers for the definition }
   Attested Computation:
     directory: /base/computations/
     description: The sanctioned computation of a value, a type the OKF spec names (§10)
@@ -59,17 +59,17 @@ types:
     directory: /base/runbooks/
     description: "Operational procedure: trigger, diagnosis, steps, rollback, escalation"
     fields:
-      owner: { type: actor, note: Who answers for the procedure }
+      owner: { type: string, note: Who answers for the procedure }
   Playbook:
     directory: /base/playbooks/
     description: Team or business procedure
     fields:
-      owner: { type: actor, note: Who answers for the procedure }
+      owner: { type: string, note: Who answers for the procedure }
   Policy:
     directory: /base/policies/
     description: A rule or standard
     fields:
-      owner: { type: actor, note: Who answers for the rule }
+      owner: { type: string, note: Who answers for the rule }
   Reference:
     directory: /base/references/
     description: Mirrored external material or execution instructions
@@ -98,13 +98,14 @@ types:
   Log: {}
 rules:
   - { name: answered-question-names-its-answer, when: { type: Open Question, question_status: answered }, require: [answered_by], level: warn, code: QUESTION_NO_ANSWER }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T21:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T21:01:10Z }
 sources:
   - { id: types, resource: references/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }
   - { id: domain-profile, resource: references/OKF-STANDARD.md, title: "OKF standard §4.1: Domain Profile" }
   - { id: frontmatter, resource: references/OKF-STANDARD.md, title: "OKF standard §3.1: Frontmatter" }
   - { id: conformance, resource: references/OKF-STANDARD.md, title: "OKF standard §7: Conformance" }
   - { id: spec-computation, resource: references/OKF-SPEC-v0.2.md, title: "OKF spec v0.2 §10.2: Contract fields of an Attested Computation" }
+  - { id: spec-actor, resource: references/OKF-SPEC-v0.2.md, title: "OKF spec v0.2 §2 and §7: Actor convention" }
 ---
 
 # What this profile holds
@@ -135,7 +136,7 @@ No extra fields: the common keys of §3.1 and the body headings of their templat
 
 ## API, Table, Metric, Runbook, Playbook, Policy
 
-- `owner`: who answers for the contract, the table, the definition, the procedure or the rule[^types]. It is an actor (§3.1). `Table` shares its directory with `Dataset`.
+- `owner`: who answers for the contract, the table, the definition, the procedure or the rule, a team or a person, as a string[^types]. It is not an actor: an actor names who wrote or verified content (OKF spec v0.2 §7) and has no form for a team, so `team:payments` and `human:ann` are both owners[^spec-actor]. `Table` shares its directory with `Dataset`.
 
 ## Architecture Decision
 
@@ -144,7 +145,7 @@ No extra fields: the common keys of §3.1 and the body headings of their templat
 
 ## System
 
-- `owner`, `repo`, `runtime`: who answers for it, where its code lives, where it runs[^types]. `owner` is an actor (§3.1).
+- `owner`, `repo`, `runtime`: who answers for it, where its code lives, where it runs[^types]. `owner` is a string, a team or a person, as for the types above[^spec-actor].
 
 ## Attested Computation
 
@@ -160,7 +161,7 @@ No extra fields: the common keys of §3.1 and the body headings of their templat
 ## Open Question
 
 - `owner`, `question_status`, `asked_in`: each one missing is a warning, `QUESTION_NO_FIELD`[^types].
-- `owner` is an actor; another form is `BAD_ACTOR`, a warning.
+- `owner` is an actor, because it names the person who answers the question; another form is `BAD_ACTOR`, a warning[^spec-actor].
 - `question_status` is `open`, `answered` or `dropped`; another value is `BAD_QUESTION_STATUS`, an error[^conformance].
 - `blocks`, `answered_by`, `review_on`: optional. `review_on` is `YYYY-MM-DD` or ISO 8601 with an offset; another form is `BAD_ISO`, a warning.
 - Rule `answered-question-names-its-answer`: an answered question names the concept that answers it in `answered_by`; without it, `QUESTION_NO_ANSWER`, a warning[^types].
