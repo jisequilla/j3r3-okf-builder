@@ -6,7 +6,7 @@ A Claude Code / Cowork plugin that manages a project's knowledge as an **OKF bun
 
 | Skill | What it does |
 |---|---|
-| `okf-standard` | Knowledge of the standard and the `knowledge/2.0` profile; concept templates. |
+| `okf-standard` | Knowledge of the standard and the `knowledge/3.0` profile; concept templates. |
 | `okf-init` | Creates the `knowledge/` structure in the current repo. |
 | `okf-capture` | Adds a concept (ADR, runbook, system, API, table, metric, term, policy…) with its template, log and index. |
 | `okf-fragment` | Captures a meeting, transcript, chat or slide deck as a knowledge fragment, recorded as it happened. |

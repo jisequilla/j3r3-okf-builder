@@ -50,6 +50,10 @@ test:
 	diff -q standard/OKF-COMPATIBILITY.md $(PLUGIN)/skills/okf-standard/references/OKF-COMPATIBILITY.md
 	test -f dist/m365/okf-knowledge-architect-m365.zip
 	python3 -c "import json; d=json.load(open('dist/m365/agent-package/declarativeAgent.json')); c=json.load(open('tools/m365-agent.json')); assert len(d['instructions']) <= 8000 and len(d['agent_skills']) <= 8, d['name']; assert [s['folder'] for s in d['agent_skills']] == ['./skills/' + k for k in c['agent_skills']], 'agent_skills differ from tools/m365-agent.json'; print('agent', len(d['instructions']), 'chars,', len(d['agent_skills']), 'M365 skills')"
+	@echo "[8] this repo's bundles are on knowledge/3.0; the 2.0 fixture equals examples/knowledge at 00e510e, before its migration"
+	for b in knowledge examples/knowledge; do uv run -q $(S)/okf_lint.py $$b --json | python3 -c "import json,sys; assert not json.load(sys.stdin)['profile_outdated'], '$$b: profile outdated'"; done
+	rm -rf /tmp/okf-fx && mkdir -p /tmp/okf-fx && git archive 00e510e examples/knowledge | tar -x -C /tmp/okf-fx
+	diff -r /tmp/okf-fx/examples/knowledge examples/fixtures/knowledge-2.0
 	@echo "OK"
 copilot:
 	python3 tools/export_copilot.py --zip
