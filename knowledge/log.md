@@ -1,5 +1,8 @@
 # Bundle history
 
+## 2026-11-02
+* **Creation**: fragment [What a long-running OKF implementation teaches](/fragments/2026-11-02-migration-tool-okf-review.md): open work outside fragments, drift by a projection's nature and composition rules for profiles; the owner decides to revise ADR-0018, ADR-0019 and ADR-0020.
+
 ## 2026-11-01
 * **Creation**: [ADR-0020](/decisions/ADR-0020-domain-profiles.md): a domain declares its types, fields, questions, dependencies and aliases in a `Domain Profile` concept (`profile.md`), which lint and the skills read; distilled from the [real-bundles fragment](/fragments/2026-11-01-real-bundles-review.md), approved by human:jisequilla.
 * **Creation**: [ADR-0018](/decisions/ADR-0018-three-layers-fragments-base-projections.md): a bundle has three layers, `fragments/`, `base/` and `projections/`, in profile knowledge/3.0; distilled from the [real-bundles fragment](/fragments/2026-11-01-real-bundles-review.md), approved by human:jisequilla.
