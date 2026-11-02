@@ -27,6 +27,7 @@ import json
 import os
 import posixpath
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -341,12 +342,13 @@ class _Reader:
         self.visited: set = set()
         self._top: str | None | bool = False  # False: not asked yet
 
-    # git, only for <path>@<commit>; never a network operation: GIT_NO_LAZY_FETCH stops a
-    # partial clone from fetching a missing object from its promisor remote
+    # git, only for <path>@<commit>; never a network operation: --no-lazy-fetch stops a partial
+    # clone from fetching a missing object from its promisor remote. Git older than 2.44 rejects
+    # the option and every call fails, so an old git can never fall back to fetching.
     def _git(self, *args: str) -> subprocess.CompletedProcess | None:
         try:
-            return subprocess.run(["git", "-C", str(self.bundle), *args], capture_output=True, text=True,
-                                  env={**os.environ, "GIT_NO_LAZY_FETCH": "1"})
+            return subprocess.run(["git", "--no-lazy-fetch", "-C", str(self.bundle), *args], capture_output=True,
+                                  text=True, env={**os.environ, "GIT_NO_LAZY_FETCH": "1"})
         except OSError:
             return None
 
@@ -357,6 +359,11 @@ class _Reader:
         return self._top
 
     def git_read(self, path: str, commit: str, where: str, ref: str) -> tuple[tuple | None, str | None]:
+        p = self._git("version")
+        if p is None or p.returncode != 0:
+            self.r.add("PROFILE_UNREADABLE", where, f"extends '{ref}': reading a pinned profile needs git 2.44 or "
+                       "later (git --no-lazy-fetch), so that lint never fetches over the network")
+            return None, None
         top = self.toplevel()
         if top is None:
             self.r.add("PROFILE_UNREADABLE", where, f"extends '{ref}': the bundle is not inside a git repository")
@@ -1036,13 +1043,37 @@ def test_pinned_blob_missing_from_a_partial_clone_is_unreadable_and_never_fetche
     _git(origin, "commit", "-q", "-m", "drop acme")
     clone = tmp_path / "clone"
     _git(tmp_path, "clone", "-q", "--filter=blob:none", origin.as_uri(), str(clone))
-    blob = ["git", "-C", str(clone), "cat-file", "-e", f"{sha}:profiles/acme.md"]
-    no_fetch = {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
-    assert subprocess.run(blob, capture_output=True, env=no_fetch).returncode != 0  # the blob is not local
+    blob = _git(origin, "rev-parse", f"{sha}:profiles/acme.md")
+    # rev-list --missing=print lists absent objects without fetching them, on any git
+    missing = ["rev-list", "--objects", "--missing=print", sha]
+    assert f"?{blob}" in _git(clone, *missing).split()  # the blob is not local
     k = _bundle(clone, f'extends: ["profiles/acme.md@{sha[:7]}"]\n')
     f = _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")
-    assert "not in the local object store" in f["message"], f
-    assert subprocess.run(blob, capture_output=True, env=no_fetch).returncode != 0  # and lint did not fetch it
+    no_flag = subprocess.run(["git", "--no-lazy-fetch", "version"], capture_output=True).returncode != 0
+    assert ("needs git 2.44" if no_flag else "not in the local object store") in f["message"], f
+    assert f"?{blob}" in _git(clone, *missing).split()  # and lint did not fetch it
+
+
+def test_git_without_no_lazy_fetch_makes_a_pinned_profile_unreadable(tmp_path, monkeypatch):
+    real = shutil.which("git")
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "git").write_text('#!/bin/sh\nif [ "$1" = "--no-lazy-fetch" ]; then\n'
+                              '  echo "unknown option: --no-lazy-fetch" >&2; exit 129\nfi\n'
+                              f'exec "{real}" "$@"\n', encoding="utf-8")
+    (fake / "git").chmod(0o755)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    (repo / "profiles").mkdir()
+    (repo / "profiles" / "acme.md").write_text(_profile_doc("types:\n  Acme Thing:\n    extends: Term\n"), encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "acme")
+    sha = _git(repo, "rev-parse", "--short", "HEAD")
+    k = _bundle(repo, f'extends: ["profiles/acme.md@{sha}"]\n')
+    monkeypatch.setenv("PATH", f"{fake}{os.pathsep}{os.environ['PATH']}")
+    f = _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")
+    assert "needs git 2.44 or later" in f["message"], f
 
 
 def test_same_id_from_two_sources_is_a_duplicate_naming_both(tmp_path):
