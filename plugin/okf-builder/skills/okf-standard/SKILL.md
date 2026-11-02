@@ -26,13 +26,14 @@ knowledge/
   index.md  log.md  project.md  conflict-log.md
   fragments/
   base/
+    profile.md
     architecture/  decisions/  domain/  systems/  apis/  data/
     metrics/  computations/  runbooks/  playbooks/  policies/  references/
     questions/
   projections/
 ```
 
-The root holds only `index.md`, `log.md`, `project.md`, `conflict-log.md` (created with the first conflict) and the three layers. Concepts live in `base/` (at any depth) and `fragments/`, never at the root or in `projections/`. All typed directories are optional; each OKF directory has its own `index.md`, and `projections/` has none. The root `index.md` lists `fragments/` and `base/`; `base/index.md` lists the typed directories.
+The root holds only `index.md`, `log.md`, `project.md`, `conflict-log.md` (created with the first conflict) and the three layers. Concepts live in `base/` (at any depth) and `fragments/`, never at the root or in `projections/`. All typed directories are optional; each OKF directory has its own `index.md`, and `projections/` has none. The root `index.md` lists `fragments/` and `base/`; `base/index.md` lists the typed directories and `base/profile.md`, the bundle's optional Domain Profile. `base/` may be organised by type, as above, or by domain: the directory of each type is a default, and the Domain Profile's `families` say what each directory holds.
 
 ## `type` vocabulary → directory → template
 
@@ -54,8 +55,15 @@ The root holds only `index.md`, `log.md`, `project.md`, `conflict-log.md` (creat
 | Open Question | base/questions/ | `<skills>/okf-standard/templates/open-question.md` |
 | Knowledge Fragment | fragments/ (`YYYY-MM-DD-slug.md`) | `<skills>/okf-standard/templates/fragment.md` |
 | Conflict Log | root (`conflict-log.md`, created with the first conflict) | `<skills>/okf-standard/templates/conflict-log.md` |
+| Domain Profile | `base/profile.md` (at most one per bundle, nowhere else) | `<skills>/okf-standard/templates/domain-profile.md` |
+
+A type the bundle's Domain Profile declares is as valid as these; a concept of a type nobody declares is tolerated.
 
 The templates use `{{name}}` placeholders; replace all of them before saving. If a placeholder doesn't apply, remove the line rather than leaving it empty.
+
+## Where to read the Domain Profile
+
+What is in force for a concept is the built-in Domain Profile, `<skills>/okf-standard/profiles/knowledge-3.0.md` (the types above with their fields and levels; it changes only with the standard), then each profile the bundle's `base/profile.md` lists in `extends`, in order, then `base/profile.md` itself: its `types`, then its `families` for the concept's directory, then its `by_type` for the concept's type. Read `base/profile.md` before choosing a type or writing a key, resolve its `aliases` to the names they stand for, and never relax an enum, a level or a rule to make a concept pass: raise the friction to the person. A `profile.md` in a knowledge/2.0 bundle is ignored. Keys, composition rules and codes: `references/OKF-STANDARD.md` §4.1.
 
 ## Versions: v0.2 (default) and v0.1
 
@@ -79,6 +87,7 @@ The templates use `{{name}}` placeholders; replace all of them before saving. If
 ```
 <skills>/okf-standard/scripts/okf_init.py | okf_lint.py | okf_index.py | okf_migrate.py | okf_common.py
 <skills>/okf-standard/templates/*.md
+<skills>/okf-standard/profiles/knowledge-3.0.md
 <skills>/okf-standard/references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
 ```
 
