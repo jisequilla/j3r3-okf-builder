@@ -1,6 +1,8 @@
 # Bundle history
 
 ## 2026-11-02
+* **Creation**: [ADR-0026](/base/decisions/ADR-0026-built-in-domain-profile.md): the standard's types become a built-in Domain Profile under each bundle's `base/profile.md`, with a level per requirement, the field types `actor`, `datetime` and `date_or_datetime`, local references only, validators on request, aliases resolved by lint and undeclared keys warned only in bundles with a profile; decided by human:jisequilla while scoping okf-6x3.
+* **Deprecation**: [ADR-0023](/base/decisions/ADR-0023-domain-profile-per-bundle.md), superseded by ADR-0026.
 * **Update**: [Knowledge architect](/base/roles/knowledge-architect.md) cites the KDD role v1.3, verified by a person, and its agent definition at kdd-knowledge commit `929515c`, where the KDD bundle is on profile 3.0; the difference on unbuilt skills is gone; the KDD agent follows ADR-0025 at `929515c`, and its policy's local exception for a written chat confirmation is listed as a difference.
 * **Update**: okf-builder 0.7.0 released: the `Open Question` type in `base/questions/` with action items routed to the team's tracker ([ADR-0021](/base/decisions/ADR-0021-three-layers-with-open-questions.md)), and an agent's recorded verification from a person's answer to a structured question ([ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md)).
 * **Creation**: [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md): an agent writes a person's `verified` only from that person's recorded answer to a structured question naming each concept and its version, kept verbatim as a fragment; asked for by the KDD bundle, approved by human:jisequilla.

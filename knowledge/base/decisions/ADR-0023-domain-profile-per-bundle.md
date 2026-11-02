@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0023: A bundle declares its taxonomy in one Domain Profile, with families per directory, composition rules and profiles shared by reference"
 description: A bundle's base/profile.md of type Domain Profile declares its types, typed fields, families (a schema per directory), questions and optional aliases, extends shared profiles by reference and never copies them, and follows written composition rules (an extension only adds, a duplicate id is an error, forbidden, fixed, by_type, named rules, validator delegation); lint and the skills read it.
 tags: [adr, standard, profile, taxonomy]
-status: draft
+status: deprecated
 adr_id: ADR-0023
-decision_status: accepted
+decision_status: superseded
+superseded_by: /base/decisions/ADR-0026-built-in-domain-profile.md
 supersedes: /base/decisions/ADR-0020-domain-profiles.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T09:50:00Z }
 sources:
