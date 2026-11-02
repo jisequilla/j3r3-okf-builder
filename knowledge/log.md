@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-02
+* **Update**: [Knowledge architect](/base/roles/knowledge-architect.md) cites the KDD role v1.3, verified by a person, and its agent definition at kdd-knowledge commit `5a6412d`, where the KDD bundle is on profile 3.0; the difference on unbuilt skills is gone, and the one on writing `verified` is new.
 * **Update**: okf-builder 0.7.0 released: the `Open Question` type in `base/questions/` with action items routed to the team's tracker ([ADR-0021](/base/decisions/ADR-0021-three-layers-with-open-questions.md)), and an agent's recorded verification from a person's answer to a structured question ([ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md)).
 * **Creation**: [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md): an agent writes a person's `verified` only from that person's recorded answer to a structured question naming each concept and its version, kept verbatim as a fragment; asked for by the KDD bundle, approved by human:jisequilla.
 * **Deprecation**: [ADR-0005](/base/decisions/ADR-0005-required-generated-human-verified.md), superseded by ADR-0025.
