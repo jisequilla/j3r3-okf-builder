@@ -26,7 +26,8 @@ Usage:
 knowledge/2.0 → knowledge/3.0 (--profile; okf_version is not changed):
   - every non-hidden root directory except fragments/ and projections/, and every root
     .md other than index.md, log.md, project.md and the Conflict Log, move under base/
-  - links in every .md (reserved files included) and sources[].resource are rewritten:
+  - links in every .md (reserved files included), sources[].resource and the ADR path
+    fields supersedes and superseded_by are rewritten:
     a bundle path into a moved path (/decisions/x.md → /base/decisions/x.md), and a
     relative path whose target is on the other side of the move (recomputed); any
     other path (/standard/..., a repo-relative resource) is left as it is
@@ -306,6 +307,8 @@ ROOT_KEEP = {"index.md", "log.md", "project.md"}
 EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:")
 MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)")
 RESOURCE_RE = re.compile(r"(\bresource\s*:\s*)([\"']?)([^\s\"',}\]]+)")
+PATH_KEYS = {"supersedes", "superseded_by"}
+PATH_VALUE_RE = re.compile(r"([\"']?)([^\s\"',\[\]{}]+)")
 
 
 class Move:
@@ -352,7 +355,8 @@ def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
 
 
 def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
-    """Rewrite the body links and the sources[].resource of one .md, keeping every other byte."""
+    """Rewrite the body links, the sources[].resource and the PATH_KEYS values of one .md,
+    keeping every other byte."""
     def sub(m: re.Match, group: int) -> str:
         new = move.target(m.group(group), doc_rel)
         if new is None:
@@ -365,13 +369,17 @@ def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
     if lines and lines[0].strip() == "---":
         end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
         if end is not None:
-            in_sources = False
+            block = None
             for i in range(1, end):
                 key = re.match(r"^([A-Za-z_][\w-]*)\s*:", lines[i])
                 if key:
-                    in_sources = key.group(1) == "sources"
-                if in_sources:
+                    block = key.group(1)
+                if block == "sources":
                     lines[i] = RESOURCE_RE.sub(lambda m: sub(m, 3), lines[i])
+                elif block in PATH_KEYS:
+                    start = key.end() if key else 0
+                    value, hash_, comment = lines[i][start:].partition(" #")
+                    lines[i] = lines[i][:start] + PATH_VALUE_RE.sub(lambda m: sub(m, 2), value) + hash_ + comment
             body_start = end + 1
     body = MD_LINK_RE.sub(lambda m: sub(m, 2), "\n".join(lines[body_start:]))
     return "\n".join([*lines[:body_start], body])
@@ -624,6 +632,11 @@ def _bundle_20(tmp: Path) -> Path:
         "  - id: d\n    resource: docs/bench.md\n",
         "[P](../project.md), [ref](../references/okf.md), [abs](/references/okf.md), [frag](../fragments/2026-10-31-m.md)"
         " and ![img](../references/okf.md).\n"), encoding="utf-8")
+    (k / "decisions" / "ADR-0002-y.md").write_text(_concept(
+        "Architecture Decision", "Y",
+        "decision_status: superseded\nsuperseded_by: /decisions/ADR-0001-x.md  # the newer one\n"
+        "supersedes:\n  - \"/decisions/ADR-0000-z.md#context\"\n  - /standard/OKF-STANDARD.md\n  - ADR-0000-z.md\n"),
+        encoding="utf-8")
     (k / "references" / "index.md").write_text("# references\n\n* [OKF](okf.md) - OKF.\n", encoding="utf-8")
     (k / "references" / "okf.md").write_text(_concept("Reference", "OKF"), encoding="utf-8")
     (k / "references" / "skills" / "index.md").write_text("# skills\n\n_(empty)_\n", encoding="utf-8")
@@ -694,6 +707,15 @@ def test_profile_rewrites_sources_and_leaves_repo_paths(tmp_path):
                                                        "docs/bench.md"]
     proj, _ = _parse((k / "project.md").read_text(encoding="utf-8"))
     assert [s["resource"] for s in proj["sources"]] == ["/standard/OKF-STANDARD.md", "/tools", "tools/export_m365.py"]
+
+
+def test_profile_rewrites_adr_path_fields(tmp_path):
+    k = _bundle_20(tmp_path)
+    main([str(k), "--profile", "knowledge/3.0"])
+    text = (k / "base" / "decisions" / "ADR-0002-y.md").read_text(encoding="utf-8")
+    assert "superseded_by: /base/decisions/ADR-0001-x.md  # the newer one\n" in text
+    adr, _ = _parse(text)
+    assert adr["supersedes"] == ["/base/decisions/ADR-0000-z.md#context", "/standard/OKF-STANDARD.md", "ADR-0000-z.md"]
 
 
 def test_profile_result_lints_clean(tmp_path):
