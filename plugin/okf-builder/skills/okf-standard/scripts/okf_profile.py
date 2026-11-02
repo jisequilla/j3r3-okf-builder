@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -340,10 +341,12 @@ class _Reader:
         self.visited: set = set()
         self._top: str | None | bool = False  # False: not asked yet
 
-    # git, only for <path>@<commit>; never a network operation
+    # git, only for <path>@<commit>; never a network operation: GIT_NO_LAZY_FETCH stops a
+    # partial clone from fetching a missing object from its promisor remote
     def _git(self, *args: str) -> subprocess.CompletedProcess | None:
         try:
-            return subprocess.run(["git", "-C", str(self.bundle), *args], capture_output=True, text=True)
+            return subprocess.run(["git", "-C", str(self.bundle), *args], capture_output=True, text=True,
+                                  env={**os.environ, "GIT_NO_LAZY_FETCH": "1"})
         except OSError:
             return None
 
@@ -364,7 +367,12 @@ class _Reader:
             return None, None
         sha = p.stdout.strip()
         p = self._git("show", f"{sha}:{path}")
-        if p.returncode != 0:
+        if p is None or p.returncode != 0:
+            listed = self._git("ls-tree", "--full-tree", "--name-only", sha, "--", path)
+            if listed is not None and listed.returncode == 0 and listed.stdout.strip():
+                self.r.add("PROFILE_UNREADABLE", where, f"extends '{ref}': {path} at commit {commit} is not in the "
+                           "local object store (partial clone?); lint does not fetch it")
+                return None, None
             self.r.add("PROFILE_UNREADABLE", where, f"extends '{ref}': {path} does not exist at commit {commit}")
             return None, None
         return ("git", path, sha), p.stdout
@@ -1010,6 +1018,31 @@ def test_missing_reference_or_unresolvable_commit_is_unreadable(tmp_path):
     assert "cannot resolve commit abc1234" in _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")["message"]
     (k / OWN_REL).write_text(_profile_doc(f'extends: ["profiles/acme.md@{sha}"]\n'), encoding="utf-8")
     assert "does not exist at commit" in _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")["message"]
+
+
+def test_pinned_blob_missing_from_a_partial_clone_is_unreadable_and_never_fetched(tmp_path):
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _git(origin, "init", "-q")
+    _git(origin, "config", "uploadpack.allowFilter", "true")
+    (origin / "profiles").mkdir()
+    (origin / "profiles" / "acme.md").write_text(_profile_doc("types:\n  Acme Thing:\n    extends: Term\n"), encoding="utf-8")
+    _git(origin, "add", ".")
+    _git(origin, "commit", "-q", "-m", "acme")
+    sha = _git(origin, "rev-parse", "HEAD")
+    _git(origin, "rm", "-q", "profiles/acme.md")
+    (origin / "README").write_text("x\n", encoding="utf-8")
+    _git(origin, "add", ".")
+    _git(origin, "commit", "-q", "-m", "drop acme")
+    clone = tmp_path / "clone"
+    _git(tmp_path, "clone", "-q", "--filter=blob:none", origin.as_uri(), str(clone))
+    blob = ["git", "-C", str(clone), "cat-file", "-e", f"{sha}:profiles/acme.md"]
+    no_fetch = {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
+    assert subprocess.run(blob, capture_output=True, env=no_fetch).returncode != 0  # the blob is not local
+    k = _bundle(clone, f'extends: ["profiles/acme.md@{sha[:7]}"]\n')
+    f = _one(load_profile(k, builtin=_builtin(tmp_path)), "PROFILE_UNREADABLE")
+    assert "not in the local object store" in f["message"], f
+    assert subprocess.run(blob, capture_output=True, env=no_fetch).returncode != 0  # and lint did not fetch it
 
 
 def test_same_id_from_two_sources_is_a_duplicate_naming_both(tmp_path):
