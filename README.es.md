@@ -2,7 +2,7 @@
 
 # j3r3-okf-builder
 
-Estándar de conocimiento de proyecto basado en **OKF (Open Knowledge Format v0.2, Google)** y plugin que lo aplica en cualquier repositorio. El conocimiento del proyecto (decisiones, arquitectura, runbooks, políticas) vive en `knowledge/` como un bundle OKF con el perfil `knowledge/2.0`. Los skills crean la estructura, capturan conceptos con plantillas, validan, regeneran índices, responden preguntas y migran entre versiones.
+Estándar de conocimiento de proyecto basado en **OKF (Open Knowledge Format v0.2, Google)** y plugin que lo aplica en cualquier repositorio. El conocimiento del proyecto (decisiones, arquitectura, runbooks, políticas) vive en `knowledge/` como un bundle OKF con el perfil `knowledge/3.0`. Los skills crean la estructura, capturan conceptos con plantillas, validan, regeneran índices, responden preguntas y migran entre versiones.
 
 El repo está en inglés. Este resumen sirve a quien habla español; el detalle completo está en [README.md](README.md).
 
