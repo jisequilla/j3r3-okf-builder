@@ -35,7 +35,6 @@ ACTOR_RE = re.compile(r"^(human:[^\s/]+|process:[^\s/]+|[^\s/:]+/[^\s/]+)$")
 KEBAB_RE = re.compile(r"^(ADR-\d{4}-)?[a-z0-9]+(-[a-z0-9]+)*\.md$")
 LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 VALID_STATUS = {"draft", "stable", "deprecated"}
-VALID_DISTILLATION = ("pending", "distilled", "conflict")
 
 
 def run_tests(script: str, argv: list[str]) -> int:

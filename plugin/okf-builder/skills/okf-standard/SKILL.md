@@ -63,7 +63,7 @@ The templates use `{{name}}` placeholders; replace all of them before saving. If
 
 ## Where to read the Domain Profile
 
-What is in force for a concept is the built-in Domain Profile, `<skills>/okf-standard/profiles/knowledge-3.0.md` (the types above with their fields and levels; it changes only with the standard), then each profile the bundle's `base/profile.md` lists in `extends`, in order, then `base/profile.md` itself: its `types`, then its `families` for the concept's directory, then its `by_type` for the concept's type. Read `base/profile.md` before choosing a type or writing a key, resolve its `aliases` to the names they stand for, and never relax an enum, a level or a rule to make a concept pass: raise the friction to the person. A `profile.md` in a knowledge/2.0 bundle is ignored. Keys, composition rules and codes: `references/OKF-STANDARD.md` §4.1.
+What is in force for a concept is the built-in Domain Profile, `<skills>/okf-standard/profiles/knowledge-3.0.md` (the types above with their usual directory, their fields, and the code and level lint reports for each breach; it changes only with the standard), then each profile the bundle's `base/profile.md` lists in `extends`, in order, then `base/profile.md` itself: its `types`, then its `families` for the concept's directory, then its `by_type` for the concept's type. Read `base/profile.md` before choosing a type or writing a key, resolve its `aliases` to the names they stand for, and never relax an enum, a level or a rule to make a concept pass: raise the friction to the person. A `profile.md` in a knowledge/2.0 bundle is ignored. Keys, composition rules and codes: `references/OKF-STANDARD.md` §4.1.
 
 ## Versions: v0.2 (default) and v0.1
 
@@ -85,9 +85,9 @@ What is in force for a concept is the built-in Domain Profile, `<skills>/okf-sta
 `<skills>` = the directory that holds the `okf-*` skills (the parent of this skill). This skill carries the scripts and templates the others use:
 
 ```
-<skills>/okf-standard/scripts/okf_init.py | okf_lint.py | okf_index.py | okf_migrate.py | okf_common.py
+<skills>/okf-standard/scripts/okf_init.py | okf_lint.py | okf_profile.py | okf_index.py | okf_migrate.py | okf_common.py
 <skills>/okf-standard/templates/*.md
-<skills>/okf-standard/profiles/knowledge-3.0.md
+<skills>/okf-standard/profiles/knowledge-3.0.md       # the built-in Domain Profile; okf_lint.py --profiles lists it as "built-in"
 <skills>/okf-standard/references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
 ```
 

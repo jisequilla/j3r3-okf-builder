@@ -14,7 +14,10 @@ are errors (or warnings with --strict). Notices are neither and never fail.
 
 In a knowledge/3.0 bundle the Domain Profile (built-in layer, extends,
 base/profile.md) must be well formed (okf_profile.py); --profiles lists what is
-in force at a path and which source declared each item.
+in force at a path and which source declared each item. Each concept is checked
+against the requirements in force for its type that carry their own code: the
+built-in profile keeps the per-field checks of a Knowledge Fragment and an Open
+Question under their codes and levels. --no-profile applies no Domain Profile.
 
 The profile is the okf_profile of the root index.md; a bundle without one is
 treated as knowledge/2.0. A knowledge/2.0 bundle stays valid, and lint prints a
@@ -42,7 +45,6 @@ from okf_common import (  # noqa: E402
     LAYER_DIRS,
     PROFILE_20,
     PROFILE_30,
-    VALID_DISTILLATION,
     VALID_STATUS,
     Doc,
     as_list,
@@ -55,12 +57,11 @@ from okf_common import (  # noqa: E402
     to_dt,
     walk_bundle,
 )
-from okf_profile import (IGNORED_20_NOTICE, Resolved, bundle_path, format_in_force, ignored_in_20, in_force,  # noqa: E402
-                         load_profile, misplaced)
+from okf_profile import (IGNORED_20_NOTICE, Resolved, _lvl, bundle_path, format_in_force, ignored_in_20,  # noqa: E402
+                         in_force, is_a, load_profile, misplaced, type_in_force)
 
 
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
-VALID_QUESTION_STATUS = ("open", "answered", "dropped")
 
 
 class Report:
@@ -147,7 +148,9 @@ def check_log(doc: Doc, rep: Report) -> None:
 
 
 def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datetime, version: str = "0.2",
-                  pname: str = PROFILE_20) -> None:
+                  pname: str = PROFILE_20, prof: Resolved | None = None, forces: dict | None = None) -> None:
+    """One concept: the spec-level checks, then, when prof is given, the Domain Profile in force for its type
+    (forces caches type_in_force per type)."""
     if not doc.has_fm_block:
         rep.error("NO_FRONTMATTER", doc.rel, "concept has no YAML frontmatter block (§11.1)")
         return
@@ -252,10 +255,15 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
             if not isinstance(p, dict) or not p.get("name") or not p.get("type"):
                 rep.error("AC_BAD_PARAM", doc.rel, "parameters[] requires { name, type, required } (§10.2)")
 
-    if profile and str(t) == "Knowledge Fragment":
-        check_fragment(doc, fm, rep)
-    if profile and str(t) == "Open Question":
-        check_question(doc, fm, rep, now)
+    if prof is not None and str(t) in prof.types:
+        force = forces.get(str(t)) if forces is not None else None
+        if force is None:
+            force = type_in_force(prof, str(t))
+            if forces is not None:
+                forces[str(t)] = force
+        check_profile_fields(doc, fm, str(t), prof, force, rep)
+        if is_a(prof, str(t), "Open Question"):
+            check_review_due(doc, fm, rep, now)
 
     if profile and not KEBAB_RE.match(doc.path.name):
         rep.warn("NAME_KEBAB", doc.rel, "file name is not ASCII kebab-case (profile §2)")
@@ -277,20 +285,78 @@ def _blank(v) -> bool:
     return v is None or (isinstance(v, (str, list, dict)) and not (v.strip() if isinstance(v, str) else v))
 
 
-def check_fragment(doc: Doc, fm: dict, rep: Report) -> None:
-    """Frontmatter of a Knowledge Fragment (ADR-0015); the body sections are not checked."""
-    for key in ("occurred_at", "origin", "participants", "distillation_status"):
-        if _blank(fm.get(key)):
-            rep.warn("FRAGMENT_NO_FIELD", doc.rel, f"Knowledge Fragment has no '{key}' (§4)")
-    oa = fm.get("occurred_at")
-    if not _blank(oa) and not is_iso_date_or_datetime(oa):
-        rep.warn("BAD_ISO", doc.rel, f"occurred_at '{oa}' is neither YYYY-MM-DD nor ISO 8601 with an offset")
-    for p in as_list(fm.get("participants")):
-        if not ACTOR_RE.match(str(p)):
-            rep.warn("BAD_ACTOR", doc.rel, f"participant '{p}' does not follow the actor convention (§7)")
-    ds = fm.get("distillation_status")
-    if not _blank(ds) and str(ds) not in VALID_DISTILLATION:
-        rep.error("BAD_DISTILLATION_STATUS", doc.rel, f"distillation_status '{ds}' is not pending|distilled|conflict (§7)")
+def value_ok(ftype: str, v, values: list | None = None) -> bool:
+    """A value of one of the field types of §4.1 other than list (a list is checked item by item)."""
+    if ftype == "actor":
+        return bool(ACTOR_RE.match(str(v)))
+    if ftype == "enum":
+        return str(v) in [str(x) for x in values or []]
+    if ftype == "date_or_datetime":
+        return is_iso_date_or_datetime(v)
+    if ftype == "datetime":
+        return is_iso(v)
+    if ftype == "date":
+        return (isinstance(v, date) and not isinstance(v, datetime)) or (
+            isinstance(v, str) and bool(DATE_RE.match(v)) and is_iso_date_or_datetime(v))
+    if ftype == "path":
+        return isinstance(v, str) and v.startswith("/")
+    if ftype == "integer":
+        return isinstance(v, int) and not isinstance(v, bool)
+    if ftype == "boolean":
+        return isinstance(v, bool)
+    return isinstance(v, str)
+
+
+def _breach(fid: str, ftype: str, v, values: list, item: bool) -> str:
+    label = fid[:-1] if item and fid.endswith("s") else fid  # an item of participants is a participant
+    if ftype == "actor":
+        return f"{label} '{v}' does not follow the actor convention (§7)"
+    if ftype == "enum":
+        return f"{label} '{v}' is not {'|'.join(str(x) for x in values)} (§7)"
+    if ftype == "date_or_datetime":
+        return f"{label} '{v}' is neither YYYY-MM-DD nor ISO 8601 with an offset"
+    return f"{label} '{v}' is not a {ftype} (§4.1)"
+
+
+def _rule_applies(prof: Resolved, t: str, fm: dict, when: dict) -> bool:
+    return all(is_a(prof, t, str(v)) if k == "type" else str(fm.get(k)) == str(v) for k, v in when.items())
+
+
+def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict, rep: Report) -> None:
+    """The requirements of the Domain Profile in force for type t that carry their own code (§4.1).
+
+    Two passes. First each required field that is missing, a blank value included, in declaration order.
+    Then each field's value in declaration order, each field followed by the rules whose first required
+    field it is; the rules that require no declared field come last. A blank value of a required scalar
+    field is reported once, as missing. A list is checked item by item, a single value as a one-item list,
+    so a blank text or map given as a list is missing and also an item of the wrong form."""
+    fields, required = force["fields"], force["required"]
+    for fid, req in required.items():
+        if req.get("code") and _blank(fm.get(fid)):
+            owner = fields[fid]["declared_by"] if fid in fields else t
+            rep.add(req["level"].upper(), req["code"], doc.rel, f"{owner} has no '{fid}' (§4)")
+    rules = [r for r in prof.rules if r.get("code") and _rule_applies(prof, t, fm, r["when"])]
+
+    def check_rules(at: str | None) -> None:
+        for r in rules:
+            if next((f for f in r["require"] if f in fields), None) != at:
+                continue
+            cond = " and ".join(f"{k} is {v}" for k, v in r["when"].items() if k != "type")
+            for f in r["require"]:
+                if _blank(fm.get(f)):
+                    rep.add(_lvl(r).upper(), r["code"], doc.rel, f"{cond} but '{f}' is missing (§4)")
+
+    for fid, d in fields.items():
+        v = fm.get(fid)
+        item = d.get("type") == "list"
+        if d.get("code") and v is not None and (item or not (d.get("required") and _blank(v))):
+            ftype = d.get("of") if item else d.get("type")
+            values = [x["value"] for x in d.get("values") or []]
+            for x in (as_list(v) if item else [v]):
+                if not value_ok(ftype, x, values):
+                    rep.add(_lvl(d).upper(), d["code"], doc.rel, _breach(fid, ftype, x, values, item))
+        check_rules(fid)
+    check_rules(None)
 
 
 def utc_date(v) -> date | None:
@@ -309,26 +375,12 @@ def utc_date(v) -> date | None:
         return None
 
 
-def check_question(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
-    """Frontmatter of an Open Question (ADR-0021); the body sections are not checked."""
-    for key in ("owner", "question_status", "asked_in"):
-        if _blank(fm.get(key)):
-            rep.warn("QUESTION_NO_FIELD", doc.rel, f"Open Question has no '{key}' (§4)")
-    owner = fm.get("owner")
-    if not _blank(owner) and not ACTOR_RE.match(str(owner)):
-        rep.warn("BAD_ACTOR", doc.rel, f"owner '{owner}' does not follow the actor convention (§7)")
-    qs = fm.get("question_status")
-    if not _blank(qs) and str(qs) not in VALID_QUESTION_STATUS:
-        rep.error("BAD_QUESTION_STATUS", doc.rel, f"question_status '{qs}' is not open|answered|dropped (§7)")
-    if str(qs) == "answered" and _blank(fm.get("answered_by")):
-        rep.warn("QUESTION_NO_ANSWER", doc.rel, "question_status is answered but 'answered_by' is missing (§4)")
+def check_review_due(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
+    """An open question past its review_on (ADR-0026 decision 6); the form of review_on is a profile check."""
     ro = fm.get("review_on")
-    if ro is not None:
-        due = utc_date(ro)
-        if due is None:
-            rep.warn("BAD_ISO", doc.rel, f"review_on '{ro}' is neither YYYY-MM-DD nor ISO 8601 with an offset")
-        elif str(qs) == "open" and due < now.date():
-            rep.warn("QUESTION_REVIEW_DUE", doc.rel, f"open question due for review since {due.isoformat()}")
+    due = utc_date(ro) if ro is not None else None
+    if due is not None and str(fm.get("question_status")) == "open" and due < now.date():
+        rep.warn("QUESTION_REVIEW_DUE", doc.rel, f"open question due for review since {due.isoformat()}")
 
 
 def check_layers(docs: list[Doc], rep: Report) -> None:
@@ -361,11 +413,12 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
     by_path = {d.path.resolve(): d for d in docs}
     declared = declared_profile(bundle)
     pname = declared or PROFILE_20
+    prof = None  # --no-profile: no Domain Profile, the built-in one included
     if profile:
         rep.profile_outdated = pname == PROFILE_20
         if declared == PROFILE_30:
             check_layers(docs, rep)
-        _, findings, notices = profile_structure(bundle, docs)
+        prof, findings, notices = profile_structure(bundle, docs)
         for i in findings:
             rep.add(i["level"], i["code"], i["path"], i["message"])
         rep.notices += notices
@@ -400,6 +453,7 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
                              and d.frontmatter.get("type") == "Conflict Log")
             rep.error("PROFILE_MANY_CONFLICT_LOGS", "conflict-log.md", f"more than one concept has type: Conflict Log ({logs})")
 
+    forces: dict = {}
     for d in docs:
         if d.path.name == "index.md":
             check_index(d, bundle, rep, by_path, profile)
@@ -408,7 +462,7 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto") -> tuple[Rep
                 rep.warn("LOG_TYPE", d.rel, "log.md with frontmatter should be type: Log, or have no frontmatter")
             check_log(d, rep)
         else:
-            check_concept(d, bundle, rep, profile, now, version, pname)
+            check_concept(d, bundle, rep, profile, now, version, pname, prof, forces)
     return rep, version, origin
 
 
@@ -910,6 +964,69 @@ def test_question_codes_in_json(tmp_path, capsys):
 def test_no_profile_skips_question_checks(tmp_path):
     rep, _, _ = lint(_question_bundle(tmp_path, _BAD_QUESTION), profile=False)
     assert rep.items == []
+
+
+def test_value_ok_for_each_field_type():
+    from datetime import date as _date
+
+    cases = {
+        "string": (["x"], [1, None]), "integer": ([3], [True, "3"]), "boolean": ([False], ["no"]),
+        "date": ([_date(2026, 11, 2), "2026-11-02"], ["2026-02-30", "2026-11-02T10:00:00Z", datetime(2026, 11, 2)]),
+        "datetime": (["2026-11-02T10:00:00+01:00"], ["2026-11-02", "2026-11-02T10:00:00"]),
+        "date_or_datetime": (["2026-11-02", "2026-11-02T10:00:00Z"], ["2026-11-02T10:00:00", "next week"]),
+        "actor": (["human:a", "process:b", "okf-builder/x"], ["Alice", "a/b/c"]),
+        "path": (["/base/x.md"], ["base/x.md", 1]),
+    }
+    for ftype, (good, bad) in cases.items():
+        assert all(value_ok(ftype, v) for v in good), ftype
+        assert not any(value_ok(ftype, v) for v in bad), ftype
+    assert value_ok("enum", "open", ["open", "answered"]) and not value_ok("enum", "closed", ["open"])
+
+
+def _with_own_profile(k: Path, keys: str) -> Path:
+    (k / "base" / "profile.md").write_text(_domain_profile(keys), encoding="utf-8")
+    (k / "base" / "index.md").write_text("# base\n\n* [Profile](profile.md) - The taxonomy.\n", encoding="utf-8")
+    return k
+
+
+def test_a_local_type_gets_the_checks_of_the_standard_type_it_extends(tmp_path):
+    k = _with_own_profile(_bundle_30(tmp_path), "types:\n  Client Meeting:\n    extends: Knowledge Fragment\n")
+    frag = k / _FRAGMENT
+    frag.write_text(frag.read_text(encoding="utf-8").replace("type: Knowledge Fragment", "type: Client Meeting")
+                    .replace("origin: Weekly meeting\n", "").replace("distillation_status: pending", "distillation_status: done"),
+                    encoding="utf-8")
+    rep, _, _ = lint(k)
+    assert [(i["level"], i["code"], i["message"]) for i in rep.items] == [
+        ("WARN", "FRAGMENT_NO_FIELD", "Knowledge Fragment has no 'origin' (§4)"),
+        ("ERROR", "BAD_DISTILLATION_STATUS", "distillation_status 'done' is not pending|distilled|conflict (§7)")]
+
+
+def test_enum_values_a_bundle_adds_are_accepted_and_named(tmp_path):
+    k = _with_own_profile(_bundle_30(tmp_path), "by_type:\n  Knowledge Fragment: { values: { distillation_status: [archived] } }\n")
+    frag = k / _FRAGMENT
+    text = frag.read_text(encoding="utf-8")
+    frag.write_text(text.replace("distillation_status: pending", "distillation_status: archived"), encoding="utf-8")
+    assert lint(k)[0].items == []
+    frag.write_text(text.replace("distillation_status: pending", "distillation_status: done"), encoding="utf-8")
+    [msg] = [i["message"] for i in lint(k)[0].items]
+    assert msg == "distillation_status 'done' is not pending|distilled|conflict|archived (§7)"
+
+
+def test_profiles_lists_the_builtin_layer_with_its_codes(tmp_path, capsys):
+    import json as _json
+
+    k = _bundle_30(tmp_path)
+    capsys.readouterr()
+    assert main([str(k), "--profiles", "/fragments/"]) == 0
+    out = capsys.readouterr().out
+    assert "sources: built-in" in out and "type Knowledge Fragment  [built-in]" in out
+    assert "  required participants (warn, code FRAGMENT_NO_FIELD)  [built-in]" in out
+    assert "  field distillation_status: enum [pending, distilled, conflict], level error  [built-in]" in out
+    assert "rule answered-question-names-its-answer" in out
+    assert main([str(k), "--profiles", "--json"]) == 0
+    data = _json.loads(capsys.readouterr().out)
+    assert data["types"]["Open Question"]["fields"]["owner"]["code"] == "BAD_ACTOR"
+    assert {t["source"] for t in data["types"].values()} == {"built-in"}
 
 
 if __name__ == "__main__":

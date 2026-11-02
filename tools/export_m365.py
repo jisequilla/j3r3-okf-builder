@@ -17,7 +17,9 @@ Builds two outputs from plugin/okf-builder/:
 
 Differences from the Claude plugin that this exporter resolves:
   - ${CLAUDE_PLUGIN_ROOT} does not exist: each skill must be self-contained. The scripts and
-    templates a skill uses are copied into it, and paths are rewritten relative to the skill.
+    templates a skill uses are copied into it, and paths are rewritten relative to the skill. The
+    built-in Domain Profile (okf-standard/profiles/knowledge-3.0.md) is inlined into each copied
+    okf_profile.py as BUILTIN_TEXT, so it adds no companion file.
   - M365 limit: ≤20 companion files per skill, ≤5 MB per file, no hidden files.
   - SKILL.md name == folder name (rule ASKILL-P006).
   - Declarative agent limits: instructions ≤ 8,000 characters, ≤ 8 agent_skills, name ≤ 100,
@@ -62,6 +64,18 @@ NEEDS = {
     "okf-ask":      {"scripts": ["okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
 }
 MAX_COMPANIONS = 20
+# The built-in Domain Profile goes inside each exported okf_profile.py, so it adds no companion file
+BUILTIN_PROFILE = PLUGIN / "skills" / "okf-standard" / "profiles" / "knowledge-3.0.md"
+BUILTIN_LINE = "BUILTIN_TEXT: str | None = None\n"
+
+
+def inline_builtin(script: Path) -> None:
+    """Replace okf_profile.py's empty BUILTIN_TEXT with the built-in profile's text, as a Python literal."""
+    text = script.read_text(encoding="utf-8")
+    if text.count(BUILTIN_LINE) != 1:
+        raise SystemExit(f"{script}: expected one line {BUILTIN_LINE.strip()!r} to inline the built-in profile into")
+    literal = repr(BUILTIN_PROFILE.read_text(encoding="utf-8"))
+    script.write_text(text.replace(BUILTIN_LINE, f"BUILTIN_TEXT: str | None = {literal}\n"), encoding="utf-8")
 
 
 # The paths note of the source SKILL.md files ("Rutas" until the skill prose is translated)
@@ -104,6 +118,8 @@ def rewrite(text: str, skill: str) -> str:
     else:
         text = text.replace("<skills>/okf-standard/templates/", "(template carried by the skill that writes that type) templates/")
     text = text.replace("<skills>/okf-standard/references/", "(okf-standard skill) references/")
+    text = text.replace("`<skills>/okf-standard/profiles/knowledge-3.0.md`",
+                        "`profiles/knowledge-3.0.md` (inlined in the `okf_profile.py` of each skill that ships it)")
     text = text.replace("<skills>/", "(skill) ")
     text = text.replace("${CLAUDE_PLUGIN_ROOT}/skills", "(skills)")
     return text
@@ -141,8 +157,9 @@ def ensure_frontmatter(text: str, skill: str, author: str) -> str:
 def build_skill(skill_src: Path, dst: Path, author: str) -> int:
     skill = skill_src.name
     shutil.copytree(skill_src, dst, ignore=shutil.ignore_patterns("__pycache__", ".*"))
-    if skill == "okf-standard":  # 20-companion limit: scripts and templates go into the skills that use them
-        for sub in ("scripts", "templates"):
+    # 20-companion limit: scripts and templates go into the skills that use them, the built-in profile into okf_profile.py
+    if skill == "okf-standard":
+        for sub in ("scripts", "templates", "profiles"):
             if (dst / sub).exists():
                 shutil.rmtree(dst / sub)
     need = NEEDS[skill]
@@ -152,6 +169,8 @@ def build_skill(skill_src: Path, dst: Path, author: str) -> int:
         (dst / "scripts").mkdir(exist_ok=True)
         for s in need["scripts"]:
             shutil.copy2(SCRIPTS / s, dst / "scripts" / s)
+            if s == "okf_profile.py":
+                inline_builtin(dst / "scripts" / s)
     if need["templates"]:
         (dst / "templates").mkdir(exist_ok=True)
         for name in need["templates"]:
