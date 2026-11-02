@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-02
+* **Update**: okf-builder 0.7.0 released: the `Open Question` type in `base/questions/` with action items routed to the team's tracker ([ADR-0021](/base/decisions/ADR-0021-three-layers-with-open-questions.md)), and an agent's recorded verification from a person's answer to a structured question ([ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md)).
 * **Creation**: [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md): an agent writes a person's `verified` only from that person's recorded answer to a structured question naming each concept and its version, kept verbatim as a fragment; asked for by the KDD bundle, approved by human:jisequilla.
 * **Deprecation**: [ADR-0005](/base/decisions/ADR-0005-required-generated-human-verified.md), superseded by ADR-0025.
 * **Update**: [Knowledge architect](/base/roles/knowledge-architect.md) and [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md) cite ADR-0025.
