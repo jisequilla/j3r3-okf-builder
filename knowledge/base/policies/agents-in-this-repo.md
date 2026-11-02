@@ -7,7 +7,7 @@ tags: [policy, agents]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:59:05Z }
 ---
 
 # Rule
@@ -17,7 +17,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
 3. Edit only the source `plugin/okf-builder/skills/`; never the platform packages (`.claude/skills`, `.agents/skills`, `dist/`).
 4. Finish with `make test` (code) and `make lint` (knowledge).
 5. Do not use vendor variables in skills; use the `<skills>/` convention.
-6. Do not add `verified: human:` without the person's confirmation ([ADR-0005](/base/decisions/ADR-0005-required-generated-human-verified.md)).
+6. Add `verified: human:` only from that person's recorded answer to a question naming each concept and its version, kept as a fragment ([ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md)).
 
 # Related
 

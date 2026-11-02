@@ -3,9 +3,10 @@ type: Architecture Decision
 title: "ADR-0005: generated required and verified only by people"
 description: "The profile requires generated on every concept and forbids an agent from writing verified with a human: actor."
 tags: [adr, trust]
-status: stable
+status: deprecated
 adr_id: ADR-0005
-decision_status: accepted
+decision_status: superseded
+superseded_by: /base/decisions/ADR-0025-verification-recorded-by-question.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
 ---
 

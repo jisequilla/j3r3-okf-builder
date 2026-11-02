@@ -1,6 +1,9 @@
 # Bundle history
 
 ## 2026-11-02
+* **Creation**: [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md): an agent writes a person's `verified` only from that person's recorded answer to a structured question naming each concept and its version, kept verbatim as a fragment; asked for by the KDD bundle, approved by human:jisequilla.
+* **Deprecation**: [ADR-0005](/base/decisions/ADR-0005-required-generated-human-verified.md), superseded by ADR-0025.
+* **Update**: [Knowledge architect](/base/roles/knowledge-architect.md) and [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md) cite ADR-0025.
 * **Update**: [Knowledge architect](/base/roles/knowledge-architect.md) cites the KDD role v1.2, re-verified by a person, and the KDD agent definition at kdd-knowledge commit `bec7695`; `okf-fragment`, `okf-distill` and `okf-review` are marked as existing.
 * **Update**: okf-builder 0.6.1 released: `okf-fragment` backfills a missing `occurred_at`, `origin` or `participants` from the record ([ADR-0024](/base/decisions/ADR-0024-fragment-capture-field-backfill.md)), the skills' per-platform outputs are called platform packages, and T3's skill fixes.
 * **Update**: [Open Knowledge Format (Google spec)](/base/references/okf-spec-google.md) cites SPEC.md at commit `62432a0`, which the v0.2 copy matches byte for byte; the reference keeps pointing at upstream `main` to track updates.
