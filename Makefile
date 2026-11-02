@@ -16,6 +16,7 @@ test:
 	uv run -q --with pytest $(S)/okf_init.py --test
 	uv run -q --with pytest $(S)/okf_index.py --test
 	uv run -q --with pytest $(S)/okf_lint.py --test
+	uv run -q --with pytest $(S)/okf_profile.py --test
 	uv run -q --with pytest $(S)/okf_migrate.py --test
 	@echo "[2] init 0.2 (profile knowledge/3.0) + index + lint --strict"
 	rm -rf /tmp/okf-test && uv run -q $(S)/okf_init.py --root /tmp/okf-test --title T --description D --actor human:test >/dev/null
@@ -43,6 +44,7 @@ test:
 	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
 	rm -rf /tmp/okf-m365p3 && uv run -q dist/m365/package/skills/okf-migrate/scripts/okf_migrate.py examples/fixtures/knowledge-2.0 --profile knowledge/3.0 --out /tmp/okf-m365p3 >/dev/null
 	uv run -q dist/m365/package/skills/okf-migrate/scripts/okf_lint.py /tmp/okf-m365p3 | tail -1 | grep ' 0 errors'
+	for d in dist/m365/package/skills/*/scripts; do test ! -f $$d/okf_lint.py || test -f $$d/okf_profile.py || { echo "$$d: okf_lint.py without okf_profile.py"; exit 1; }; done
 	for s in okf-capture okf-fragment okf-distill; do grep -q 'scripts/okf_migrate.py' dist/m365/package/skills/$$s/SKILL.md && test -f dist/m365/package/skills/$$s/scripts/okf_migrate.py || { echo "$$s: names okf_migrate.py but does not ship it"; exit 1; }; done
 	@echo "[7] canonical copies match the source; M365 agent within its limits and matching tools/m365-agent.json"
 	diff -rq templates $(PLUGIN)/skills/okf-standard/templates
