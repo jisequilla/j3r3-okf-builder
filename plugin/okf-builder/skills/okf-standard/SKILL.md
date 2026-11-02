@@ -28,6 +28,7 @@ knowledge/
   base/
     architecture/  decisions/  domain/  systems/  apis/  data/
     metrics/  computations/  runbooks/  playbooks/  policies/  references/
+    questions/
   projections/
 ```
 
@@ -50,6 +51,7 @@ The root holds only `index.md`, `log.md`, `project.md`, `conflict-log.md` (creat
 | Playbook | base/playbooks/ | `<skills>/okf-standard/templates/playbook.md` |
 | Policy | base/policies/ | `<skills>/okf-standard/templates/policy.md` |
 | Reference | base/references/ | `<skills>/okf-standard/templates/reference.md` |
+| Open Question | base/questions/ | `<skills>/okf-standard/templates/open-question.md` |
 | Knowledge Fragment | fragments/ (`YYYY-MM-DD-slug.md`) | `<skills>/okf-standard/templates/fragment.md` |
 | Conflict Log | root (`conflict-log.md`, created with the first conflict) | `<skills>/okf-standard/templates/conflict-log.md` |
 

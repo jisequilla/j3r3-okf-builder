@@ -45,8 +45,9 @@ PLUGIN_JSON = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text(e
 
 # Which scripts/templates each skill needs (to be self-contained)
 TEMPLATES = PLUGIN / "skills" / "okf-standard" / "templates"
-# The concept templates: every template except the fragment and the conflict log
-CONCEPT_TEMPLATES = sorted(p.name for p in TEMPLATES.glob("*.md") if p.name not in ("fragment.md", "conflict-log.md"))
+# The concept templates: every template except the fragment, the conflict log and the ones only okf-init writes
+CONCEPT_TEMPLATES = sorted(p.name for p in TEMPLATES.glob("*.md")
+                           if p.name not in ("fragment.md", "conflict-log.md", "root-index.md", "log.md", "project.md"))
 WRITE_SCRIPTS = ["okf_index.py", "okf_lint.py", "okf_migrate.py", "okf_common.py"]
 NEEDS = {
     "okf-standard": {"scripts": [], "templates": False},
