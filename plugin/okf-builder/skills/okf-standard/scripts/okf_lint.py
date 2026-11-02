@@ -307,8 +307,11 @@ def value_ok(ftype: str, v, values: list | None = None) -> bool:
     return isinstance(v, str)
 
 
+ITEM_LABELS = {"participants": "participant"}  # what one item of a list field is called in a message
+
+
 def _breach(fid: str, ftype: str, v, values: list, item: bool) -> str:
-    label = fid[:-1] if item and fid.endswith("s") else fid  # an item of participants is a participant
+    label = ITEM_LABELS.get(fid, fid) if item else fid
     if ftype == "actor":
         return f"{label} '{v}' does not follow the actor convention (§7)"
     if ftype == "enum":
@@ -327,8 +330,8 @@ def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict
 
     Two passes. First each required field that is missing, a blank value included, in declaration order.
     Then each field's value in declaration order, each field followed by the rules whose first required
-    field it is; the rules that require no declared field come last. A blank value of a required scalar
-    field is reported once, as missing. A list is checked item by item, a single value as a one-item list,
+    field it is; the rules that require no declared field come last. A blank value of a scalar field
+    required in force with a code (by_type and families included) is reported once, as missing. A list is checked item by item, a single value as a one-item list,
     so a blank text or map given as a list is missing and also an item of the wrong form."""
     fields, required = force["fields"], force["required"]
     for fid, req in required.items():
@@ -349,7 +352,8 @@ def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict
     for fid, d in fields.items():
         v = fm.get(fid)
         item = d.get("type") == "list"
-        if d.get("code") and v is not None and (item or not (d.get("required") and _blank(v))):
+        reported_missing = bool(required.get(fid, {}).get("code")) and _blank(v)
+        if d.get("code") and v is not None and (item or not reported_missing):
             ftype = d.get("of") if item else d.get("type")
             values = [x["value"] for x in d.get("values") or []]
             for x in (as_list(v) if item else [v]):
@@ -1027,6 +1031,66 @@ def test_profiles_lists_the_builtin_layer_with_its_codes(tmp_path, capsys):
     data = _json.loads(capsys.readouterr().out)
     assert data["types"]["Open Question"]["fields"]["owner"]["code"] == "BAD_ACTOR"
     assert {t["source"] for t in data["types"].values()} == {"built-in"}
+
+
+def test_a_blank_field_required_through_by_type_is_reported_once_as_missing(tmp_path):
+    k = _question_bundle(tmp_path, _QUESTION_FIELDS + 'review_on: ""\n')
+    (k / "base" / "profile.md").write_text(_domain_profile(
+        "by_type:\n  Open Question: { required: { review_on: { level: warn, code: MY_REVIEW } } }\n"), encoding="utf-8")
+    (k / "base" / "index.md").write_text("# base\n\n* [Profile](profile.md) - The taxonomy.\n\n# Subdirectories\n\n"
+                                         "* [questions](questions/index.md) - Questions.\n", encoding="utf-8")
+    rep, _, _ = lint(k)
+    assert [(i["level"], i["code"], i["path"], i["message"]) for i in rep.items] == [
+        ("WARN", "MY_REVIEW", _QUESTION, "Open Question has no 'review_on' (§4)")]
+
+
+# Every per-field breach of a fragment and of two questions. The expected findings are the --json output, in
+# order, of okf_lint.py as it was before the built-in profile (origin/main at 659f872) on the same bundles.
+_EVERY_FRAGMENT_BREACH = ("occurred_at: last tuesday\nparticipants: [human:alice, Bob, okf-builder/x, Carol]\n"
+                          "distillation_status: done\n")
+_EVERY_QUESTION_BREACH = "owner: Alice\nquestion_status: answered\nreview_on: next week\n"
+_BAD_STATUS_QUESTION = "owner: human:alice\nquestion_status: closed\nasked_in: /fragments/2026-10-31-meeting.md\n"
+_EVERY_BREACH_FINDINGS = [
+    ('WARN', 'QUESTION_NO_FIELD', 'base/questions/who-approves-refunds.md', "Open Question has no 'asked_in' (§4)"),
+    ('WARN', 'BAD_ACTOR', 'base/questions/who-approves-refunds.md',
+     "owner 'Alice' does not follow the actor convention (§7)"),
+    ('WARN', 'QUESTION_NO_ANSWER', 'base/questions/who-approves-refunds.md',
+     "question_status is answered but 'answered_by' is missing (§4)"),
+    ('WARN', 'BAD_ISO', 'base/questions/who-approves-refunds.md',
+     "review_on 'next week' is neither YYYY-MM-DD nor ISO 8601 with an offset"),
+    ('WARN', 'FRAGMENT_NO_FIELD', 'fragments/2026-10-31-meeting.md', "Knowledge Fragment has no 'origin' (§4)"),
+    ('WARN', 'BAD_ISO', 'fragments/2026-10-31-meeting.md',
+     "occurred_at 'last tuesday' is neither YYYY-MM-DD nor ISO 8601 with an offset"),
+    ('WARN', 'BAD_ACTOR', 'fragments/2026-10-31-meeting.md',
+     "participant 'Bob' does not follow the actor convention (§7)"),
+    ('WARN', 'BAD_ACTOR', 'fragments/2026-10-31-meeting.md',
+     "participant 'Carol' does not follow the actor convention (§7)"),
+    ('ERROR', 'BAD_DISTILLATION_STATUS', 'fragments/2026-10-31-meeting.md',
+     "distillation_status 'done' is not pending|distilled|conflict (§7)"),
+]
+_BAD_STATUS_FINDINGS = [
+    ('ERROR', 'BAD_QUESTION_STATUS', 'base/questions/who-approves-refunds.md',
+     "question_status 'closed' is not open|answered|dropped (§7)"),
+]
+
+
+def _every_breach_bundles(tmp_path) -> tuple[Path, Path]:
+    k = _question_bundle(tmp_path / "a", _EVERY_QUESTION_BREACH)
+    frag = k / _FRAGMENT
+    frag.write_text(frag.read_text(encoding="utf-8").replace(_FRAGMENT_FIELDS, _EVERY_FRAGMENT_BREACH),
+                    encoding="utf-8")
+    return k, _question_bundle(tmp_path / "b", _BAD_STATUS_QUESTION)
+
+
+def test_every_per_field_breach_keeps_its_level_code_message_and_order(tmp_path, capsys):
+    import json as _json
+
+    for k, want in zip(_every_breach_bundles(tmp_path), (_EVERY_BREACH_FINDINGS, _BAD_STATUS_FINDINGS)):
+        capsys.readouterr()
+        assert main([str(k), "--json"]) == 1
+        got = [(i["level"], i["code"], i["path"], i["message"])
+               for i in _json.loads(capsys.readouterr().out)["findings"]]
+        assert got == want
 
 
 if __name__ == "__main__":

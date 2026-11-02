@@ -1091,6 +1091,27 @@ def test_inlined_copy_is_read_when_the_file_is_missing(tmp_path, monkeypatch):
     assert not load_profile(_bundle(tmp_path / "b"), builtin=tmp_path / "missing.md").builtin_file
 
 
+def test_the_builtin_file_wins_over_the_inlined_copy(tmp_path, monkeypatch):
+    shipped = tmp_path / "profiles" / "knowledge-3.0.md"
+    shipped.parent.mkdir()
+    shipped.write_text("---\ntype: Domain Profile\ntitle: B\ndescription: B.\ntypes:\n  Glossary: {}\n  Domain Profile: {}\n"
+                       "---\n\n# Why\n\nText.\n", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "BUILTIN_PATH", shipped)
+    monkeypatch.setattr(sys.modules[__name__], "BUILTIN_TEXT", _STAND_IN)
+    assert builtin_text() == shipped.read_text(encoding="utf-8")
+    r = load_profile(_bundle(tmp_path))
+    assert r.builtin_file and r.findings == [] and set(r.types) == {"Glossary", "Domain Profile"}
+
+
+def test_check_builtin_names_a_type_whose_fields_differ_from_section_4(tmp_path):
+    std = tmp_path / "OKF-STANDARD.md"
+    std.write_text("## 4. Profile type vocabulary\n\n| `type` | Usual directory | Description |\n|---|---|---|\n"
+                   "| `Open Question` | `base/questions/` | Extra fields: `owner`, `asked_in` (a path). |\n\n### 4.1 Next\n",
+                   encoding="utf-8")
+    problems = check_builtin(std, _builtin(tmp_path))
+    assert "Open Question: fields owner, question_status, §4 names asked_in, owner" in problems
+
+
 def test_raising_a_coded_requirement_keeps_its_code(tmp_path):
     k = _bundle(tmp_path, "by_type:\n  Open Question: { required: { owner: { level: error } } }\n")
     r = load_profile(k, builtin=_builtin(tmp_path))
