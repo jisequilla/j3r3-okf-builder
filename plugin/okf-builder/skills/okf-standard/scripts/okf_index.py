@@ -47,6 +47,7 @@ DIR_DESCRIPTIONS = {
     "runbooks": "Operational and incident procedures.",
     "playbooks": "Team and business procedures.",
     "policies": "Rules, standards and compliance.",
+    "questions": "Questions nobody has answered yet, each with an owner.",
     "references": "Mirrored external material, execution skills and attesters.",
     "skills": "Execution instructions (executors) for computations.",
     "attesters": "Deterministic receipt verification code.",
@@ -56,7 +57,7 @@ DIR_DESCRIPTIONS = {
 TYPE_ORDER = [
     "Project", "Architecture View", "Architecture Decision", "Term", "Glossary",
     "System", "API", "Dataset", "Table", "Metric", "Attested Computation",
-    "Runbook", "Playbook", "Policy", "Reference",
+    "Runbook", "Playbook", "Policy", "Open Question", "Reference",
 ]
 
 
@@ -76,6 +77,7 @@ def plural_heading(t: str) -> str:
         "Runbook": "Runbooks",
         "Playbook": "Playbooks",
         "Policy": "Policies",
+        "Open Question": "Open questions",
         "Reference": "References",
     }
     return table.get(t, t)
@@ -294,6 +296,19 @@ def test_30_projections_listed_only_with_its_index(tmp_path):
     assert (k / "projections" / "index.md").read_text(encoding="utf-8") == "# projections\n\n> Derived views.\n"
     assert not (k / "projections" / "deck" / "index.md").exists()
     assert main([str(k), "--dir", "projections/deck"]) == 2
+
+
+def test_questions_dir_has_default_description_and_heading(tmp_path):
+    k = _bundle_30(tmp_path)
+    (k / "base" / "questions").mkdir()
+    (k / "base" / "questions" / "who-owns-refunds.md").write_text(
+        "---\ntype: Open Question\ntitle: Who owns refunds?\ndescription: Nobody owns refunds yet.\n---\n\n# Question\n",
+        encoding="utf-8")
+    main([str(k)])
+    base = (k / "base" / "index.md").read_text(encoding="utf-8")
+    assert "* [questions](questions/index.md) - Questions nobody has answered yet, each with an owner." in base
+    questions = (k / "base" / "questions" / "index.md").read_text(encoding="utf-8")
+    assert "# Open questions\n\n* [Who owns refunds?](who-owns-refunds.md) - Nobody owns refunds yet." in questions
 
 
 def test_default_root_frontmatter_is_30(tmp_path):

@@ -11,6 +11,7 @@
 * [metrics](metrics/index.md) - Metric and KPI definitions.
 * [playbooks](playbooks/index.md) - Team and business procedures.
 * [policies](policies/index.md) - Rules, standards and compliance.
+* [questions](questions/index.md) - Questions nobody has answered yet, each with an owner.
 * [references](references/index.md) - Mirrored external material, execution skills and attesters.
 * [runbooks](runbooks/index.md) - Operational and incident procedures.
 * [systems](systems/index.md) - Services, modules and deployable components.

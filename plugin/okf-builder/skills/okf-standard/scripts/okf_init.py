@@ -35,7 +35,7 @@ from okf_common import (  # noqa: E402
 _HERE = Path(__file__).resolve().parent
 TEMPLATES = _HERE.parent / "templates"   # okf-standard/scripts/ → okf-standard/templates/
 DEFAULT_DIRS = ["architecture", "decisions", "domain", "systems", "apis", "data",
-                "metrics", "computations", "runbooks", "playbooks", "policies", "references"]
+                "metrics", "computations", "runbooks", "playbooks", "policies", "questions", "references"]
 DIR_DESC = {
     "architecture": "Architecture views and principles.",
     "decisions": "Architecture decision records (ADR).",
@@ -48,6 +48,7 @@ DIR_DESC = {
     "runbooks": "Operational and incident procedures.",
     "playbooks": "Team and business procedures.",
     "policies": "Rules, standards and compliance.",
+    "questions": "Questions nobody has answered yet, each with an owner.",
     "references": "Mirrored external material, execution skills and attesters.",
     "fragments": "Records of events, distilled into the base.",
     "base": "The project's knowledge, in typed directories.",
@@ -143,6 +144,21 @@ def test_creates_profile_structure(tmp_path):
     fm = parse_yaml(raw)
     assert (fm["type"], fm["title"], fm["description"]) == ("Project", "T", "D")
     assert fm["generated"]["by"] == "human:test"
+
+
+def test_creates_questions_listed_in_base_index(tmp_path):
+    assert main(["--root", str(tmp_path), *_ARGS]) == 0
+    k = tmp_path / "knowledge"
+    assert (k / "base" / "questions" / "index.md").is_file()
+    base = (k / "base" / "index.md").read_text(encoding="utf-8")
+    assert "* [questions](questions/index.md) - Questions nobody has answered yet, each with an owner." in base
+    from okf_index import DIR_DESCRIPTIONS
+    assert DIR_DESCRIPTIONS["questions"] == DIR_DESC["questions"]
+
+
+def test_custom_dirs_leave_questions_out(tmp_path):
+    assert main(["--root", str(tmp_path), *_ARGS, "--dirs", "decisions"]) == 0
+    assert not (tmp_path / "knowledge" / "base" / "questions").exists()
 
 
 def test_creates_empty_fragments_without_conflict_log(tmp_path):
