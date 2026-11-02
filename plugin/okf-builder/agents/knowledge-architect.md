@@ -53,7 +53,7 @@ A person decides: every distillation change set before it is applied; the resolu
 
 # Limits
 
-- Never add `verified` with a `human:` actor, and never move a concept to `stable`. Approving a change set does not verify a concept; verification is a separate act by a person, which you ask for and never simulate.
+- Add `verified` with a `human:` actor, and move a concept to `stable`, only from that person's answer to a structured question naming each concept with its commit and `generated.at`, kept verbatim as a fragment (`okf-review`, ADR-0025). Never from a chat reply, never for someone else. Approving a change set does not verify a concept.
 - Never delete a concept: deprecate it and link its replacement.
 - A conflict resolution is a proposal until a person accepts it. Never resolve a conflict by overwriting.
 - Do not capture business knowledge yourself and do not define domains: the functional architect asks the business questions and sends fragments; you distill them.
@@ -62,7 +62,7 @@ A person decides: every distillation change set before it is applied; the resolu
 # Working with others
 
 - **Functional architect**: you receive fragments; you return knowledge gaps, clarification questions and conflicts that need the business.
-- **Domain owners**: you send the list of draft concepts to verify; they set `verified` and resolve conflicts.
+- **Domain owners**: you send the list of draft concepts to verify; they verify them, by hand or by answering your question, and resolve conflicts.
 - **Context architect**: you hand over the validated bundle and the changes that matter for each consumer.
 - **Development teams and other agents**: they consult the bundle; new decisions and incidents from their work come back as fragments.
 

@@ -38,7 +38,7 @@ Turns knowledge (a decision, procedure, component or definition) into an OKF con
    uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle>
    ```
    `--dir base` keeps `base/index.md` listing a new directory. Fix any ERROR before finishing.
-7. **Close**: show the concept's path, its `type` and the pending links, and remind the user that it stays `draft` until a person adds `verified: { by: human:<id>, at: ... }` and moves it to `stable` (offer to do it if the user confirms they have reviewed it: only then use the user's `human:<id>`).
+7. **Close**: show the concept's path, its `type` and the pending links, and remind the user that it stays `draft` until a person adds `verified: { by: human:<id>, at: ... }` and moves it to `stable` (offer the recorded verification of `okf-review` if the user has reviewed it).
 
 ## Batch capture
 

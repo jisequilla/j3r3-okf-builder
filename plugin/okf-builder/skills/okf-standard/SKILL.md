@@ -14,7 +14,7 @@ This skill is the source of truth for the standard inside the plugin. The other 
 - Reserved files: `index.md` (listing per directory, no frontmatter except the root one with `okf_version` and `okf_profile`) and `log.md` (history, `## YYYY-MM-DD` dates, most recent first).
 - Every non-reserved `.md` is a **concept**. The only required field: `type`.
 - The profile also requires `generated: { by: <actor>, at: <ISO 8601> }` and the presence of `index.md`, `log.md` and `project.md` (`type: Project`).
-- Actors: `human:<id>` · `process:<id>` · `<agent>/<version>`. When this plugin writes content, it uses `okf-builder/<model>` as the actor in `generated.by`; **never** invent a `verified` with `human:`: only the person adds it.
+- Actors: `human:<id>` · `process:<id>` · `<agent>/<version>`. When this plugin writes content, it uses `okf-builder/<model>` as the actor in `generated.by`; **never** invent a `verified` with `human:`: the person adds it, or the agent does from that person's recorded answer to a question naming each concept and version (`okf-review`).
 - Links between concepts: bundle-absolute `[x](/base/systems/x.md)`. Broken links = pending knowledge, not an error.
 - Lifecycle: `status: draft|stable|deprecated` (absent ⇒ stable), `stale_after` an absolute instant. Never delete: deprecate and link to the replacement.
 - Provenance: `sources[]` with a required `resource`, and an `id` if the body cites it with `[^id]`.
