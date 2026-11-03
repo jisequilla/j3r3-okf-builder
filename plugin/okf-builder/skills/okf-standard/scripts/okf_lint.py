@@ -653,6 +653,21 @@ def run_validators(bundle: Path, docs: list[Doc], prof: Resolved, rep: Report, r
                 f"validator {v['name']} failed ({why})" + (f": {out}" if out else ""), v["source"], DOMAIN)
 
 
+def scan_notices(scan) -> list[str]:
+    """One notice for what .okfignore excludes, one per nested bundle and one per non-OKF directory; lint and
+    --profiles both print them, so a check on a file the scan left out is never skipped in silence."""
+    out = []
+    if scan.ignored:
+        n = len(scan.ignored)
+        out.append(f".okfignore excludes {n} path{'s' if n != 1 else ''}, not read: {', '.join(scan.ignored)}")
+    for rel in scan.nested:
+        out.append(f"nested bundle {rel} skipped: its index.md declares its own okf_version; lint it on its own")
+    for rel, n in scan.not_okf:
+        out.append(f"{rel} is not OKF: {n} Markdown file{'s' if n != 1 else ''} without OKF frontmatter and no "
+                   "index.md, skipped")
+    return out
+
+
 def lint(bundle: Path, profile: bool = True, version: str = "auto",
          validators: bool = False) -> tuple[Report, str, str]:
     """validators: run the Domain Profile's validator commands (--run-validators); otherwise each one is a notice."""
@@ -662,14 +677,7 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
     docs = scan.docs
     excluded = scan.excluded(bundle)
     rep.ignored, rep.concepts = scan.ignored, len([d for d in docs if not d.is_reserved])
-    if scan.ignored:
-        n = len(scan.ignored)
-        rep.notices.append(f".okfignore excludes {n} path{'s' if n != 1 else ''}, not read: {', '.join(scan.ignored)}")
-    for rel in scan.nested:
-        rep.notices.append(f"nested bundle {rel} skipped: its index.md declares its own okf_version; lint it on its own")
-    for rel, n in scan.not_okf:
-        rep.notices.append(f"{rel} is not OKF: {n} Markdown file{'s' if n != 1 else ''} without OKF frontmatter and no "
-                           "index.md, skipped")
+    rep.notices += scan_notices(scan)
     by_path = {d.path.resolve(): d for d in docs}
     declared = declared_profile(bundle)
     foreign = declared not in (None, *SHIPPED_PROFILES)
@@ -759,8 +767,10 @@ def main(argv=None) -> int:
             print("ERROR: --profiles lists the Domain Profile and --no-profile turns every one off; pass one of them",
                   file=sys.stderr)
             return 2
-        prof, findings, notices = profile_structure(bundle, scan_bundle(bundle).docs)
-        info = {**in_force(prof, bundle_path(bundle, args.profiles)), "findings": findings, "notices": notices}
+        scan = scan_bundle(bundle)
+        prof, findings, notices = profile_structure(bundle, scan.docs)
+        info = {**in_force(prof, bundle_path(bundle, args.profiles)), "findings": findings,
+                "notices": scan_notices(scan) + notices}
         print(json.dumps(info, ensure_ascii=False, indent=2, default=str) if args.json else format_in_force(info))
         return 1 if findings else 0
 
@@ -2183,6 +2193,43 @@ def test_a_bundle_with_every_source_of_noise_reports_only_the_expected_notices(t
         f"profile {_FOREIGN} is not one okf-builder ships (knowledge/2.0, knowledge/3.0): spec checks only, "
         "1 okf-profile and domain-profile findings skipped (FRAGMENT_NO_FIELD)"]
 
+
+
+def test_domain_profile_structural_and_validator_findings_name_the_domain_profile_layer(tmp_path):
+    for code, (keys, extra) in _BROKEN_PROFILES.items():
+        (tmp_path / code).mkdir()
+        k = _bundle_30(tmp_path / code)
+        for rel, text in {"base/profile.md": keys, **extra}.items():
+            _write(k, rel, _domain_profile(text))
+        rep, _, _ = lint(k)
+        found = [i for i in rep.items if i["code"] == code]
+        assert found and all(i["layer"] == "domain-profile" for i in found), (code, found)
+        assert rep.by_layer()["domain-profile"]["errors"] >= len(found) and rep.by_layer()["spec"]["errors"] == 0, code
+    [f] = [i for i in lint(_validator_bundle(tmp_path / "v"), validators=True)[0].items
+           if i["code"] == "PROFILE_VALIDATOR"]
+    assert f["layer"] == "domain-profile"
+
+
+def test_profiles_gives_a_notice_for_each_path_the_scan_leaves_out(tmp_path, capsys):
+    k = _bundle_30(tmp_path)
+    _write(k, "base/profile.md", _domain_profile("types: {}\n"))
+    _write(k, "base/index.md", "# base\n\n* [Profile](profile.md) - P.\n")
+    _write(k, ".okfignore", "drafts/\n")
+    _write(k, "drafts/p.md", _domain_profile("types: {}\n"))  # PROFILE_MISPLACED were it read
+    _write(k, "base/vendor/index.md", '---\nokf_version: "0.2"\n---\n\n# Vendor\n\n* [X](x.md) - X.\n')
+    _write(k, "base/vendor/x.md", "---\ntitle: X\n---\n\nText.\n")
+    _write(k, "notes/a.md", "Plain notes.\n")
+    expected = [".okfignore excludes 1 path, not read: drafts/",
+                "nested bundle base/vendor/ skipped: its index.md declares its own okf_version; lint it on its own",
+                "notes/ is not OKF: 1 Markdown file without OKF frontmatter and no index.md, skipped"]
+    capsys.readouterr()
+    assert main([str(k), "--profiles", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["findings"] == [] and data["notices"][:3] == expected
+    assert data["notices"] == lint(k)[0].notices
+    assert main([str(k), "--profiles"]) == 0
+    text = capsys.readouterr().out
+    assert all(f"NOTICE {n}" in text for n in expected)
 
 if __name__ == "__main__":
     if "--test" in sys.argv[1:]:
