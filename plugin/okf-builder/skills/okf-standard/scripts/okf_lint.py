@@ -31,6 +31,15 @@ The profile is the okf_profile of the root index.md; a bundle without one is
 treated as knowledge/2.0. A knowledge/2.0 bundle stays valid, and lint prints a
 notice (neither a warning nor an error) before the summary line; --json carries
 it as "profile_outdated". projections/ at the root is not OKF and is skipped.
+
+Each finding names its rule layer (--json "layer"): spec (OKF v0.1/v0.2, all that
+runs under --no-profile), okf-profile (knowledge/3.0 or 2.0) or domain-profile
+(the Domain Profile in force); the summary counts errors/warnings per rule layer.
+An okf_profile okf-builder does not ship gets the spec checks only: what the other
+two rule layers find is one notice and is listed under "skipped". Lint does not
+read what .okfignore at the root matches ("ignored"), a nested bundle (a
+subdirectory whose index.md declares okf_version) or a non-OKF directory (no
+index.md, no Markdown file with a type or a title); each of the last two is a notice.
 """
 from __future__ import annotations
 
@@ -52,6 +61,7 @@ from okf_common import (  # noqa: E402
     DATE_RE,
     SUPPORTED_VERSIONS,
     V02_KEYS,
+    declared_version,
     detect_version,
     KEBAB_RE,
     LAYER_DIRS,
@@ -66,6 +76,7 @@ from okf_common import (  # noqa: E402
     is_iso,
     is_iso_date_or_datetime,
     resolve_link,
+    scan_bundle,
     to_dt,
     walk_bundle,
 )
@@ -77,16 +88,49 @@ from okf_profile import (BUILTIN, DOMAIN_PROFILE, IGNORED_20_NOTICE, OWN_REL, PR
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
 
 
+SPEC, OKF_PROFILE, DOMAIN = "spec", "okf-profile", "domain-profile"
+RULE_LAYERS = (SPEC, OKF_PROFILE, DOMAIN)
+# The codes of the knowledge profile itself (knowledge/3.0 or 2.0): lint reports them only with a profile, and no
+# Domain Profile declares them. A finding of the Domain Profile in force (built-in, extends, base/profile.md) gets
+# its rule layer where it is raised (Report.scope), since BAD_ISO or BAD_ACTOR may be the spec's or a Domain Profile's.
+OKF_PROFILE_CODES = frozenset({
+    "NAME_KEBAB", "NO_OKF_VERSION", "PROFILE_OKF_VERSION", "PROFILE_NO_INDEX", "PROFILE_NO_LOG", "PROFILE_NO_PROJECT",
+    "PROFILE_PROJECT_TYPE", "PROFILE_NO_GENERATED", "PROFILE_NO_TIMESTAMP", "PROFILE_OUTSIDE_LAYER",
+    "PROFILE_MANY_PROJECTS", "PROFILE_MANY_CONFLICT_LOGS"})
+SHIPPED_PROFILES = (PROFILE_20, PROFILE_30)
+
+
 class Report:
     def __init__(self) -> None:
         self.items: list[dict] = []
         self.notices: list[str] = []  # neither warnings nor errors; they never fail --strict
         self.profile_outdated = False
+        self.skipped: list[dict] = []  # what a foreign profile's okf-profile and domain-profile rules found
+        self.ignored: list[str] = []  # paths .okfignore excludes
+        self.concepts = 0
+        self.scope: str | None = None  # the rule layer of the checks running, when the call site fixes it
 
-    def add(self, level: str, code: str, path: str, msg: str, source: str | None = None) -> None:
-        """source: the layer that declared the broken item; the PROFILE_* codes of a concept carry it."""
-        self.items.append({"level": level, "code": code, "path": path, "message": msg,
+    def add(self, level: str, code: str, path: str, msg: str, source: str | None = None,
+            layer: str | None = None) -> None:
+        """source: the Domain Profile layer that declared the broken item; the PROFILE_* codes of a concept carry it.
+        layer: the rule layer the finding comes from (spec, okf-profile or domain-profile); by default the scope
+        the caller set, else okf-profile for OKF_PROFILE_CODES and spec for every other code."""
+        layer = layer or self.scope or (OKF_PROFILE if code in OKF_PROFILE_CODES else SPEC)
+        self.items.append({"level": level, "code": code, "path": path, "message": msg, "layer": layer,
                            **({"source": source} if source is not None else {})})
+
+    def by_layer(self) -> dict:
+        return {x: {"errors": sum(i["layer"] == x for i in self.errors),
+                    "warnings": sum(i["layer"] == x for i in self.warns)} for x in RULE_LAYERS}
+
+    def skip_profile_layers(self, name: str) -> None:
+        """A foreign okf_profile: what the okf-profile and domain-profile rules found moves to skipped, as one notice."""
+        self.skipped = [i for i in self.items if i["layer"] != SPEC]
+        self.items = [i for i in self.items if i["layer"] == SPEC]
+        codes = ", ".join(sorted({i["code"] for i in self.skipped}))
+        self.notices.append(f"profile {name} is not one okf-builder ships ({', '.join(SHIPPED_PROFILES)}): spec "
+                            f"checks only, {len(self.skipped)} okf-profile and domain-profile findings skipped"
+                            + (f" ({codes})" if codes else ""))
 
     def error(self, code, path, msg):
         self.add("ERROR", code, path, msg)
@@ -103,7 +147,10 @@ class Report:
         return [i for i in self.items if i["level"] == "WARN"]
 
 
-def check_index(doc: Doc, bundle: Path, rep: Report, docs_by_path: dict, profile: bool = True) -> None:
+def check_index(doc: Doc, bundle: Path, rep: Report, docs_by_path: dict, profile: bool = True,
+                excluded: set | None = None) -> None:
+    """excluded: the resolved paths scan_bundle leaves out (ignored, nested bundles, non-OKF directories); an index
+    need not list them."""
     is_root = doc.path.parent.resolve() == bundle.resolve()
     if doc.has_fm_block and not is_root:
         rep.error("INDEX_FM", doc.rel, "index.md outside the root must not have frontmatter (§8)")
@@ -136,7 +183,7 @@ def check_index(doc: Doc, bundle: Path, rep: Report, docs_by_path: dict, profile
             if t.is_dir():
                 listed.add((t / "index.md").resolve())
     for p in sorted(doc.path.parent.iterdir()):
-        if p.name.startswith("."):
+        if p.name.startswith(".") or p.resolve() in (excluded or ()):
             continue
         if p.is_file() and p.suffix == ".md" and p.name not in ("index.md", "log.md"):
             if p.resolve() not in listed:
@@ -279,9 +326,13 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
             force = concept_force(prof, str(t), "/" + doc.rel)
             if forces is not None:
                 forces[key] = force
-        check_profile_fields(doc, fm, str(t), prof, force, rep)
-        if is_a(prof, str(t), "Open Question"):
-            check_review_due(doc, fm, rep, now)
+        rep.scope = DOMAIN
+        try:
+            check_profile_fields(doc, fm, str(t), prof, force, rep)
+            if is_a(prof, str(t), "Open Question"):
+                check_review_due(doc, fm, rep, now)
+        finally:
+            rep.scope = None
 
     if profile and not KEBAB_RE.match(doc.path.name):
         rep.warn("NAME_KEBAB", doc.rel, "file name is not ASCII kebab-case (profile §2)")
@@ -464,8 +515,20 @@ def check_review_due(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
         rep.warn("QUESTION_REVIEW_DUE", doc.rel, f"open question due for review since {due.isoformat()}")
 
 
-def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None) -> None:
-    """knowledge/3.0: concepts live in base/ or fragments/; the root holds project.md and the Conflict Log."""
+def outside_layers(not_okf: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    """The non-OKF directories outside fragments/, base/ and projections/: knowledge/3.0 still applies rule 12 to
+    them (ADR-0018 decision 3), one PROFILE_OUTSIDE_LAYER per directory."""
+    return [(rel, n) for rel, n in not_okf if rel.split("/")[0] not in LAYER_DIRS]
+
+
+def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None,
+                 not_okf: list[tuple[str, int]] = ()) -> None:
+    """knowledge/3.0: concepts live in base/ or fragments/; the root holds project.md and the Conflict Log.
+    not_okf: the non-OKF directories of the scan; each one outside the layers is one error for all its files."""
+    for rel, n in outside_layers(list(not_okf)):
+        rep.error("PROFILE_OUTSIDE_LAYER", rel,
+                  f"profile {PROFILE_30}: {rel} is not a layer and holds {n} Markdown file{'s' if n != 1 else ''} "
+                  "without OKF frontmatter; move them under base/ or list the directory in .okfignore")
     for d in docs:
         parts = d.rel.split("/")
         if len(parts) == 1:
@@ -479,11 +542,21 @@ def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None) -> 
                       f"profile {PROFILE_30}: {parts[0]}/ is not a layer; move it under base/")
 
 
+def foreign_profile_notice(name: str, unread: list[str]) -> str:
+    """--profiles under a foreign okf_profile: lint runs spec checks only, so no Domain Profile file is read or checked."""
+    files = f"{', '.join(unread)} not read: " if unread else ""
+    return (f"{files}profile {name} is not one okf-builder ships ({', '.join(SHIPPED_PROFILES)}): lint runs spec "
+            "checks only, so the Domain Profile's checks (structural ones included) do not run")
+
+
 def profile_structure(bundle: Path, docs: list[Doc]) -> tuple[Resolved, list[dict], list[str]]:
     """The Domain Profile in force, its structural findings (§7 rule 14) and its notices; lint and --profiles share it."""
-    if declared_profile(bundle) == PROFILE_30:
+    declared = declared_profile(bundle)
+    if declared == PROFILE_30:
         prof = load_profile(bundle, read_own=True)
         return prof, prof.findings + misplaced(docs, prof), []
+    if declared not in (None, PROFILE_20):  # a foreign profile: lint skips what it finds beyond the spec
+        return load_profile(bundle, read_own=False), [], [foreign_profile_notice(declared, ignored_in_20(docs))]
     return load_profile(bundle, read_own=False), [], [IGNORED_20_NOTICE.format(rel=rel) for rel in ignored_in_20(docs)]
 
 
@@ -596,7 +669,27 @@ def run_validators(bundle: Path, docs: list[Doc], prof: Resolved, rep: Report, r
         if len(out) > VALIDATOR_OUTPUT_MAX:
             out = out[:VALIDATOR_OUTPUT_MAX] + " [truncated]"
         rep.add("ERROR", "PROFILE_VALIDATOR", v["source"],
-                f"validator {v['name']} failed ({why})" + (f": {out}" if out else ""), v["source"])
+                f"validator {v['name']} failed ({why})" + (f": {out}" if out else ""), v["source"], DOMAIN)
+
+
+def scan_notices(scan, reported: list[tuple[str, int]] = ()) -> list[str]:
+    """One notice for what .okfignore excludes, one per reserved path it cannot exclude, one per nested bundle and
+    one per non-OKF directory but those in reported (lint gives them an error instead); lint and --profiles both
+    print them, so a check on a file the scan left out is never skipped in silence."""
+    out = []
+    if scan.ignored:
+        n = len(scan.ignored)
+        out.append(f".okfignore excludes {n} path{'s' if n != 1 else ''}, not read: {', '.join(scan.ignored)}")
+    for rel in scan.reserved:
+        out.append(f"cannot ignore {rel}: reserved" + (f", it holds {OWN_REL}" if rel.endswith("/") else ""))
+    for rel in scan.nested:
+        out.append(f"nested bundle {rel} skipped: its index.md declares its own okf_version; lint it on its own")
+    for rel, n in scan.not_okf:
+        if (rel, n) in reported:
+            continue
+        out.append(f"{rel} is not OKF: {n} Markdown file{'s' if n != 1 else ''} without OKF frontmatter and no "
+                   "index.md, skipped")
+    return out
 
 
 def lint(bundle: Path, profile: bool = True, version: str = "auto",
@@ -604,28 +697,42 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
     """validators: run the Domain Profile's validator commands (--run-validators); otherwise each one is a notice."""
     rep = Report()
     now = datetime.now(timezone.utc)
-    docs = walk_bundle(bundle)
+    scan = scan_bundle(bundle)
+    docs = scan.docs
+    excluded = scan.excluded(bundle)
+    rep.ignored, rep.concepts = scan.ignored, len([d for d in docs if not d.is_reserved])
     by_path = {d.path.resolve(): d for d in docs}
     declared = declared_profile(bundle)
+    foreign = declared not in (None, *SHIPPED_PROFILES)
+    layered = profile and declared == PROFILE_30
+    rep.notices += scan_notices(scan, outside_layers(scan.not_okf) if layered else [])
     pname = declared or PROFILE_20
     prof = None  # --no-profile: no Domain Profile, the built-in one included
     if profile:
         rep.profile_outdated = pname == PROFILE_20
         prof, findings, notices = profile_structure(bundle, docs)
-        if declared == PROFILE_30:
-            check_layers(docs, rep, prof)
+        if layered:
+            check_layers(docs, rep, prof, scan.not_okf)
         for i in findings:
-            rep.add(i["level"], i["code"], i["path"], i["message"])
-        rep.notices += notices
+            rep.add(i["level"], i["code"], i["path"], i["message"], layer=DOMAIN)
+        if not foreign:  # skip_profile_layers gives a foreign profile its one notice
+            rep.notices += notices
 
     detected, origin = detect_version(bundle, docs)
-    if version == "auto":
+    forced = version != "auto"
+    if not forced:
         version = detected
+    unsupported = declared_version(bundle) if origin != "declared" else None
     if origin == "mixed":
-        rep.warn("MIXED_VERSIONS", "index.md", "concepts mix 0.1 and 0.2 forms and okf_version is missing: bundle half migrated (okf-migrate)")
+        why = "okf_version is missing" if unsupported is None else f"okf_version '{unsupported}' is not supported"
+        rep.warn("MIXED_VERSIONS", "index.md", f"concepts mix 0.1 and 0.2 forms and {why}: bundle half migrated (okf-migrate)")
     if origin == "declared" and detected != version:
         rep.warn("VERSION_MISMATCH", "index.md", f"index.md declares okf_version {detected} but is validated as {version}")
-    if origin != "declared" and profile:
+    if unsupported is not None:
+        how = f"forced version: {version} (--okf-version)" if forced else f"inferred version: {version} ({origin})"
+        rep.warn("UNSUPPORTED_OKF_VERSION", "index.md", f"root index.md declares okf_version '{unsupported}', which is "
+                 f"not {' or '.join(SUPPORTED_VERSIONS)}; {how}")
+    elif origin != "declared" and profile:
         rep.warn("NO_OKF_VERSION", "index.md", f"root index.md has no okf_version; inferred version: {version} ({origin})")
 
     if profile:
@@ -651,7 +758,7 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
     forces: dict = {}
     for d in docs:
         if d.path.name == "index.md":
-            check_index(d, bundle, rep, by_path, profile)
+            check_index(d, bundle, rep, by_path, profile, excluded)
         elif d.path.name == "log.md":
             if d.has_fm_block and d.frontmatter and d.frontmatter.get("type") not in (None, "Log"):
                 rep.warn("LOG_TYPE", d.rel, "log.md with frontmatter should be type: Log, or have no frontmatter")
@@ -660,6 +767,8 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
             check_concept(d, bundle, rep, profile, now, version, pname, prof, forces)
     if prof is not None:
         run_validators(bundle, docs, prof, rep, validators)
+    if profile and foreign:
+        rep.skip_profile_layers(declared)
     return rep, version, origin
 
 
@@ -687,18 +796,21 @@ def main(argv=None) -> int:
             print("ERROR: --profiles lists the Domain Profile and --no-profile turns every one off; pass one of them",
                   file=sys.stderr)
             return 2
-        prof, findings, notices = profile_structure(bundle, walk_bundle(bundle))
-        info = {**in_force(prof, bundle_path(bundle, args.profiles)), "findings": findings, "notices": notices}
+        scan = scan_bundle(bundle)
+        prof, findings, notices = profile_structure(bundle, scan.docs)
+        info = {**in_force(prof, bundle_path(bundle, args.profiles)), "findings": findings,
+                "notices": scan_notices(scan) + notices}
         print(json.dumps(info, ensure_ascii=False, indent=2, default=str) if args.json else format_in_force(info))
         return 1 if findings else 0
 
     rep, version, origin = lint(bundle, profile=not args.no_profile, version=args.okf_version,
                                 validators=args.run_validators)
-    n_docs = len([d for d in walk_bundle(bundle) if not d.is_reserved])
+    n_docs = rep.concepts
+    by_layer = rep.by_layer()
     if args.json:
         print(json.dumps({"bundle": str(bundle), "okf_version": version, "version_origin": origin, "concepts": n_docs, "errors": len(rep.errors),
-                          "warnings": len(rep.warns), "profile_outdated": rep.profile_outdated, "notices": rep.notices,
-                          "findings": rep.items},
+                          "warnings": len(rep.warns), "by_layer": by_layer, "profile_outdated": rep.profile_outdated,
+                          "notices": rep.notices, "findings": rep.items, "skipped": rep.skipped, "ignored": rep.ignored},
                          ensure_ascii=False, indent=2))
     else:
         for i in rep.items:
@@ -708,7 +820,9 @@ def main(argv=None) -> int:
         if rep.profile_outdated:
             print(f"NOTICE {OUTDATED_NOTICE}")
         verdict = "CONFORMANT" if not rep.errors else "NOT CONFORMANT"
-        print(f"\n{bundle}: OKF {version} ({origin}) · {n_docs} concepts · {len(rep.errors)} errors · {len(rep.warns)} warnings → {verdict}")
+        layers = " · ".join(f"{x} {c['errors']}/{c['warnings']}" for x, c in by_layer.items())
+        print(f"\n{bundle}: OKF {version} ({origin}) · {n_docs} concepts · {len(rep.errors)} errors · "
+              f"{len(rep.warns)} warnings ({layers}) → {verdict}")
     if rep.errors or (args.strict and rep.warns):
         return 1
     return 0
@@ -1917,6 +2031,400 @@ def test_profile_outside_layer_comes_before_the_profile_structure_findings(tmp_p
     codes = [i["code"] for i in lint(k)[0].items]
     assert codes.index("PROFILE_OUTSIDE_LAYER") < codes.index("PROFILE_INVALID"), codes
     assert codes[:2] == ["PROFILE_OUTSIDE_LAYER", "PROFILE_INVALID"], codes
+
+
+# --------------------------------------------------------------------------
+# Rule layers, foreign profiles, .okfignore, nested bundles and non-OKF directories (ticket A1)
+# --------------------------------------------------------------------------
+def _write(k: Path, rel: str, text: str) -> None:
+    (k / rel).parent.mkdir(parents=True, exist_ok=True)
+    (k / rel).write_text(text, encoding="utf-8")
+
+
+def _with_link(k: Path, target: str) -> None:
+    """The fragment's body links to target."""
+    f = k / _FRAGMENT
+    f.write_text(f.read_text(encoding="utf-8") + f"\nSee [it]({target}).\n", encoding="utf-8")
+
+
+def _layered_bundle(tmp_path) -> Path:
+    """A 3.0 bundle with one finding of each rule layer, and BAD_ISO both from the spec and from the Domain Profile."""
+    k = _bundle_30(tmp_path)
+    frag = k / _FRAGMENT
+    frag.write_text(frag.read_text(encoding="utf-8").replace("occurred_at: 2026-10-31", "occurred_at: 31/10/2026")
+                    .replace("status: draft\n", "status: draft\nstale_after: soon\n"), encoding="utf-8")
+    _with_link(k, "/base/missing.md")
+    p = k / "project.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(_GEN, ""), encoding="utf-8")
+    return k
+
+
+_LAYERED = [("ERROR", "PROFILE_NO_GENERATED", "project.md", "okf-profile"),
+            ("WARN", "BAD_ISO", _FRAGMENT, "domain-profile"),  # occurred_at, a field the Domain Profile declares
+            ("WARN", "BAD_ISO", _FRAGMENT, "spec"),  # stale_after, a spec field
+            ("WARN", "BROKEN_LINK", _FRAGMENT, "spec")]
+
+
+def test_every_finding_names_its_rule_layer_and_json_counts_them_per_layer(tmp_path, capsys):
+    k = _layered_bundle(tmp_path)
+    assert main([str(k), "--json"]) == 1
+    data = json.loads(capsys.readouterr().out)
+    assert sorted((i["level"], i["code"], i["path"], i["layer"]) for i in data["findings"]) == sorted(_LAYERED)
+    assert data["by_layer"] == {"spec": {"errors": 0, "warnings": 2}, "okf-profile": {"errors": 1, "warnings": 0},
+                                "domain-profile": {"errors": 0, "warnings": 1}}
+    assert (data["errors"], data["warnings"]) == (1, 3)
+    # spec is what still runs under --no-profile, and nothing else
+    rep, _, _ = lint(k, profile=False)
+    spec = sorted((i["code"], i["path"], i["message"]) for i in rep.items)
+    assert all(i["layer"] == "spec" for i in rep.items)
+    assert spec == sorted((i["code"], i["path"], i["message"]) for i in data["findings"] if i["layer"] == "spec")
+
+
+def test_the_summary_line_adds_errors_and_warnings_per_rule_layer(tmp_path, capsys):
+    assert main([str(_layered_bundle(tmp_path))]) == 1
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert " · 1 errors · 3 warnings (spec 0/2 · okf-profile 1/0 · domain-profile 0/1) → NOT CONFORMANT" in last
+
+
+_FOREIGN = "acme/handbook-1.0"
+
+
+def _foreign(k: Path) -> Path:
+    index = k / "index.md"
+    index.write_text(index.read_text(encoding="utf-8").replace(PROFILE_30, _FOREIGN), encoding="utf-8")
+    return k
+
+
+def test_a_foreign_profile_gets_spec_checks_and_one_notice_for_the_rest(tmp_path, capsys):
+    k = _foreign(_bundle_30(tmp_path))
+    frag = k / _FRAGMENT
+    frag.write_text(frag.read_text(encoding="utf-8").replace("origin: Weekly meeting\n", "")
+                    .replace(_GEN, ""), encoding="utf-8")
+    _write(k, "base/profile.md", _domain_profile("types: {}\n"))
+    _write(k, "base/index.md", "# base\n\n* [Profile](profile.md) - P.\n")
+    rep, _, _ = lint(k)
+    assert rep.items == [] and not rep.profile_outdated
+    skipped = sorted((i["code"], i["layer"]) for i in rep.skipped)
+    assert skipped == [("FRAGMENT_NO_FIELD", "domain-profile"), ("PROFILE_NO_GENERATED", "okf-profile")]
+    assert rep.notices == [f"profile {_FOREIGN} is not one okf-builder ships (knowledge/2.0, knowledge/3.0): spec "
+                           "checks only, 2 okf-profile and domain-profile findings skipped "
+                           "(FRAGMENT_NO_FIELD, PROFILE_NO_GENERATED)"]
+    assert main([str(k), "--strict"]) == 0
+    capsys.readouterr()
+    assert main([str(k), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert sorted(i["code"] for i in data["skipped"]) == ["FRAGMENT_NO_FIELD", "PROFILE_NO_GENERATED"]
+    assert data["findings"] == [] and data["errors"] == 0
+    _with_link(k, "/base/missing.md")  # a spec finding is still reported
+    assert [(i["code"], i["layer"]) for i in lint(k)[0].items] == [("BROKEN_LINK", "spec")]
+
+
+def test_okfignore_reads_gitignore_style_globs():
+    from okf_common import OkfIgnore
+
+    ign = OkfIgnore.parse("# comment\n\ndrafts/\n*.tmp.md\n!keep.tmp.md\n/top.md\ndocs/**/old.md\n\\#hash.md\n")
+    assert ign.match("drafts", True) and ign.match("base/drafts", True) and not ign.match("drafts", False)
+    assert ign.match("a.tmp.md", False) and ign.match("base/x/a.tmp.md", False)
+    assert not ign.match("keep.tmp.md", False) and not ign.match("base/keep.tmp.md", False)
+    assert ign.match("top.md", False) and not ign.match("base/top.md", False)
+    assert ign.match("docs/old.md", False) and ign.match("docs/a/b/old.md", False) and not ign.match("x/docs/old.md", False)
+    assert ign.match("#hash.md", False) and not ign.match("comment", False)
+    assert not OkfIgnore.parse("").match("a.md", False)
+
+
+def test_okfignore_paths_are_not_read_counted_or_link_checked_and_json_lists_them(tmp_path, capsys):
+    k = _bundle_30(tmp_path)
+    _write(k, ".okfignore", "# work in progress\ndrafts/\n*.tmp.md\n")
+    _write(k, "drafts/a.md", "no frontmatter\n")
+    _write(k, "drafts/deep/b.md", "---\nbad: [\n---\n")
+    _write(k, "base/scratch.tmp.md", "no frontmatter, [broken](/nowhere.md)\n")
+    _with_link(k, "/drafts/a.md")
+    rep, _, _ = lint(k)
+    assert rep.items == [] and rep.notices == [".okfignore excludes 2 paths, not read: drafts/, base/scratch.tmp.md"]
+    assert sorted(rep.ignored) == ["base/scratch.tmp.md", "drafts/"]
+    assert main([str(k), "--strict"]) == 0
+    assert " 3 concepts " in capsys.readouterr().out
+    assert main([str(k), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert sorted(data["ignored"]) == ["base/scratch.tmp.md", "drafts/"] and data["concepts"] == 3
+
+
+def test_a_nested_bundle_is_skipped_as_one_notice_and_lints_on_its_own(tmp_path):
+    k = _bundle_30(tmp_path)
+    nested = k / "base" / "vendor"
+    _write(nested, "index.md", '---\nokf_version: "0.2"\n---\n\n# Vendor\n\n* [X](x.md) - X.\n')
+    _write(nested, "x.md", "---\ntitle: X\ndescription: X.\n---\n\nText.\n")
+    _with_link(k, "/base/vendor/x.md")
+    rep, _, _ = lint(k)
+    assert rep.items == []
+    assert rep.notices == ["nested bundle base/vendor/ skipped: its index.md declares its own okf_version; "
+                           "lint it on its own"]
+    own, _, _ = lint(nested, profile=False)
+    assert [i["code"] for i in own.errors] == ["NO_TYPE"]
+
+
+def test_a_directory_without_okf_frontmatter_is_one_notice_and_a_mixed_one_keeps_its_findings(tmp_path):
+    k = _bundle_30(tmp_path)
+    _write(k, "base/notes/a.md", "Plain notes.\n")
+    _write(k, "base/notes/b.md", "---\nlayout: post\n---\n\nA Jekyll page.\n")
+    _write(k, "base/mixed/a.md", "---\ntype: Term\ntitle: A\ndescription: A.\n" + _GEN + "---\n\nText.\n")
+    _write(k, "base/mixed/b.md", "Plain.\n")
+    rep, _, _ = lint(k)
+    assert rep.notices == ["base/notes/ is not OKF: 2 Markdown files without OKF frontmatter and no index.md, skipped"]
+    assert not [i for i in rep.items if i["path"].startswith("base/notes/")]
+    assert ("ERROR", "NO_FRONTMATTER") in _codes(rep, "base/mixed/b.md")
+
+
+_NOT_A_LAYER = ("ERROR", "PROFILE_OUTSIDE_LAYER", "notes/", "okf-profile",
+                "profile knowledge/3.0: notes/ is not a layer and holds 2 Markdown files without OKF frontmatter; "
+                "move them under base/ or list the directory in .okfignore")
+
+
+def test_a_non_okf_directory_at_the_root_of_a_30_bundle_is_one_outside_layer_error(tmp_path):
+    """ADR-0018 decision 3: rule 12 still applies at the root, once for the directory, not once per file."""
+    k = _bundle_30(tmp_path)
+    _write(k, "notes/a.md", "Plain notes.\n")
+    _write(k, "notes/b.md", "---\nlayout: post\n---\n\nA Jekyll page.\n")
+    _write(k, "base/notes/c.md", "Plain notes.\n")
+    rep, _, _ = lint(k)
+    assert [(i["level"], i["code"], i["path"], i["layer"], i["message"]) for i in rep.items] == [_NOT_A_LAYER]
+    assert rep.notices == ["base/notes/ is not OKF: 1 Markdown file without OKF frontmatter and no index.md, skipped"]
+    # spec only, a knowledge/2.0 bundle and a foreign profile have no layer rule: the root directory is a notice
+    notice = "notes/ is not OKF: 2 Markdown files without OKF frontmatter and no index.md, skipped"
+    assert lint(k, profile=False)[0].items == [] and notice in lint(k, profile=False)[0].notices
+    index = k / "index.md"
+    for other in (PROFILE_20, _FOREIGN):
+        index.write_text(re.sub(r'okf_profile: "[^"]*"', f'okf_profile: "{other}"', index.read_text(encoding="utf-8")),
+                         encoding="utf-8")
+        rep, _, _ = lint(k)
+        assert not [i for i in rep.items + rep.skipped if i["path"].startswith("notes/")], other
+        assert notice in rep.notices, other
+
+
+def test_a_declared_okf_version_lint_does_not_support_is_named_not_reported_missing(tmp_path):
+    k = _bundle_30(tmp_path)
+    index = k / "index.md"
+    index.write_text(index.read_text(encoding="utf-8").replace('okf_version: "0.2"', 'okf_version: "0.3"'),
+                     encoding="utf-8")
+    for profile in (True, False):
+        rep, version, origin = lint(k, profile=profile)
+        assert [(i["code"], i["layer"]) for i in rep.items] == [("UNSUPPORTED_OKF_VERSION", "spec")], profile
+        assert "'0.3'" in rep.items[0]["message"] and (version, origin) == ("0.2", "heuristic")
+    index.write_text(index.read_text(encoding="utf-8").replace('okf_version: "0.3"\n', ""), encoding="utf-8")
+    assert sorted(i["code"] for i in lint(k)[0].items) == ["NO_OKF_VERSION", "PROFILE_OKF_VERSION"]
+
+
+def test_profiles_under_a_foreign_profile_gives_a_notice_for_the_unread_domain_profile(tmp_path, capsys):
+    k = _foreign(_bundle_30(tmp_path))
+    _write(k, "base/profile.md", _domain_profile("types:\n  T:\n    fields: {}\n    bogus: 1\n"))
+    _write(k, "base/index.md", "# base\n\n* [Profile](profile.md) - P.\n")
+    capsys.readouterr()
+    assert main([str(k), "--profiles", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["findings"] == []
+    assert data["notices"] == [f"base/profile.md not read: profile {_FOREIGN} is not one okf-builder ships "
+                               "(knowledge/2.0, knowledge/3.0): lint runs spec checks only, so the Domain Profile's "
+                               "checks (structural ones included) do not run"]
+    assert main([str(k), "--profiles"]) == 0
+    assert f"NOTICE base/profile.md not read: profile {_FOREIGN}" in capsys.readouterr().out
+    # with no Domain Profile file the notice still names the profile; lint keeps its one notice
+    (k / "base" / "profile.md").unlink()
+    _write(k, "base/index.md", "# base\n\n_(empty)_\n")
+    assert main([str(k), "--profiles", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["notices"] == [
+        f"profile {_FOREIGN} is not one okf-builder ships (knowledge/2.0, knowledge/3.0): lint runs spec checks "
+        "only, so the Domain Profile's checks (structural ones included) do not run"]
+    assert len(lint(k)[0].notices) == 1
+
+
+def test_no_profile_stays_spec_only_with_a_foreign_profile(tmp_path):
+    k = _foreign(_layered_bundle(tmp_path))
+    rep, _, _ = lint(k, profile=False)
+    assert rep.skipped == [] and rep.notices == []
+    assert sorted((i["code"], i["layer"]) for i in rep.items) == [("BAD_ISO", "spec"), ("BROKEN_LINK", "spec")]
+    assert sorted((i["code"], i["layer"]) for i in lint(k)[0].items) == [("BAD_ISO", "spec"), ("BROKEN_LINK", "spec")]
+
+
+def _noise_bundle(tmp_path) -> Path:
+    """Each source of noise at once: a foreign okf_profile, an ignored directory, a nested bundle, a non-OKF directory."""
+    k = _foreign(_bundle_30(tmp_path))
+    frag = k / _FRAGMENT
+    frag.write_text(frag.read_text(encoding="utf-8").replace("origin: Weekly meeting\n", ""), encoding="utf-8")
+    _write(k, ".okfignore", "drafts/\n")
+    _write(k, "drafts/a.md", "no frontmatter, [broken](/nowhere.md)\n")
+    _write(k, "drafts/b.md", "---\ntitle: B\n---\n\nText.\n")
+    _write(k, "base/vendor/index.md", '---\nokf_version: "0.2"\n---\n\n# Vendor\n\n* [X](x.md) - X.\n')
+    _write(k, "base/vendor/x.md", "---\ntitle: X\n---\n\nText.\n")
+    _write(k, "notes/a.md", "Plain notes.\n")
+    _write(k, "notes/b.md", "More notes.\n")
+    _with_link(k, "/drafts/a.md")
+    return k
+
+
+def test_a_bundle_with_every_source_of_noise_reports_only_the_expected_notices(tmp_path):
+    rep, _, _ = lint(_noise_bundle(tmp_path))
+    assert rep.items == [] and rep.ignored == ["drafts/"]
+    assert rep.notices == [
+        ".okfignore excludes 1 path, not read: drafts/",
+        "nested bundle base/vendor/ skipped: its index.md declares its own okf_version; lint it on its own",
+        "notes/ is not OKF: 2 Markdown files without OKF frontmatter and no index.md, skipped",
+        f"profile {_FOREIGN} is not one okf-builder ships (knowledge/2.0, knowledge/3.0): spec checks only, "
+        "1 okf-profile and domain-profile findings skipped (FRAGMENT_NO_FIELD)"]
+
+
+def test_domain_profile_structural_and_validator_findings_name_the_domain_profile_layer(tmp_path):
+    for code, (keys, extra) in _BROKEN_PROFILES.items():
+        (tmp_path / code).mkdir()
+        k = _bundle_30(tmp_path / code)
+        for rel, text in {"base/profile.md": keys, **extra}.items():
+            _write(k, rel, _domain_profile(text))
+        rep, _, _ = lint(k)
+        found = [i for i in rep.items if i["code"] == code]
+        assert found and all(i["layer"] == "domain-profile" for i in found), (code, found)
+        assert rep.by_layer()["domain-profile"]["errors"] >= len(found) and rep.by_layer()["spec"]["errors"] == 0, code
+    [f] = [i for i in lint(_validator_bundle(tmp_path / "v"), validators=True)[0].items
+           if i["code"] == "PROFILE_VALIDATOR"]
+    assert f["layer"] == "domain-profile"
+
+
+def test_profiles_gives_a_notice_for_each_path_the_scan_leaves_out(tmp_path, capsys):
+    k = _bundle_30(tmp_path)
+    _write(k, "base/profile.md", _domain_profile("types: {}\n"))
+    _write(k, "base/index.md", "# base\n\n* [Profile](profile.md) - P.\n")
+    _write(k, ".okfignore", "drafts/\n")
+    _write(k, "drafts/p.md", _domain_profile("types: {}\n"))  # PROFILE_MISPLACED were it read
+    _write(k, "base/vendor/index.md", '---\nokf_version: "0.2"\n---\n\n# Vendor\n\n* [X](x.md) - X.\n')
+    _write(k, "base/vendor/x.md", "---\ntitle: X\n---\n\nText.\n")
+    _write(k, "base/notes/a.md", "Plain notes.\n")
+    expected = [".okfignore excludes 1 path, not read: drafts/",
+                "nested bundle base/vendor/ skipped: its index.md declares its own okf_version; lint it on its own",
+                "base/notes/ is not OKF: 1 Markdown file without OKF frontmatter and no index.md, skipped"]
+    capsys.readouterr()
+    assert main([str(k), "--profiles", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["findings"] == [] and data["notices"][:3] == expected
+    assert data["notices"] == lint(k)[0].notices
+    assert main([str(k), "--profiles"]) == 0
+    text = capsys.readouterr().out
+    assert all(f"NOTICE {n}" in text for n in expected)
+
+
+def test_a_root_layer_directory_whose_index_declares_okf_version_is_no_nested_bundle(tmp_path):
+    for layer in ("base", "fragments"):
+        (tmp_path / layer).mkdir()
+        k = _bundle_30(tmp_path / layer)
+        index = k / layer / "index.md"
+        clean = lint(k)[0]
+        index.write_text('---\nokf_version: "0.2"\n---\n\n' + index.read_text(encoding="utf-8"), encoding="utf-8")
+        rep, _, _ = lint(k)
+        assert [(i["code"], i["path"]) for i in rep.items] == [("INDEX_FM", f"{layer}/index.md")], layer
+        assert (rep.notices, rep.concepts) == (clean.notices, clean.concepts), layer
+
+
+def test_a_concept_that_lost_its_type_and_title_keeps_no_type_in_a_directory_of_its_own(tmp_path):
+    """Any key of the spec makes a file OKF-shaped (okf_shaped), so its directory is not skipped as non-OKF."""
+    keys = ("title: C\n", "description: C.\n", _GEN, "verified: [{ by: process:ci, at: 2026-10-31T18:00:00Z }]\n",
+            "sources: [{ resource: https://example.com }]\n", "status: draft\n", "tags: [a]\n",
+            "stale_after: 2999-01-01T00:00:00Z\n", "resource: https://example.com\n",
+            "timestamp: 2026-10-31T18:00:00Z\n")
+    for n, key in enumerate(keys):
+        (tmp_path / str(n)).mkdir()
+        k = _bundle_30(tmp_path / str(n))
+        _write(k, "base/loose/c.md", "---\n" + key + "---\n\nText.\n")
+        rep, _, _ = lint(k)
+        assert ("ERROR", "NO_TYPE") in _codes(rep, "base/loose/c.md"), key
+        assert not [x for x in rep.notices if "is not OKF" in x], key
+
+
+def test_okfignore_cannot_exclude_a_reserved_file_and_says_so(tmp_path):
+    k = _bundle_30(tmp_path)
+    _write(k, "base/profile.md", _domain_profile("types: {}\n"))
+    _write(k, "base/index.md", "# base\n\n* [Profile](profile.md) - P.\n")
+    clean = lint(k)[0]
+    _write(k, ".okfignore", "/index.md\nlog.md\nproject.md\nconflict-log.md\nfragments/index.md\nprofile.md\n")
+    rep, _, _ = lint(k)
+    assert (rep.items, rep.concepts, rep.ignored) == (clean.items, clean.concepts, [])
+    reserved = ["conflict-log.md", "index.md", "log.md", "project.md", "base/profile.md", "fragments/index.md"]
+    assert rep.notices == [f"cannot ignore {p}: reserved" for p in reserved] + clean.notices
+    # base/ as a whole would take base/profile.md with it
+    _write(k, ".okfignore", "base/\n")
+    rep, _, _ = lint(k)
+    assert (rep.items, rep.concepts, rep.ignored) == (clean.items, clean.concepts, [])
+    assert rep.notices == ["cannot ignore base/: reserved, it holds base/profile.md"] + clean.notices
+
+
+def test_a_directory_with_an_index_keeps_the_findings_of_its_plain_files(tmp_path):
+    k = _bundle_30(tmp_path)
+    _write(k, "base/notes/index.md", "# notes\n\n* [A](a.md) - A.\n")
+    _write(k, "base/notes/a.md", "Plain notes.\n")
+    rep, _, _ = lint(k)
+    assert ("ERROR", "NO_FRONTMATTER") in _codes(rep, "base/notes/a.md") and rep.notices == []
+
+
+def test_a_root_layer_directory_of_plain_files_keeps_their_findings(tmp_path):
+    k = _bundle_30(tmp_path)
+    (k / "fragments" / "index.md").unlink()
+    (k / _FRAGMENT).write_text("Plain notes.\n", encoding="utf-8")
+    rep, _, _ = lint(k)
+    assert ("ERROR", "NO_FRONTMATTER") in _codes(rep) and rep.notices == []
+
+
+def test_unparsable_frontmatter_counts_as_okf_and_keeps_bad_yaml(tmp_path):
+    k = _bundle_30(tmp_path)
+    _write(k, "base/notes/a.md", "---\nbad: [\n---\n\nText.\n")
+    rep, _, _ = lint(k)
+    assert ("ERROR", "BAD_YAML") in _codes(rep, "base/notes/a.md") and rep.notices == []
+
+
+def test_okfignore_comment_lines_are_not_patterns():
+    from okf_common import OkfIgnore
+
+    ign = OkfIgnore.parse("#drafts.md\n# notes/\n\\#kept.md\n")
+    assert len(ign.rules) == 1
+    assert not ign.match("#drafts.md", False) and not ign.match("notes", True)
+    assert ign.match("#kept.md", False)
+
+
+def test_every_okf_profile_code_names_the_okf_profile_layer(tmp_path):
+    """Two bundles that raise every code of OKF_PROFILE_CODES: each one, and only those, is layer okf-profile."""
+    (tmp_path / "a").mkdir()
+    a = _bundle_30(tmp_path / "a")
+    index = a / "index.md"
+    index.write_text(index.read_text(encoding="utf-8").replace('okf_version: "0.2"\n', ""), encoding="utf-8")
+    (a / "log.md").unlink()
+    (a / "project.md").write_text("---\ntype: Term\ntitle: P\ndescription: P.\n" + _GEN + "---\n\nText.\n",
+                                  encoding="utf-8")
+    for rel in ("base/Bad_Name.md", "base/p2.md"):
+        _write(a, rel, "---\ntype: Project\ntitle: P\ndescription: P.\n" + _GEN + "---\n\nText.\n")
+    _write(a, "base/c2.md", _CONFLICT_LOG)
+    _write(a, "loose.md", "---\ntype: Term\ntitle: L\ndescription: L.\n" + _GEN + "---\n\nText.\n")
+    _write(a, "base/nogen.md", "---\ntype: Term\ntitle: N\ndescription: N.\n---\n\nText.\n")
+    (tmp_path / "b").mkdir()
+    b = _bundle_30(tmp_path / "b")
+    (b / "index.md").unlink()
+    (b / "project.md").unlink()
+    items = lint(a)[0].items + lint(b, version="0.1")[0].items
+    emitted = {"NAME_KEBAB", "NO_OKF_VERSION", "PROFILE_OKF_VERSION", "PROFILE_NO_INDEX", "PROFILE_NO_LOG",
+               "PROFILE_NO_PROJECT", "PROFILE_PROJECT_TYPE", "PROFILE_NO_GENERATED", "PROFILE_NO_TIMESTAMP",
+               "PROFILE_OUTSIDE_LAYER", "PROFILE_MANY_PROJECTS", "PROFILE_MANY_CONFLICT_LOGS"}
+    assert emitted <= {i["code"] for i in items} and OKF_PROFILE_CODES == emitted
+    assert {i["code"] for i in items if i["layer"] == "okf-profile"} == emitted
+    assert all(i["layer"] == "okf-profile" for i in items if i["code"] in emitted)
+
+
+def test_an_unsupported_okf_version_says_when_the_version_is_forced_and_mixed_versions_names_it(tmp_path):
+    k = _bundle_30(tmp_path)
+    index = k / "index.md"
+    index.write_text(index.read_text(encoding="utf-8").replace('okf_version: "0.2"', 'okf_version: "0.3"'),
+                     encoding="utf-8")
+    [f] = lint(k, version="0.2")[0].items
+    assert f["message"].endswith("; forced version: 0.2 (--okf-version)") and "inferred" not in f["message"]
+    _write(k, "base/t.md", "---\ntype: Term\ntitle: T\ndescription: T.\ntimestamp: 2026-10-31T18:00:00Z\n---\n\nT.\n")
+    [m] = [i["message"] for i in lint(k)[0].items if i["code"] == "MIXED_VERSIONS"]
+    assert m == "concepts mix 0.1 and 0.2 forms and okf_version '0.3' is not supported: bundle half migrated (okf-migrate)"
+    index.write_text(index.read_text(encoding="utf-8").replace('okf_version: "0.3"\n', ""), encoding="utf-8")
+    [m] = [i["message"] for i in lint(k)[0].items if i["code"] == "MIXED_VERSIONS"]
+    assert m == "concepts mix 0.1 and 0.2 forms and okf_version is missing: bundle half migrated (okf-migrate)"
 
 
 if __name__ == "__main__":
