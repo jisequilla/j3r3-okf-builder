@@ -530,6 +530,13 @@ def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None) -> 
                       f"profile {PROFILE_30}: {parts[0]}/ is not a layer; move it under base/")
 
 
+def foreign_profile_notice(name: str, unread: list[str]) -> str:
+    """--profiles under a foreign okf_profile: lint runs spec checks only, so no Domain Profile file is read or checked."""
+    files = f"{', '.join(unread)} not read: " if unread else ""
+    return (f"{files}profile {name} is not one okf-builder ships ({', '.join(SHIPPED_PROFILES)}): lint runs spec "
+            "checks only, so the Domain Profile's checks (structural ones included) do not run")
+
+
 def profile_structure(bundle: Path, docs: list[Doc]) -> tuple[Resolved, list[dict], list[str]]:
     """The Domain Profile in force, its structural findings (§7 rule 14) and its notices; lint and --profiles share it."""
     declared = declared_profile(bundle)
@@ -537,7 +544,7 @@ def profile_structure(bundle: Path, docs: list[Doc]) -> tuple[Resolved, list[dic
         prof = load_profile(bundle, read_own=True)
         return prof, prof.findings + misplaced(docs, prof), []
     if declared not in (None, PROFILE_20):  # a foreign profile: lint skips what it finds beyond the spec
-        return load_profile(bundle, read_own=False), [], []
+        return load_profile(bundle, read_own=False), [], [foreign_profile_notice(declared, ignored_in_20(docs))]
     return load_profile(bundle, read_own=False), [], [IGNORED_20_NOTICE.format(rel=rel) for rel in ignored_in_20(docs)]
 
 
@@ -690,7 +697,8 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
             check_layers(docs, rep, prof)
         for i in findings:
             rep.add(i["level"], i["code"], i["path"], i["message"], layer=DOMAIN)
-        rep.notices += notices
+        if not foreign:  # skip_profile_layers gives a foreign profile its one notice
+            rep.notices += notices
 
     detected, origin = detect_version(bundle, docs)
     if version == "auto":
@@ -2157,6 +2165,29 @@ def test_a_declared_okf_version_lint_does_not_support_is_named_not_reported_miss
         assert "'0.3'" in rep.items[0]["message"] and (version, origin) == ("0.2", "heuristic")
     index.write_text(index.read_text(encoding="utf-8").replace('okf_version: "0.3"\n', ""), encoding="utf-8")
     assert sorted(i["code"] for i in lint(k)[0].items) == ["NO_OKF_VERSION", "PROFILE_OKF_VERSION"]
+
+
+def test_profiles_under_a_foreign_profile_gives_a_notice_for_the_unread_domain_profile(tmp_path, capsys):
+    k = _foreign(_bundle_30(tmp_path))
+    _write(k, "base/profile.md", _domain_profile("types:\n  T:\n    fields: {}\n    bogus: 1\n"))
+    _write(k, "base/index.md", "# base\n\n* [Profile](profile.md) - P.\n")
+    capsys.readouterr()
+    assert main([str(k), "--profiles", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["findings"] == []
+    assert data["notices"] == [f"base/profile.md not read: profile {_FOREIGN} is not one okf-builder ships "
+                               "(knowledge/2.0, knowledge/3.0): lint runs spec checks only, so the Domain Profile's "
+                               "checks (structural ones included) do not run"]
+    assert main([str(k), "--profiles"]) == 0
+    assert f"NOTICE base/profile.md not read: profile {_FOREIGN}" in capsys.readouterr().out
+    # with no Domain Profile file the notice still names the profile; lint keeps its one notice
+    (k / "base" / "profile.md").unlink()
+    _write(k, "base/index.md", "# base\n\n_(empty)_\n")
+    assert main([str(k), "--profiles", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["notices"] == [
+        f"profile {_FOREIGN} is not one okf-builder ships (knowledge/2.0, knowledge/3.0): lint runs spec checks "
+        "only, so the Domain Profile's checks (structural ones included) do not run"]
+    assert len(lint(k)[0].notices) == 1
 
 
 def test_no_profile_stays_spec_only_with_a_foreign_profile(tmp_path, capsys):
