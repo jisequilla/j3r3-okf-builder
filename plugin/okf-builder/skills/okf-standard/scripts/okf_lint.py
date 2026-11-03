@@ -36,10 +36,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import shlex
 import subprocess
 import sys
+from collections import Counter
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -493,21 +495,65 @@ _SECRET_RES = (
                 r"""(?!\[masked\])("[^"\n]*"|'[^'\n]*'|[^\s,;}\]]+)"""), r"\1[masked]"),
     (re.compile(r"(?i)(authorization:\s*)\S+(?:\s+(?!\[masked\])\S+)?"), r"\1[masked]"),
     (re.compile(r"(?i)\b(bearer\s+)(?!\[masked\])\S+"), r"\1[masked]"),
+    # a JWT: three base64url parts joined by '.', the first one a JSON object ("eyJ")
+    (re.compile(r"\beyJ[\w-]+\.[\w-]+\.[\w-]*"), "[masked]"),
 )
-# a run of 32 or more base64, base64url or hex characters; '/' ends a run, so a file path is kept
+# a run of 32 or more base64, base64url or hex characters, '/' included
+_CANDIDATE = re.compile(r"[A-Za-z0-9+/_-]{32,}={0,2}")
+# the same without '/': the pieces of a path that are masked on their own
 _LONG_RUN = re.compile(r"[A-Za-z0-9+_-]{32,}={0,2}")
 # lowercase words or numbers joined by - or _ (a kebab-case slug, a dated file name, a snake_case test name)
 _WORDS = re.compile(r"(?:[a-z]+|[0-9]+)(?:[_-](?:[a-z]+|[0-9]+))+")
+# a path segment shaped like a name: a word, CamelCase words, an acronym, lowercase letters and digits, a number,
+# any of them joined by - or _
+_NAME = re.compile(r"(?:[A-Z]?[a-z]+(?:[A-Z][a-z]+)*[0-9]*|[a-z0-9]+|[A-Z]{2,6}[a-z]*|[0-9]+)"
+                   r"(?:[-_](?:[A-Za-z]?[a-z]+|[A-Za-z0-9]+))*")
+SECRET_ENTROPY = 4.0  # bits per character; see _slashed_secret
+SECRET_UNNAMED = 0.5  # share of the characters in segments not shaped like a name; see _slashed_secret
+
+
+def _entropy(s: str) -> float:
+    n = len(s)
+    return -sum(c / n * math.log2(c / n) for c in Counter(s).values())
+
+
+def _slashed_secret(run: str, before: str) -> bool:
+    """A run with '/' is a standard-base64 secret, not a path, when it does not follow '~' or '.' (~/, ./, ../),
+    at least half of its characters lie in segments not shaped like a name (_NAME), and it carries at least 4.0
+    bits of entropy per character.
+
+    The thresholds come from data. Random base64 strings of 40-88 characters that hold a '/' measured at least
+    4.4 bits per character; about 2 in 60,000 had under 50% of their characters in unnamed segments and are
+    read as paths (their pieces of 32 or more characters are still masked). The path runs of the
+    test table (absolute macOS and Linux paths, Java, Kotlin, Android and TypeScript paths, URL path parts, of
+    33-88 characters, mixed case and digits) measured 3.82-4.34 bits, with 0-12% in unnamed segments; the
+    relative paths of okf-builder, a dated fragment and a Docker overlay directory stay at or under 32%. The
+    name-shape share separates them by itself; entropy is a second condition, so a run of few distinct
+    characters is never masked whole. A leading '/' is not taken as a path: a base64 secret starts with one once
+    in 64, and an absolute path's segments are names, so the share keeps it."""
+    segs = [s for s in run.rstrip("=").split("/") if s]
+    if before in ("~", "."):
+        return False
+    unnamed = sum(len(s) for s in segs if not _NAME.fullmatch(s)) / max(1, sum(len(s) for s in segs))
+    return unnamed >= SECRET_UNNAMED and _entropy(run) >= SECRET_ENTROPY
+
+
+def _mask_run(m: re.Match) -> str:
+    run = m.group(0)
+    if "/" in run and _slashed_secret(run, m.string[m.start() - 1:m.start()]):
+        return "[masked]"
+    return _LONG_RUN.sub(lambda p: p.group(0) if _WORDS.fullmatch(p.group(0)) else "[masked]", run)
 
 
 def mask_secrets(text: str) -> str:
     """The value after a key that names a token, key, password or secret (token=, "token": "...",
-    password: "a b"), after Authorization: and after Bearer, and every run of 32 or more base64, base64url or
-    hex characters, become [masked]. A run of lowercase words or numbers joined by - or _ (a slug, a test
-    name) is not a secret, and '/' ends a run, so paths are kept."""
+    password: "a b"), after Authorization: and after Bearer, a JWT, and every run of 32 or more base64,
+    base64url or hex characters, become [masked]. A run of lowercase words or numbers joined by - or _ (a slug,
+    a test name) is not a secret. A run with '/' is masked whole when it reads as a standard-base64 secret
+    (_slashed_secret); otherwise it is a path, kept but for its pieces of 32 or more characters without '/'."""
     for rx, sub in _SECRET_RES:
         text = rx.sub(sub, text)
-    return _LONG_RUN.sub(lambda m: m.group(0) if _WORDS.fullmatch(m.group(0)) else "[masked]", text)
+    return _CANDIDATE.sub(_mask_run, text)
 
 
 def _validator_paths(v: dict, docs: list[Doc], prof: Resolved) -> list[str]:
@@ -1796,6 +1842,71 @@ def test_mask_secrets_reads_quoted_values_and_keeps_paths():
     for kept in ("fragments/2026-11-02-refund-topic-follow-up.md",
                  "test_a_concept_of_a_local_type_missing_a_required_field_is_profile_required"):
         assert mask_secrets(kept) == kept
+
+
+def _fake_b64(seed: int, size: int) -> str:
+    """A standard-base64 string from seeded random bytes: fake, never a real secret."""
+    import base64
+    import random
+    return base64.b64encode(random.Random(seed).randbytes(size)).decode()
+
+
+def _fake_secrets() -> list[str]:
+    import base64
+    b64url = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")  # noqa: E731
+    with_both = [s for s in (_fake_b64(n, 30 + n % 37) for n in range(400)) if "/" in s and "+" in s]
+    picked = [next(s for s in with_both if len(s) <= 48), next(s for s in with_both if 56 <= len(s) <= 64),
+              next(s for s in with_both if len(s) >= 80)]
+    pem = next("MII" + _fake_b64(n, 46)[:61] for n in range(100) if "/" in _fake_b64(n, 46)[:61])
+    jwt = ".".join([b64url(b'{"alg":"HS256","typ":"JWT"}'), b64url(b'{"sub":"fake"}'), _fake_b64(3, 32).replace("+", "-")
+                    .replace("/", "_").rstrip("=")])
+    return [*picked, "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", pem, jwt]
+
+
+_KEPT_PATHS = (
+    "/Users/someone/Documents/Projects/iOSApp2024/Sources/ViewControllers/LoginViewController.swift",
+    "/home/ubuntu/projects/MyService2024/src/main/resources/application.yml",
+    "/opt/homebrew/Cellar/python@3.12/3.12.7/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/x",
+    "/var/lib/docker/overlay2/volumes/postgres_data/_data/base/16384",
+    "src/main/java/com/Example/Service.java",
+    "src/test/kotlin/org/acme/billing/InvoiceServiceTest.kt",
+    "app/src/main/res/drawable-xxhdpi/ic_launcher_foreground.png",
+    "https://github.com/jisequilla/okf-builder/pull/53/files",
+    "repos/jisequilla/j3r3-okf-builder/contents/plugin/okf-builder/skills",
+    "~/repos/personal/j3r3-okf-builder/plugin/okf-builder/skills/okf-standard",
+    "./node_modules/@types/node/README.md",
+    "components/ui/DataTable/DataTableToolbar.tsx",
+)
+
+
+def test_mask_secrets_masks_a_standard_base64_secret_with_slashes_whole():
+    secrets = _fake_secrets()
+    assert len(secrets) >= 6 and all("/" in s for s in secrets[:5]) and secrets[-1].startswith("eyJ")
+    assert all("+" in s for s in secrets[:3]) and 40 <= min(map(len, secrets[:3])) and max(map(len, secrets[:3])) <= 88
+    assert secrets[0].startswith("/")  # once in 64 a base64 secret starts with '/'
+    for s in secrets:
+        for line in (s, f"out: {s} end", f'"{s}"'):
+            masked = mask_secrets(line)
+            assert masked == line.replace(s, "[masked]"), len(s)  # the secret is never part of a failure message
+
+
+def test_mask_secrets_keeps_paths_and_urls_whatever_their_case_and_digits():
+    for p in _KEPT_PATHS:
+        assert len(p.split()[0]) >= 32 and mask_secrets(f"see {p} now") == f"see {p} now", p
+    assert 40 <= len(_KEPT_PATHS[0]) <= 120 and 100 <= len(_KEPT_PATHS[2]) <= 120
+    # a 40-hex SHA is masked on its own, in a path as well: the run without '/' rule, as before
+    sha = "4abdfa0" + "1" * 33
+    assert mask_secrets(f"commits/{sha}") == "commits/[masked]" and mask_secrets(sha) == "[masked]"
+    assert mask_secrets(f"/repo/objects/{sha}") == "/repo/objects/[masked]"
+
+
+def test_mask_secrets_masks_before_a_long_output_is_truncated(tmp_path):
+    s = _fake_secrets()[0]
+    k = _validator_bundle(tmp_path)
+    (k / "check.sh").write_text(f"printf '%0.s.' $(seq 1 {VALIDATOR_OUTPUT_MAX - 20}); echo ' {s}'\nexit 1\n",
+                                encoding="utf-8")
+    [f] = [i for i in lint(k, validators=True)[0].items if i["code"] == "PROFILE_VALIDATOR"]
+    assert s not in f["message"] and s[:12] not in f["message"]
 
 
 def test_profile_outside_layer_comes_before_the_profile_structure_findings(tmp_path):
