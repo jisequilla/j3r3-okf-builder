@@ -720,33 +720,35 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
             declared = f"{canonical_type(r, t)}.{f}"
             if declared != q["field"]:
                 q["field_as_written"], q["field"] = q["field"], declared
-    # 2. by_type, a type before its subtypes (then layer order), so the order of declaration does not matter
-    entries = [(lay.source, tid, e or {}) for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
-    entries.sort(key=lambda x: len(ancestors(r, x[1])))
-    for src, tid, e in entries:
-        cur = type_in_force(r, tid)
-        where = f"by_type.{tid}"
-        _check_lowering(r, where, src, e, cur["required"], cur["fixed"], cur["forbidden"], cur["fields"])
-        for fid in (e.get("values") or {}):
-            fd = cur["fields"].get(fid)
-            if fd is None:
-                r.add("PROFILE_INVALID", src, f"{where}.values: '{tid}' has no field '{fid}'")
-            elif fd.get("type") != "enum":
-                r.add("PROFILE_REDEFINED", src,
-                      f"{where}.values: '{fid}' is a {fd.get('type')} ({fd['source']}); values turn it into an enum")
-        slot = r.by_type.setdefault(tid, {"required": {}, "fixed": {}, "forbidden": {}, "values": {}})
-        _raise_into(slot["required"], {k: {**q, "source": src} for k, q in _req_map(e.get("required")).items()
-                                       if not q.get("optional")})
-        _raise_into(slot["fixed"], _stamp(e.get("fixed"), src))
-        _raise_into(slot["forbidden"], _stamp(e.get("forbidden"), src))
-        for fid, vals in (e.get("values") or {}).items():
-            fd = cur["fields"].get(fid)
-            if fd is not None and fd.get("type") == "enum":
-                slot["values"].setdefault(fid, [])
-                slot["values"][fid] += [{"value": v, "source": src} for v in vals]
-    # 3. families, enclosing before nested (then layer order). A family is narrower than the types it
-    # covers (all of them when it names none), so it never loosens what they, their by_type or an
-    # enclosing family require.
+    # 2. families, then 3. by_type: §4.1 merges each layer's families before its by_type, so a by_type entry is
+    # narrower than the families of its own and earlier layers, and a family narrower than the by_type of earlier
+    # layers. What is in force combines levels by the highest either way; the order decides what a loosening is.
+    order = {lay.source: i for i, lay in enumerate(layers)}
+    bts = [(order[lay.source], lay.source, canonical_type(r, tid), tid, e or {})
+           for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
+    _merge_families(r, layers, order, bts)
+    _merge_by_type(r, order, bts)
+
+
+def _reach(r: Resolved, t: str) -> list[str]:
+    """t, the types it extends and the local types that extend it: the types a by_type entry for t shares concepts with."""
+    return [t, *ancestors(r, t), *_subtypes(r, t)]
+
+
+def _covers(r: Resolved, fam_types: list | None, t: str) -> bool:
+    """A family covers t when it names no type, t or a type t extends."""
+    return not fam_types or any(x in fam_types for x in (t, *ancestors(r, t)))
+
+
+def _named(m: dict, name: str) -> dict:
+    """Requirements, fixed or forbidden keys whose source names the entry that declared them, for a finding."""
+    return {k: {**e, "source": f"{name} ({e['source']})"} for k, e in m.items()}
+
+
+def _merge_families(r: Resolved, layers: list[Layer], order: dict, bts: list) -> None:
+    """Families, enclosing before nested (then layer order). A family is narrower than the types it covers (all of
+    them when it names none), an enclosing family and the by_type entries of earlier layers, so it never loosens
+    what they require; a by_type entry of its own or a later layer comes after it."""
     fams: list[tuple[str, str, dict]] = []
     declared: dict = {}
     for lay in layers:
@@ -768,22 +770,101 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
                 _raise_into(req_in, x["required"])
                 _raise_into(fixed_in, x["fixed"])
                 _raise_into(forb_in, x["forbidden"])
-        covered = list(r.types)
-        if f.get("types"):
-            covered = [t for t in r.types if t in f["types"] or any(a in f["types"] for a in ancestors(r, t))]
+        covered = [t for t in r.types if _covers(r, f.get("types"), t)]
         fields_in: dict = {}
         for t in covered:
-            ti = type_in_force(r, t)
+            ti = type_in_force(r, t)  # by_type is not merged yet: the types and their fields only
             fields_in.update({k: v for k, v in ti["fields"].items() if k not in fields_in})
             _raise_into(req_in, ti["required"])
             _raise_into(fixed_in, ti["fixed"])
             _raise_into(forb_in, ti["forbidden"])
+        reach = {a for t in covered for a in (t, *ancestors(r, t))}
+        for li, bsrc, tid, written, e in bts:
+            if li < order[src] and tid in reach:
+                name = f"by_type.{written}"
+                _raise_into(req_in, _named({k: {**q, "source": bsrc} for k, q in _req_map(e.get("required")).items()
+                                            if not q.get("optional")}, name))
+                _raise_into(fixed_in, _named(_stamp(e.get("fixed"), bsrc), name))
+                _raise_into(forb_in, _named(_stamp(e.get("forbidden"), bsrc), name))
         _check_lowering(r, f"family {dr}", src, f, req_in, fixed_in, forb_in, fields_in)
         r.families[dr] = {"dir": dr, "types": f.get("types"),
                           "required": {k: {**e, "source": src} for k, e in _req_map(f.get("required")).items()
                                        if not e.get("optional")},
                           "fixed": _stamp(f.get("fixed"), src), "forbidden": _stamp(f.get("forbidden"), src),
                           "source": src}
+
+
+def _join(r: Resolved, src: str, tid: str, parts: list[tuple[str, dict]]) -> dict:
+    """The by_type entries one layer writes for one type, under its declared name and under aliases of it, as one
+    entry. They are one declaration, so they agree: a key one part sets at another level than another part, makes
+    optional where another requires it, or fixes to another value, is PROFILE_REDEFINED, whichever part is lower."""
+    out: dict = {"required": {}, "fixed": {}, "forbidden": {}, "values": {}}
+    seen: dict = {}
+    for written, e in parts:
+        for kind, m in (("required", _req_map(e.get("required"))), ("fixed", e.get("fixed") or {}),
+                        ("forbidden", e.get("forbidden") or {})):
+            for k, q in m.items():
+                q = q or {}
+                prev = seen.get((kind, k))
+                if prev is None:
+                    seen[(kind, k)] = (written, q)
+                    out[kind][k] = (False if q.get("optional") else {x: v for x, v in q.items() if x in ("level", "code")}) \
+                        if kind == "required" else q
+                elif (prev[1].get("optional"), _lvl(prev[1]), prev[1].get("value")) != \
+                        (q.get("optional"), _lvl(q), q.get("value")):
+                    r.add("PROFILE_REDEFINED", src, f"by_type.{prev[0]} and by_type.{written} name the same type "
+                                                    f"'{tid}' and disagree on {kind} '{k}'")
+        for fid, vs in (e.get("values") or {}).items():
+            have = out["values"].setdefault(fid, [])
+            have += [v for v in vs or [] if v not in have]
+        if e.get("fields"):
+            out.setdefault("fields", {}).update({k: v for k, v in e["fields"].items() if k not in out.get("fields", {})})
+    return out
+
+
+def _merge_by_type(r: Resolved, order: dict, bts: list) -> None:
+    """by_type, a type before its subtypes (then layer order), so the order of declaration does not matter. A key
+    that is an alias stands for the declared type, and the entries one layer writes for one type are joined into
+    one. An entry never loosens what the types, a supertype's or an earlier layer's by_type, or a family of its own
+    or an earlier layer that covers the type or a local type that extends it, requires."""
+    groups: dict = {}
+    for li, src, tid, written, e in bts:
+        groups.setdefault((li, src, tid), []).append((written, e))
+    entries = []
+    for (li, src, tid), parts in groups.items():
+        parts.sort(key=lambda p: p[0] != tid)  # the declared name first, then its aliases
+        e = parts[0][1] if len(parts) == 1 else _join(r, src, tid, parts)
+        entries.append((li, src, tid, " / ".join(w for w, _ in parts), e))
+    entries.sort(key=lambda x: (len(ancestors(r, x[2])), x[0]))
+    for li, src, tid, written, e in entries:
+        cur = type_in_force(r, tid)
+        where = f"by_type.{written}"
+        req_in, fixed_in, forb_in = cur["required"], cur["fixed"], cur["forbidden"]
+        reach = _reach(r, tid)
+        for x in r.families.values():
+            if order[x["source"]] <= li and any(_covers(r, x["types"], t) for t in reach):
+                name = f"family {x['dir']}"
+                _raise_into(req_in, _named(x["required"], name))
+                _raise_into(fixed_in, _named(x["fixed"], name))
+                _raise_into(forb_in, _named(x["forbidden"], name))
+        _check_lowering(r, where, src, e, req_in, fixed_in, forb_in, cur["fields"])
+        for fid in (e.get("values") or {}):
+            fd = cur["fields"].get(fid)
+            if fd is None:
+                r.add("PROFILE_INVALID", src, f"{where}.values: '{tid}' has no field '{fid}'")
+            elif fd.get("type") != "enum":
+                r.add("PROFILE_REDEFINED", src,
+                      f"{where}.values: '{fid}' is a {fd.get('type')} ({fd['source']}); values turn it into an enum")
+        slot = r.by_type.setdefault(tid, {"required": {}, "fixed": {}, "forbidden": {}, "values": {}})
+        _raise_into(slot["required"], {k: {**q, "source": src} for k, q in _req_map(e.get("required")).items()
+                                       if not q.get("optional")})
+        _raise_into(slot["fixed"], _stamp(e.get("fixed"), src))
+        _raise_into(slot["forbidden"], _stamp(e.get("forbidden"), src))
+        for fid, vals in (e.get("values") or {}).items():
+            fd = cur["fields"].get(fid)
+            if fd is not None and fd.get("type") == "enum":
+                slot["values"].setdefault(fid, [])
+                slot["values"][fid] += [{"value": v, "source": src} for v in vals]
 
 
 # --------------------------------------------------------------------------
@@ -1455,22 +1536,104 @@ def test_nested_families_and_by_type_give_the_same_result_in_either_order(tmp_pa
         assert "by_type.Client Meeting: lowers 'tags'" in _one(r, "PROFILE_REDEFINED")["message"], bt
 
 
-def test_a_family_cannot_loosen_what_a_type_or_by_type_requires(tmp_path):
+_SHARED_REL = "base/shared/profile.md"
+_EXTENDS = "extends: [/base/shared/profile.md]\n"
+
+
+def _extending(tmp_path: Path, shared: str, own: str) -> Resolved:
+    k = _bundle(tmp_path, _EXTENDS + own, extra={_SHARED_REL: _profile_doc(shared)})
+    return load_profile(k, builtin=_builtin(tmp_path))
+
+
+def test_a_family_cannot_loosen_what_a_type_or_an_earlier_layers_by_type_requires(tmp_path):
     cases = {
         "family without types makes a type requirement optional": "families:\n  /base/x/: { required: { owner: false } }\n",
         "family without types lowers a type requirement": "families:\n  /base/x/: { required: { owner: { level: warn } } }\n",
-        "family lowers a by_type requirement":
-            "by_type:\n  System: { required: [tags] }\nfamilies:\n  /base/x/: { types: [System], required: { tags: { level: warn } } }\n",
-        "family makes a by_type requirement optional":
-            "by_type:\n  System: { required: [tags] }\nfamilies:\n  /base/x/: { types: [System], required: { tags: false } }\n",
-        "family lowers a by_type forbidden key":
-            "by_type:\n  System: { forbidden: { x: { reason: r } } }\nfamilies:\n  /base/x/: { forbidden: { x: { reason: r, level: warn } } }\n",
     }
     for n, (case, own) in enumerate(cases.items()):
         f = _one(load_profile(_bundle(tmp_path / str(n), own), builtin=_builtin(tmp_path)), "PROFILE_REDEFINED")
         assert f["path"] == OWN_REL and "family /base/x/" in f["message"], (case, f)
+    across = {
+        "family lowers an extended layer's by_type requirement": (
+            "by_type:\n  System: { required: [tags] }\n",
+            "families:\n  /base/x/: { types: [System], required: { tags: { level: warn } } }\n",
+            "family /base/x/: lowers 'tags' from error (by by_type.System (base/shared/profile.md)) to warn"),
+        "family makes an extended layer's by_type requirement optional": (
+            "by_type:\n  System: { required: [tags] }\n",
+            "families:\n  /base/x/: { types: [System], required: { tags: false } }\n",
+            "family /base/x/: makes 'tags' optional, required by by_type.System (base/shared/profile.md)"),
+        "family lowers an extended layer's by_type forbidden key": (
+            "by_type:\n  System: { forbidden: { x: { reason: r } } }\n",
+            "families:\n  /base/x/: { forbidden: { x: { reason: r, level: warn } } }\n",
+            "family /base/x/: lowers forbidden 'x' from error (by by_type.System (base/shared/profile.md))"),
+    }
+    for n, (case, (shared, own, msg)) in enumerate(across.items()):
+        f = _one(_extending(tmp_path / f"a{n}", shared, own), "PROFILE_REDEFINED")
+        assert (f["path"], f["message"]) == (OWN_REL, msg), case
     # a family that only raises, or names a field no covered type requires, adds
     ok = "families:\n  /base/x/: { required: { owner: { level: error }, tags: { level: warn } } }\n"
+    assert load_profile(_bundle(tmp_path / "ok", ok), builtin=_builtin(tmp_path)).findings == []
+
+
+def test_a_by_type_entry_cannot_loosen_a_family_of_its_own_or_an_earlier_layer(tmp_path):
+    """§4.1: families, then by_type. A by_type entry that loosens a family is the loosening, never the family."""
+    fam = "families:\n  /base/x/: { types: [System], required: [tags], forbidden: { x: { reason: r } } }\n"
+    low = {
+        "lowers a family requirement": ("by_type:\n  System: { required: { tags: { level: warn } } }\n",
+                                        "by_type.System: lowers 'tags' from error (by family /base/x/ ({src})) to warn"),
+        "makes a family requirement optional": ("by_type:\n  System: { required: { tags: false } }\n",
+                                                "by_type.System: makes 'tags' optional, required by family /base/x/ ({src})"),
+        "lowers a family forbidden key": ("by_type:\n  System: { forbidden: { x: { reason: r, level: warn } } }\n",
+                                          "by_type.System: lowers forbidden 'x' from error (by family /base/x/ ({src}))"),
+    }
+    for n, (case, (bt, msg)) in enumerate(low.items()):
+        r = load_profile(_bundle(tmp_path / f"s{n}", fam + bt), builtin=_builtin(tmp_path))
+        f = _one(r, "PROFILE_REDEFINED")
+        assert (f["path"], f["message"]) == (OWN_REL, msg.format(src=OWN_REL)), case
+        f = _one(_extending(tmp_path / f"e{n}", fam, bt), "PROFILE_REDEFINED")
+        assert (f["path"], f["message"]) == (OWN_REL, msg.format(src=_SHARED_REL)), case
+    # a family without types covers System; one naming the type a local type extends covers that local type
+    r = load_profile(_bundle(tmp_path / "all", "families:\n  /base/x/: { required: [tags] }\n"
+                             "by_type:\n  System: { required: { tags: { level: warn } } }\n"), builtin=_builtin(tmp_path))
+    assert "by_type.System: lowers 'tags'" in _one(r, "PROFILE_REDEFINED")["message"]
+    r = load_profile(_bundle(tmp_path / "sub", "types:\n  Client Meeting: { extends: Knowledge Fragment }\n"
+                             "families:\n  /base/x/: { types: [Knowledge Fragment], required: [tags] }\n"
+                             "by_type:\n  Client Meeting: { required: { tags: { level: warn } } }\n"),
+                     builtin=_builtin(tmp_path))
+    assert "by_type.Client Meeting: lowers 'tags'" in _one(r, "PROFILE_REDEFINED")["message"]
+    # a family for other types, or one that a by_type entry only raises, is no loosening
+    other = "families:\n  /base/x/: { types: [Term], required: [tags] }\nby_type:\n  System: { required: { tags: { level: warn } } }\n"
+    assert load_profile(_bundle(tmp_path / "other", other), builtin=_builtin(tmp_path)).findings == []
+    raised = fam.replace("required: [tags]", "required: { tags: { level: warn } }") + "by_type:\n  System: { required: [tags] }\n"
+    assert load_profile(_bundle(tmp_path / "raised", raised), builtin=_builtin(tmp_path)).findings == []
+
+
+def test_a_family_looser_than_a_by_type_entry_of_its_own_or_a_later_layer_adds(tmp_path):
+    """The family comes first, so the by_type entry raises it; what is in force is the highest level either way."""
+    fam = "families:\n  /base/x/: { types: [System], required: { tags: { level: warn } } }\n"
+    bt = "by_type:\n  System: { required: [tags] }\n"
+    for r in (load_profile(_bundle(tmp_path / "same", bt + fam), builtin=_builtin(tmp_path)),
+              _extending(tmp_path / "later", fam, bt)):
+        assert r.findings == []
+        assert _lvl(concept_force(r, "System", "/base/x/s.md")["required"]["tags"]) == "error"
+        assert _lvl(concept_force(r, "System", "/base/y/s.md")["required"]["tags"]) == "error"
+    r = load_profile(_bundle(tmp_path / "opt", "families:\n  /base/x/: { types: [System], required: { tags: false } }\n"
+                             + bt), builtin=_builtin(tmp_path))
+    assert r.findings == []  # tags is not required by a type, so the family makes nothing optional
+
+
+def test_family_and_by_type_against_a_type_field(tmp_path):
+    """Both layers come after the types: neither lowers a field a type requires, nor declares it again."""
+    cases = {
+        "family lowers a type field": "families:\n  /base/x/: { types: [System], required: { owner: { level: warn } } }\n",
+        "by_type lowers a type field": "by_type:\n  System: { required: { owner: { level: warn } } }\n",
+        "by_type makes a type field optional": "by_type:\n  System: { required: { owner: false } }\n",
+    }
+    for n, (case, own) in enumerate(cases.items()):
+        f = _one(load_profile(_bundle(tmp_path / str(n), own), builtin=_builtin(tmp_path)), "PROFILE_REDEFINED")
+        assert "'owner'" in f["message"] and "built-in" in f["message"], (case, f)
+    ok = ("families:\n  /base/x/: { types: [System], required: { owner: { level: error } } }\n"
+          "by_type:\n  System: { required: { owner: { level: error } } }\n")
     assert load_profile(_bundle(tmp_path / "ok", ok), builtin=_builtin(tmp_path)).findings == []
 
 
@@ -1667,6 +1830,50 @@ def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_
     assert r.rules[-1]["when"] == {"type": "Client Meeting", "distillation_status": "distilled"}
     assert r.validators[0]["types"] == ["Client Meeting"]
     assert "Client Meeting" in in_force(r, "/base/clients/")["types_allowed"]
+
+
+_FRAGMENTO = "aliases:\n  types: { Fragmento: Knowledge Fragment }\n"
+
+
+def test_a_type_alias_as_a_by_type_key_stands_for_the_declared_type(tmp_path):
+    r = load_profile(_bundle(tmp_path / "v", _FRAGMENTO + "by_type:\n  Fragmento: { values: { distillation_status: [archived] } }\n"),
+                     builtin=_builtin(tmp_path))
+    assert r.findings == [] and list(r.by_type) == ["Knowledge Fragment"]
+    vals = concept_force(r, "Knowledge Fragment", "/fragments/f.md")["fields"]["distillation_status"]["values"]
+    assert [v["value"] for v in vals] == ["pending", "distilled", "conflict", "archived"] and vals[-1]["source"] == OWN_REL
+    r = load_profile(_bundle(tmp_path / "q", _FRAGMENTO + "by_type:\n  Fragmento: { required: [tags] }\n"),
+                     builtin=_builtin(tmp_path))
+    assert r.findings == [] and _lvl(concept_force(r, "Knowledge Fragment", "/fragments/f.md")["required"]["tags"]) == "error"
+    # a local type's alias, and the checks of the declared type: an alias key that loosens is REDEFINED
+    sub = "types:\n  Client Meeting: { extends: Knowledge Fragment }\naliases:\n  types: { Reunión: Client Meeting }\n"
+    r = load_profile(_bundle(tmp_path / "s", sub + "by_type:\n  Knowledge Fragment: { required: [tags] }\n"
+                             "  Reunión: { required: { tags: { level: warn } } }\n"), builtin=_builtin(tmp_path))
+    assert _one(r, "PROFILE_REDEFINED")["message"] == "by_type.Reunión: lowers 'tags' from error (by base/profile.md) to warn"
+    f = _one(_extending(tmp_path / "e", "by_type:\n  Knowledge Fragment: { required: [tags] }\n",
+                        _FRAGMENTO + "by_type:\n  Fragmento: { required: { tags: false } }\n"), "PROFILE_REDEFINED")
+    assert f["message"] == f"by_type.Fragmento: makes 'tags' optional, required by {_SHARED_REL}"
+
+
+def test_an_alias_and_its_declared_name_in_one_by_type_are_one_entry(tmp_path):
+    """One layer, one type: the parts join; they are one declaration, so a key they set apart is REDEFINED."""
+    both = (_FRAGMENTO + "by_type:\n  Knowledge Fragment: { required: [tags], values: { distillation_status: [archived] } }\n"
+            "  Fragmento: { required: [participants], forbidden: { x: { reason: r } }, values: { distillation_status: [held] } }\n")
+    r = load_profile(_bundle(tmp_path / "ok", both), builtin=_builtin(tmp_path))
+    assert r.findings == [] and list(r.by_type) == ["Knowledge Fragment"]
+    force = concept_force(r, "Knowledge Fragment", "/fragments/f.md")
+    assert set(force["required"]) >= {"tags", "participants"} and "x" in force["forbidden"]
+    assert [v["value"] for v in force["fields"]["distillation_status"]["values"]][-2:] == ["archived", "held"]
+    same = _FRAGMENTO + "by_type:\n  Knowledge Fragment: { required: [tags] }\n  Fragmento: { required: [tags] }\n"
+    assert load_profile(_bundle(tmp_path / "same", same), builtin=_builtin(tmp_path)).findings == []
+    msg = "by_type.Knowledge Fragment and by_type.Fragmento name the same type 'Knowledge Fragment' and disagree on {}"
+    for n, (a, b, what) in enumerate([
+            ("{ required: [tags] }", "{ required: { tags: { level: warn } } }", "required 'tags'"),
+            ("{ required: { tags: { level: warn } } }", "{ required: [tags] }", "required 'tags'"),
+            ("{ required: [tags] }", "{ required: { tags: false } }", "required 'tags'"),
+            ("{ fixed: { okf_lang: { value: en } } }", "{ fixed: { okf_lang: { value: es } } }", "fixed 'okf_lang'")]):
+        own = _FRAGMENTO + f"by_type:\n  Knowledge Fragment: {a}\n  Fragmento: {b}\n"
+        f = _one(load_profile(_bundle(tmp_path / str(n), own), builtin=_builtin(tmp_path)), "PROFILE_REDEFINED")
+        assert (f["path"], f["message"]) == (OWN_REL, msg.format(what)), (a, b)
 
 
 _SHARED_Q = "questions:\n  - { question: \"Who owns each runbook?\", field: Runbook.owner }\n"
