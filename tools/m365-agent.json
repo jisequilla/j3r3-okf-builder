@@ -14,6 +14,7 @@
     {"title": "Capture a meeting", "text": "Capture this meeting transcript as a knowledge fragment."},
     {"title": "Double check", "text": "Run the double check: what changed since the last review and which conflicts are open?"},
     {"title": "Open questions", "text": "Which open questions are still unanswered, who owns them and which are due for review?"},
+    {"title": "Domain Profile", "text": "Which concepts break the Domain Profile, and what has changed in it since the last review?"},
     {"title": "Ask the bundle", "text": "What do we know about this decision, and how trustworthy is it?"}
   ]
 }

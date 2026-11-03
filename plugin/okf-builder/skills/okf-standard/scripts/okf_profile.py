@@ -712,6 +712,14 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
     for v in r.validators:
         if v.get("types"):
             v["types"] = [canonical_type(r, t) for t in v["types"]]
+    # a question mapped to Type.field with local names stands for the declared type and field
+    for q in r.questions:
+        if isinstance(q.get("field"), str) and "." in q["field"]:
+            t, f = q["field"].split(".", 1)
+            f = r.aliases["fields"][f]["to"] if f in r.aliases["fields"] else f
+            declared = f"{canonical_type(r, t)}.{f}"
+            if declared != q["field"]:
+                q["field_as_written"], q["field"] = q["field"], declared
     # 2. by_type, a type before its subtypes (then layer order), so the order of declaration does not matter
     entries = [(lay.source, tid, e or {}) for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
     entries.sort(key=lambda x: len(ancestors(r, x[1])))
@@ -877,7 +885,8 @@ def alias_keys(r: Resolved) -> set:
 
 
 def in_force(r: Resolved, path: str = "/") -> dict:
-    """Types allowed at a bundle path, each one's fields and requirements, rules and aliases, with sources."""
+    """Types allowed at a bundle path, each one's fields and requirements, rules, aliases and questions, with sources.
+    Questions are not scoped to a path: every question of every layer is in force, in merge order."""
     fams = families_at(r, path)
     allowed = list(r.types)
     for f in fams:
@@ -896,7 +905,8 @@ def in_force(r: Resolved, path: str = "/") -> dict:
     return {"path": path, "sources": r.sources, "families": [{"dir": f["dir"], "types": f["types"], "source": f["source"]}
                                                              for f in fams],
             "types_allowed": allowed, "types": types,
-            "rules": r.rules, "aliases": r.aliases, "validators": r.validators, "findings": r.findings}
+            "rules": r.rules, "aliases": r.aliases, "validators": r.validators, "questions": r.questions,
+            "findings": r.findings}
 
 
 def format_in_force(info: dict) -> str:
@@ -927,6 +937,11 @@ def format_in_force(info: dict) -> str:
             lines.append(f"alias ({kind[:-1]}) {name} → {a['to']}  [{a['source']}]")
     for a in info["aliases"]["values"]:
         lines.append(f"alias (value) {a['from']} → {a['to']}  [{a['source']}]")
+    for q in info["questions"]:
+        target = f"field {q['field']}" if "field" in q else f"concept {q['concept']}"
+        if q.get("field_as_written"):
+            target += f" (written {q['field_as_written']})"
+        lines.append(f"question {q['question']} → {target}  [{q['source']}]")
     for v in info["validators"]:
         lines.append(f"validator {v['name']}: {v['command']} (not run here)  [{v['source']}]")
     for f in info["findings"]:
@@ -1652,6 +1667,52 @@ def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_
     assert r.rules[-1]["when"] == {"type": "Client Meeting", "distillation_status": "distilled"}
     assert r.validators[0]["types"] == ["Client Meeting"]
     assert "Client Meeting" in in_force(r, "/base/clients/")["types_allowed"]
+
+
+_SHARED_Q = "questions:\n  - { question: \"Who owns each runbook?\", field: Runbook.owner }\n"
+_OWN_Q = ("extends: [/base/shared/profile.md]\n"
+          "questions:\n  - { question: \"How is the product deployed?\", concept: /base/architecture/deployment.md }\n")
+
+
+def _questions_bundle(tmp_path: Path) -> Path:
+    return _bundle(tmp_path, _OWN_Q, extra={"base/shared/profile.md": _profile_doc(_SHARED_Q)})
+
+
+def test_in_force_lists_the_questions_of_the_bundles_own_layer(tmp_path):
+    r = load_profile(_bundle(tmp_path, _OWN_Q.split("\n", 1)[1]), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    assert in_force(r)["questions"] == [{"question": "How is the product deployed?",
+                                         "concept": "/base/architecture/deployment.md", "source": OWN_REL}]
+
+
+def test_in_force_composes_the_questions_of_an_extended_layer_before_the_bundles_own(tmp_path):
+    r = load_profile(_questions_bundle(tmp_path), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    assert [(q["question"], q["source"]) for q in in_force(r)["questions"]] == [
+        ("Who owns each runbook?", "base/shared/profile.md"), ("How is the product deployed?", OWN_REL)]
+    # questions are not scoped to a path: the same list at any path
+    assert in_force(r, "/base/questions/")["questions"] == in_force(r)["questions"]
+
+
+def test_a_question_mapped_to_a_field_or_to_a_concept_keeps_its_target_in_text_and_json(tmp_path):
+    r = load_profile(_questions_bundle(tmp_path), builtin=_builtin(tmp_path))
+    by_field, by_concept = in_force(r)["questions"]
+    assert by_field == {"question": "Who owns each runbook?", "field": "Runbook.owner", "source": "base/shared/profile.md"}
+    assert by_concept["concept"] == "/base/architecture/deployment.md" and "field" not in by_concept
+    out = format_in_force(in_force(r))
+    assert "question Who owns each runbook? → field Runbook.owner  [base/shared/profile.md]" in out
+    assert "question How is the product deployed? → concept /base/architecture/deployment.md  [base/profile.md]" in out
+    assert json.loads(json.dumps(in_force(r), default=str))["questions"][0]["field"] == "Runbook.owner"
+
+
+def test_a_question_mapped_with_local_names_is_in_force_with_the_declared_type_and_field(tmp_path):
+    own = _OWN + "questions:\n  - { question: \"Which client was each meeting with?\", field: Reunión con cliente.cliente }\n"
+    r = load_profile(_bundle(tmp_path, own), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    q = in_force(r)["questions"][-1]
+    assert q["field"] == "Client Meeting.client" and q["field_as_written"] == "Reunión con cliente.cliente"
+    assert ("question Which client was each meeting with? → field Client Meeting.client "
+            "(written Reunión con cliente.cliente)") in format_in_force(in_force(r))
 
 
 if __name__ == "__main__":

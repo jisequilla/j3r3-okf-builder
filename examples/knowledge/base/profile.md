@@ -1,7 +1,7 @@
 ---
 type: Domain Profile
 title: Domain Profile of Demo Payments
-description: The taxonomy of the demo payments bundle, on top of the built-in Domain Profile; one local type for payments meetings, one family for open questions, one rule and its aliases.
+description: The taxonomy of the demo payments bundle, on top of the built-in Domain Profile; one local type for payments meetings, one family for open questions, one rule, two mapped questions and the bundle's local names.
 tags: [profile, taxonomy]
 status: draft
 extends: []
@@ -27,12 +27,17 @@ rules:
 validator: []
 questions:
   - { question: "How long must refund events be kept?", concept: /base/questions/refund-event-retention.md }
+  - { question: "Who answers for each runbook?", field: Runbook.owner }
 aliases:
-  types: { Reunión de pagos: Payments Meeting }
+  types: { Reunión de pagos: Payments Meeting, Fragmento: Knowledge Fragment }
   fields: { equipo: team }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T18:00:00Z }
+  values:
+    - { from: { ingerido: true }, to: { distillation_status: distilled } }
+    - { from: { ingerido: false }, to: { distillation_status: pending } }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T22:32:48Z }
 sources:
   - { id: refund-review, resource: /fragments/2026-11-02-refund-events-review.md, title: "Payments sync: refund events on the Kafka bus" }
+  - { id: dispute-window, resource: /fragments/2026-11-02-finance-dispute-window.md, title: "Finance chat: the refund dispute window" }
   - { id: domain-profile, resource: https://github.com/jisequilla/j3r3-okf-builder/blob/main/standard/OKF-STANDARD.md, title: "OKF standard §4.1: Domain Profile" }
 ---
 
@@ -53,6 +58,13 @@ The payments team meets every week, and what a reader of a fragment wants first 
 
 `Reunión de pagos` is a local name for `Payments Meeting`.
 
+# Local names
+
+Finance records its chats with the payments team in its own words: a fragment is a `Fragmento`, and whether it has been distilled is `ingerido`[^dispute-window]. Lint and the skills read them as the declared names:
+
+- `Fragmento` is a `Knowledge Fragment`, with every fragment check.
+- `ingerido: true` is `distillation_status: distilled`, and `ingerido: false` is `distillation_status: pending`.
+
 # Keys for every concept
 
 - `internal_notes` is forbidden: notes meant for the team only stay out of the bundle.
@@ -66,4 +78,5 @@ Open questions only, so the list of what the team does not know stays a list of 
 
 # Questions
 
-The open question on refund retention is answered at [its own concept](/base/questions/refund-event-retention.md).
+- How long refund events must be kept is answered at [its own concept](/base/questions/refund-event-retention.md).
+- Who answers for each runbook is answered from the frontmatter, by each `Runbook`'s `owner`; a runbook without one is the gap.

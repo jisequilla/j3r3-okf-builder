@@ -13,11 +13,11 @@ Creates a knowledge/3.0 bundle: `knowledge/` with `index.md` (declaring `okf_ver
 - `base/`, with its `index.md` and one typed directory per `--dirs` entry (`base/decisions/`, `base/systems/`...), each with its own `index.md`;
 - `projections/`, with only a `.gitkeep`: it is not OKF, has no `index.md` and the root `index.md` does not list it.
 
-The root `index.md` lists `fragments/` and `base/`; `base/index.md` lists the typed directories. No `conflict-log.md` is created: `okf-distill` creates it with the first conflict.
+The root `index.md` lists `fragments/` and `base/`; `base/index.md` lists the typed directories. No `conflict-log.md` is created: `okf-distill` creates it with the first conflict. No Domain Profile is created either: the bundle starts under the built-in one alone, and `okf-capture` writes `base/profile.md` from the `domain-profile.md` template when the person asks for one.
 
 ## Steps
 
-1. Find the repo root (where `.git/` or the `CLAUDE.md` is). If `knowledge/index.md` already exists, say so and read its `okf_profile` (missing means knowledge/2.0, the older profile):
+1. Find the repo root (where `.git/` or the `CLAUDE.md` is). If `knowledge/index.md` already exists, say so and read its OKF profile, `okf_profile` (missing means knowledge/2.0, the older OKF profile):
    - knowledge/3.0: ask whether to complete the structure (the script is idempotent: it doesn't overwrite without `--force`).
    - knowledge/2.0: do not run the script on it, since it would add `base/` beside the root typed directories and mix the two layouts. Offer the migration instead (`uv run "<skills>/okf-standard/scripts/okf_migrate.py" <root>/knowledge --profile knowledge/3.0 --dry-run`, then without `--dry-run` once the person confirms) and stop.
 2. Get the following from the user, or infer it from the repo (README, `package.json`, `pom.xml`, `pyproject.toml`, git remote); ask only for what can't be inferred:
@@ -25,7 +25,7 @@ The root `index.md` lists `fragments/` and `base/`; `base/index.md` lists the ty
    - `description`: one sentence.
    - `repo-url`: the git remote, if there is one.
    - `actor`: the user's `human:<id>` (derive it from `git config user.email` before the `@`; confirm).
-   - `dirs`: the typed directories under `base/`, all of the profile's by default. If the project clearly has no data or metrics (e.g. a library), propose leaving out `data,metrics,computations`.
+   - `dirs`: the typed directories under `base/`, all of the OKF profile's by default. If the project clearly has no data or metrics (e.g. a library), propose leaving out `data,metrics,computations`.
 3. Run:
    ```bash
    uv run "<skills>/okf-standard/scripts/okf_init.py" --root <root> \
