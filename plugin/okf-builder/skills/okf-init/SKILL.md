@@ -15,6 +15,8 @@ Creates a knowledge/3.0 bundle: `knowledge/` with `index.md` (declaring `okf_ver
 
 The root `index.md` lists `fragments/` and `base/`; `base/index.md` lists the typed directories. No `conflict-log.md` is created: `okf-distill` creates it with the first conflict. No Domain Profile is created either: the bundle starts under the built-in one alone, and `okf-capture` writes `base/profile.md` from the `domain-profile.md` template when the person asks for one.
 
+No `.okfignore` is created; when `knowledge/` holds paths that are not part of the bundle (drafts, generated files), the person may add one at its root, gitignore-style globs that `okf-lint` does not read (standard §2).
+
 ## Steps
 
 1. Find the repo root (where `.git/` or the `CLAUDE.md` is). If `knowledge/index.md` already exists, say so and read its OKF profile, `okf_profile` (missing means knowledge/2.0, the older OKF profile):

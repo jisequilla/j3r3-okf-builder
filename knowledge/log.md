@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-03
+* **Update**: okf-lint judges only what it should (okf-flz.1): each finding names its rule layer (`spec`, `okf-profile`, `domain-profile`) with per-layer counts on the summary line and under `by_layer`; a foreign `okf_profile` gets spec checks only and one notice for what it skipped (`skipped` in `--json`); a root `.okfignore` (gitignore-style globs), a nested bundle (a subdirectory whose `index.md` declares `okf_version`) and a non-OKF directory are left out with a notice; a declared `okf_version` other than 0.1 or 0.2 is `UNSUPPORTED_OKF_VERSION`. Standard §2 and §7 describe them.
 * **Update**: okf-builder 0.8.0 released: Domain Profiles ([ADR-0026](/base/decisions/ADR-0026-built-in-domain-profile.md)): the standard's types as a built-in Domain Profile, a bundle's own `base/profile.md` with local types, families, rules, aliases, validators and mapped questions, lint checking each concept against the profile in force, `okf_lint --profiles` to show it, and the skills reading it; `owner` of operational concepts a string ([ADR-0027](/base/decisions/ADR-0027-owner-is-a-string-actor-stays-the-spec.md)).
 
 ## 2026-11-02
