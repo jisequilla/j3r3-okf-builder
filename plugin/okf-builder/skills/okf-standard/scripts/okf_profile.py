@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from okf_common import (PROFILE_30, V02_KEYS, Doc, declared_profile, find_bundle, parse_yaml,  # noqa: E402
+from okf_common import (PROFILE_30, SPEC_KEYS, Doc, declared_profile, find_bundle, parse_yaml,  # noqa: E402
                         split_frontmatter)
 
 FIELD_TYPES = ("string", "integer", "boolean", "date", "datetime", "date_or_datetime", "actor", "list", "enum", "path")
@@ -52,8 +52,6 @@ BY_TYPE_KEYS = {"required", "fixed", "forbidden", "values", "fields"}
 DOMAIN_PROFILE = "Domain Profile"
 OWN_REL = "base/profile.md"
 BUILTIN = "built-in"  # the source label of the built-in layer
-# the keys every concept may carry: the spec's (OKF v0.1 and v0.2) and those of the standard's §3.1
-SPEC_KEYS = frozenset({"type", "title", "description", "resource", "tags", "timestamp"}) | V02_KEYS
 BUILTIN_LABEL = "<skills>/okf-standard/profiles/knowledge-3.0.md"
 # scripts/ sits beside profiles/ in okf-standard. A copy without profiles/ reads BUILTIN_TEXT, the copy of that
 # file an exported package inlines here (tools/export_m365.py), and without either falls back to the names of §4
