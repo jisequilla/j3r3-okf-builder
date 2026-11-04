@@ -406,13 +406,17 @@ def _breach(fid: str, ftype: str, v, values: list, item: bool) -> str:
     return f"{label} '{v}' is not a {ftype} (§4.1)"
 
 
-def map_breaches(fid: str, keys: dict, v, item: bool) -> list[str]:
+def map_breaches(fid: str, keys: dict, v, item: bool, n: int = 0) -> list[str]:
     """What breaks a map field's declaration (§4.1): a value that is not a map, then each required key that is missing
     (a blank value included) and each key of another type, in declaration order. A key the declaration does not name
-    is not a breach."""
+    is not a breach. An empty map item of a list counts as a missing item: one breach naming it (n, from 1), when the
+    declaration requires a key."""
     label = f"an item of {fid}" if item else fid
     if not isinstance(v, dict):
         return [f"{label} '{v}' is not a map with {', '.join(keys)} (§4.1)"]
+    required = [k for k, kd in keys.items() if (kd or {}).get("required")]
+    if item and not v:
+        return [f"item {n} of {fid} is empty: it has no {', '.join(required)} (§4.1)"] if required else []
     out = []
     for k, kd in keys.items():
         kd = kd or {}
@@ -452,8 +456,9 @@ def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict
     under the generic PROFILE_* code with the source that declared it, the built-in layer included. Order: each required field that is missing, a blank value included, in declaration order; then each
     field's value in declaration order, each field followed by the rules whose first required field it is,
     and the rules that require no declared field; then fixed and forbidden keys, the types the covering
-    families allow, and, in a bundle with a base/profile.md, the keys no layer declares. A blank value of a
-    scalar field reported as missing is not checked again. A list is checked item by item, a single value as
+    families allow, and, in a bundle with a base/profile.md, the keys no layer declares. A blank value (empty
+    text, list or map) counts as missing: reported as missing when the field is required, no finding when it is
+    optional, and never checked against the field's type. A list is checked item by item, a single value as
     a one-item list. A type no layer declares gets only fixed, forbidden, rules and the families' types. In a
     bundle without a base/profile.md the built-in profile's items without a code are not reported."""
     fields, required, own = force["fields"], force["required"], prof.has_own
@@ -487,12 +492,12 @@ def check_profile_fields(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict
         v = fm.get(fid)
         item = d.get("type") == "list"
         reported_missing = fid in required and _checked(required[fid], own) and _blank(v)
-        if _checked(d, own) and v is not None and (item or not reported_missing):
+        if _checked(d, own) and not _blank(v) and (item or not reported_missing):
             ftype = d.get("of") if item else d.get("type")
             values = [x["value"] for x in d.get("values") or []]
-            for x in (as_list(v) if item else [v]):
+            for n, x in enumerate(as_list(v) if item else [v], 1):
                 if ftype == "map":
-                    for msg in map_breaches(fid, d.get("keys") or {}, x, item):
+                    for msg in map_breaches(fid, d.get("keys") or {}, x, item, n):
                         rep.add(_lvl(d).upper(), d.get("code") or "PROFILE_FIELD_TYPE", doc.rel, msg,
                                 None if d.get("code") else d["source"])
                     continue
@@ -766,6 +771,18 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _beside_fragment(doc: Doc, root: Path, path: str) -> str | None:
+    """The bundle path of a file named by path relative to the fragment's own directory, when one is there: the likely
+    meaning of a material path written relative to the fragment instead of the bundle root. Only checked, never read."""
+    if path.strip().startswith("/"):
+        return None
+    try:
+        near = (doc.path.parent / path.strip()).resolve()
+        return near.relative_to(root).as_posix() if near.is_file() else None
+    except (ValueError, OSError, RuntimeError):
+        return None
+
+
 def check_material(doc: Doc, fm: dict, bundle: Path, rep: Report, nested: list[str] = ()) -> None:
     """FRAGMENT_MATERIAL_CHANGED (error, okf-profile): a well-formed material item (a text path, a 64-hex sha256) of a
     Knowledge Fragment whose file, in the bundle, hashes to another SHA-256. The path is a bundle path or relative to the
@@ -778,7 +795,12 @@ def check_material(doc: Doc, fm: dict, bundle: Path, rep: Report, nested: list[s
         path, want = x.get("path"), x.get("sha256")
         if not (isinstance(path, str) and path.strip() and isinstance(want, str) and SHA256_RE.fullmatch(want)):
             continue  # BAD_MATERIAL, or a missing key, already says what is wrong; nothing is hashed
-        target = (root / path.strip().lstrip("/")).resolve()
+        absent = f"{doc.rel}: material {path} is not in the bundle: its sha256 is not checked"
+        try:
+            target = (root / path.strip().lstrip("/")).resolve()
+        except (ValueError, OSError, RuntimeError):  # a path the system rejects (a NUL byte), a symbolic-link loop
+            rep.notices.append(absent)
+            continue
         try:
             rel = target.relative_to(root).as_posix()
         except ValueError:
@@ -789,10 +811,15 @@ def check_material(doc: Doc, fm: dict, bundle: Path, rep: Report, nested: list[s
             rep.notices.append(f"{doc.rel}: material {path} is in the nested bundle {inner}, outside this one, not "
                                "read: its sha256 is not checked")
             continue
-        if not target.is_file():
-            rep.notices.append(f"{doc.rel}: material {path} is not in the bundle: its sha256 is not checked")
+        try:
+            have = _sha256(target) if target.is_file() else None
+        except (ValueError, OSError):
+            have = None
+        if have is None:
+            near = _beside_fragment(doc, root, path)
+            rep.notices.append(absent + (f"; paths are relative to the bundle root: did you mean {near}?" if near
+                                         else ""))
             continue
-        have = _sha256(target)
         if have != want.lower():
             rep.add("ERROR", "FRAGMENT_MATERIAL_CHANGED", doc.rel,
                     f"material {path} has SHA-256 {have}, and the fragment records {want}: the record's source was "
@@ -3589,6 +3616,60 @@ def test_bad_repository_is_one_warning_per_breach(tmp_path):
     for n, (fields, msg) in enumerate(cases.items()):
         rep = lint(_material_bundle(tmp_path / str(n), fields))[0]
         assert [(i["level"], i["code"], i["message"]) for i in rep.items] == [("WARN", "BAD_REPOSITORY", msg)], fields
+
+
+def test_a_material_path_the_system_rejects_is_the_absent_notice_and_never_read(tmp_path, monkeypatch):
+    import okf_lint
+
+    k = _material_bundle(tmp_path, f"material:\n  - {{ path: \"a\\0b.txt\", sha256: \"{_MATERIAL_SHA}\" }}\n")
+    hashed = []
+    monkeypatch.setattr(okf_lint, "_sha256", lambda p: hashed.append(p) or "f" * 64)
+    rep = lint(k)[0]
+    assert rep.items == [] and hashed == []
+    assert [n for n in rep.notices if n.startswith(_FRAGMENT)] == [
+        f"{_FRAGMENT}: material a\0b.txt is not in the bundle: its sha256 is not checked"]
+
+
+def test_a_material_file_that_cannot_be_read_is_the_absent_notice(tmp_path, monkeypatch):
+    import okf_lint
+
+    def denied(p):
+        raise PermissionError(13, "Permission denied", str(p))
+
+    k = _material_bundle(tmp_path)
+    monkeypatch.setattr(okf_lint, "_sha256", denied)
+    rep = lint(k)[0]
+    assert rep.items == [] and [n for n in rep.notices if n.startswith(_FRAGMENT)] == [
+        f"{_FRAGMENT}: material {_MATERIAL_REL} is not in the bundle: its sha256 is not checked"]
+
+
+def test_a_single_map_under_material_is_a_one_item_list_hashed_and_checked(tmp_path):
+    one = f"material: {{ path: {_MATERIAL_REL}, sha256: \"{_MATERIAL_SHA}\" }}\n"
+    assert lint(_material_bundle(tmp_path / "ok", one))[0].items == []
+    rep = lint(_material_bundle(tmp_path / "changed", one, changed=True))[0]
+    assert [(i["level"], i["code"]) for i in rep.items] == [("ERROR", "FRAGMENT_MATERIAL_CHANGED")]
+    bad = f"material: {{ path: {_MATERIAL_REL}, sha256: \"abc123\" }}\n"
+    rep = lint(_material_bundle(tmp_path / "bad", bad, changed=True))[0]
+    assert [(i["level"], i["code"], i["message"]) for i in rep.items] == [
+        ("WARN", "BAD_MATERIAL", f"material {_MATERIAL_REL}: sha256 'abc123' is not 64 hexadecimal digits, a SHA-256")]
+
+
+def test_an_empty_map_counts_as_missing(tmp_path):
+    for n, fields in enumerate(("repository: {}\n", "material: {}\n", "material: []\n")):
+        assert lint(_material_bundle(tmp_path / str(n), fields))[0].items == [], fields
+    fields = f"material:\n  - {{ path: {_MATERIAL_REL}, sha256: \"{_MATERIAL_SHA}\" }}\n  - {{}}\n"
+    rep = lint(_material_bundle(tmp_path / "item", fields))[0]
+    assert [(i["level"], i["code"], i["message"]) for i in rep.items] == [
+        ("WARN", "BAD_MATERIAL", "item 2 of material is empty: it has no path, sha256 (§4.1)")]
+
+
+def test_an_absent_material_file_beside_the_fragment_is_named_in_the_notice(tmp_path):
+    name = _MATERIAL_REL.split("/")[-1]
+    k = _material_bundle(tmp_path, f"material:\n  - {{ path: {name}, sha256: \"{_MATERIAL_SHA}\" }}\n")
+    rep = lint(k)[0]
+    assert rep.items == [] and [n for n in rep.notices if n.startswith(_FRAGMENT)] == [
+        f"{_FRAGMENT}: material {name} is not in the bundle: its sha256 is not checked; paths are relative to the "
+        f"bundle root: did you mean {_MATERIAL_REL}?"]
 
 
 def test_a_repository_cited_through_sources_is_not_a_repository_field(tmp_path):
