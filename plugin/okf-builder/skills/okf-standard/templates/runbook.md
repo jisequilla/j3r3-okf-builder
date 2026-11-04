@@ -12,13 +12,13 @@ generated: { by: {{actor}}, at: {{now}} }
 
 # Trigger
 
-{{Alert, symptom or event that starts this runbook. Link to the system: [X](/base/systems/x.md).}}
+{{Alert, symptom or event that starts this runbook. Link to the system, /base/systems/<name>.md.}}
 
 # Impact
 
 # Diagnosis
 
-1. Check ...
+1. Check: ...
 2. ...
 
 # Resolution steps

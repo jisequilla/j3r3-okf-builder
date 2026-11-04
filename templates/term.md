@@ -13,10 +13,10 @@ generated: { by: {{actor}}, at: {{now}} }
 
 # Synonyms and related terms
 
-- Synonyms:
-- Not to be confused with: [other term](/base/domain/other-term.md)
+- Synonyms: ...
+- Not to be confused with: ...
 
 # Where it appears
 
-* [Table](/base/data/....md) · column `...`
-* [API](/base/apis/....md) · field `...`
+* {{Table: a link to /base/data/<name>.md and its column}}
+* {{API: a link to /base/apis/<name>.md and its field}}
