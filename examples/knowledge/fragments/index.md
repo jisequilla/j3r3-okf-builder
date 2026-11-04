@@ -4,6 +4,7 @@
 
 * [2026-10-28 · Finance chat: asking for the refund dispute window](2026-10-28-finance-dispute-window-ask.md) - A short fictional chat in which María asks finance how long a refund can be disputed and Lucía takes it to check, recorded and distilled with the bundle's local names. _(draft)_
 * [2026-11-02 · Finance chat: the refund dispute window](2026-11-02-finance-dispute-window.md) - A short fictional chat in which finance gives María the dispute window of a refund, recorded with the bundle's local names for a fragment and its distillation state. _(draft)_
+* [2026-11-03 · Platform chat: the retention of the refunds topic](2026-11-03-refund-topic-retention-chat.md) - A short fictional chat in which Tomás and María weigh keeping refund events 7 or 120 days, recorded from a chat export kept beside it with its SHA-256. _(draft)_
 
 # Knowledge Fragment
 

@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-04
+* **Creation**: [Platform chat: the retention of the refunds topic](/fragments/2026-11-03-refund-topic-retention-chat.md), a fictional chat captured as a Fragmento (ingerido: false) from a text export kept beside it, `fragments/2026-11-03-refund-topic-retention-chat.txt`, named with its SHA-256 in `material` so lint checks that the source was not altered after capture.
 * **Update**: [Demo Payments](/project.md) is written the way okf_init now writes a project.md: Purpose holds the description, and the sections and rows nobody filled (Scope, Team and ownership, the empty Key links rows) are removed instead of kept as placeholders (SECTION_EMPTY).
 
 ## 2026-11-02

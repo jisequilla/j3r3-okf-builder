@@ -40,13 +40,16 @@ sys.path.insert(0, str(Path(__file__).parent))
 from okf_common import (PROFILE_30, SPEC_KEYS, Doc, declared_profile, find_bundle, parse_yaml,  # noqa: E402
                         split_frontmatter)
 
-FIELD_TYPES = ("string", "integer", "boolean", "date", "datetime", "date_or_datetime", "actor", "list", "enum", "path")
+FIELD_TYPES = ("string", "integer", "boolean", "date", "datetime", "date_or_datetime", "actor", "list", "enum", "path",
+               "map")
+KEY_TYPES = ("string", "integer", "boolean", "date", "datetime", "date_or_datetime", "actor", "enum", "path")
 LEVELS = ("error", "warn")
 RANK = {"warn": 0, "error": 1}
 PROFILE_KEYS = ("extends", "types", "families", "forbidden", "fixed", "by_type", "rules", "validator", "questions",
                 "aliases")
 TYPE_KEYS = {"extends", "description", "fields", "directory", "note"}
-FIELD_KEYS = {"type", "of", "values", "required", "level", "code", "note"}
+FIELD_KEYS = {"type", "of", "values", "keys", "required", "level", "code", "note"}
+MAP_KEY_KEYS = {"type", "values", "required", "note"}  # a key of a map field: one level deep, its breaches the field's
 FAMILY_KEYS = {"types", "required", "fixed", "forbidden", "fields", "description", "note"}
 BY_TYPE_KEYS = {"required", "fixed", "forbidden", "values", "fields"}
 DOMAIN_PROFILE = "Domain Profile"
@@ -100,6 +103,10 @@ def _check_field(fid: str, d: Any, where: str, errs: list[str]) -> None:
         errs.append(f"{w}: a list needs 'of', the field type of each item")
     if ft != "list" and "of" in d:
         errs.append(f"{w}: 'of' applies to a list only")
+    if ft == "map" or (ft == "list" and d.get("of") == "map"):
+        _check_map_keys(d.get("keys"), w, errs)
+    elif "keys" in d:
+        errs.append(f"{w}: 'keys' applies to a map, or a list of map, only")
     if ft == "enum" and not (isinstance(d.get("values"), list) and d["values"]):
         errs.append(f"{w}: an enum needs a non-empty 'values'")
     if ft != "enum" and "values" in d:
@@ -113,6 +120,35 @@ def _check_field(fid: str, d: Any, where: str, errs: list[str]) -> None:
             errs.append(f"{w}.required: unknown key(s) {', '.join(extra)}")
         _level_ok(req, f"{w}.required", errs)
     _level_ok(d, w, errs)
+
+
+def _check_map_keys(keys: Any, w: str, errs: list[str]) -> None:
+    """The keys of a map field: each one a field definition of a scalar type with its own required (true or false);
+    one level deep, so a key is never a map or a list, and its level and code are the field's."""
+    if not (_is_map(keys) and keys):
+        errs.append(f"{w}: a map needs 'keys', a map key → {{ type, required }}")
+        return
+    for k, kd in keys.items():
+        kw = f"{w}.keys.{k}"
+        if not _is_map(kd):
+            errs.append(f"{kw}: a key is a map with 'type'")
+            continue
+        why = []  # one message per key: a key declared as a map or a list breaks its type and its keys at once
+        if kd.get("type") not in KEY_TYPES:
+            why.append(f"key type '{kd.get('type')}' is not one of {', '.join(KEY_TYPES)} (one level deep: a key is "
+                       "never a map or a list)")
+        extra = sorted(set(kd) - MAP_KEY_KEYS)
+        if extra:
+            why.append(f"unknown key(s) {', '.join(extra)} (a key takes type, values, required and note; its level "
+                       "and code are the field's)")
+        if kd.get("type") == "enum" and not (isinstance(kd.get("values"), list) and kd["values"]):
+            why.append("an enum needs a non-empty 'values'")
+        if kd.get("type") != "enum" and "values" in kd:
+            why.append("'values' applies to an enum only")
+        if not isinstance(kd.get("required", False), bool):
+            why.append("required is true or false")
+        if why:
+            errs.append(f"{kw}: {'; '.join(why)}")
 
 
 def _check_required(v: Any, where: str, errs: list[str]) -> None:
@@ -622,6 +658,8 @@ def _field_change(old: dict, new: dict) -> str:
         gone = [str(v["value"]) for v in old.get("values") or [] if v["value"] not in (new["values"] or [])]
         if gone:
             parts.append(f"removes value(s) {', '.join(gone)}")
+    if "keys" in new and new["keys"] != old.get("keys"):
+        parts.append("changes its keys")
     if new.get("level") in RANK and RANK[new["level"]] < RANK[old.get("level", "error")]:
         parts.append(f"lowers its level from {old.get('level', 'error')} to {new['level']}")
     return (": " + "; ".join(parts)) if parts else ""
@@ -998,6 +1036,10 @@ def format_in_force(info: dict) -> str:
         lines.append(f"type {t}{ext}  [{ti['source']}]")
         for fid, fd in ti["fields"].items():
             kind = fd.get("type", "?") + (f" of {fd['of']}" if fd.get("of") else "")
+            if isinstance(fd.get("keys"), dict):
+                kind += " {" + ", ".join(f"{k}: {(kd or {}).get('type', '?')}" + (" (required)" if (kd or {}).get("required")
+                                                                                   else "")
+                                         for k, kd in fd["keys"].items()) + "}"
             if fd.get("values"):
                 kind += " [" + ", ".join(f"{v['value']}" + ("" if v["source"] == fd["source"] else f" ({v['source']})")
                                          for v in fd["values"]) + "]"
@@ -1918,6 +1960,70 @@ def test_a_question_mapped_with_local_names_is_in_force_with_the_declared_type_a
     assert q["field"] == "Client Meeting.client" and q["field_as_written"] == "Reunión con cliente.cliente"
     assert ("question Which client was each meeting with? → field Client Meeting.client "
             "(written Reunión con cliente.cliente)") in format_in_force(in_force(r))
+
+
+_MAP_FIELDS = ("types:\n  Site Visit:\n    extends: Knowledge Fragment\n    fields:\n"
+               "      site: { type: map, keys: { name: { type: string, required: true }, floor: { type: integer } } }\n"
+               "      photos: { type: list, of: map, level: warn, keys: { file: { type: path, required: true }, "
+               "kind: { type: enum, values: [jpg, png] } } }\n")
+
+
+def test_a_map_field_declares_scalar_keys_one_level_deep(tmp_path):
+    r = load_profile(_bundle(tmp_path / "ok", _MAP_FIELDS), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    photos = type_in_force(r, "Site Visit")["fields"]["photos"]
+    assert photos["of"] == "map" and photos["keys"]["file"] == {"type": "path", "required": True}
+    m = "types:\n  T:\n    fields:\n      f: { type: map, keys: { k: %s } }\n"
+    cases = {
+        "a map without keys": "types:\n  T:\n    fields:\n      f: { type: map }\n",
+        "a list of map without keys": "types:\n  T:\n    fields:\n      f: { type: list, of: map }\n",
+        "keys on a string": "types:\n  T:\n    fields:\n      f: { type: string, keys: { k: { type: string } } }\n",
+        "a key that is a map": m % "{ type: map, keys: { x: { type: string } } }",
+        "a key that is a list": m % "{ type: list, of: string }",
+        "a key with its own level": m % "{ type: string, level: warn }",
+        "a key with its own code": m % "{ type: string, code: X }",
+        "a key of an unknown type": m % "{ type: text }",
+        "a key whose required is a map": m % "{ type: string, required: { level: warn } }",
+        "an enum key without values": m % "{ type: enum }",
+        "a key that is not a map": m % "string",
+    }
+    for n, (case, own) in enumerate(cases.items()):
+        f = _one(load_profile(_bundle(tmp_path / str(n), own), builtin=_builtin(tmp_path)), "PROFILE_INVALID")
+        assert f["path"] == OWN_REL and "types.T.fields.f" in f["message"], (case, f)
+
+
+def test_changing_the_keys_of_an_inherited_map_field_is_redefined(tmp_path):
+    own = (_MAP_FIELDS + "by_type:\n  Site Visit: { fields: { site: { type: map, keys: "
+           "{ name: { type: string, required: true }, room: { type: string } } } } }\n")
+    f = _one(load_profile(_bundle(tmp_path, own), builtin=_builtin(tmp_path)), "PROFILE_REDEFINED")
+    assert "declares field 'site' again" in f["message"] and "changes its keys" in f["message"], f
+
+
+def test_in_force_lists_the_keys_of_a_map_field(tmp_path):
+    r = load_profile(_bundle(tmp_path, _MAP_FIELDS), builtin=_builtin(tmp_path))
+    out = format_in_force(in_force(r))
+    assert "  field site: map {name: string (required), floor: integer}, level error  [base/profile.md]" in out
+    assert "  field photos: list of map {file: path (required), kind: enum}, level warn  [base/profile.md]" in out
+    data = json.loads(json.dumps(in_force(r), default=str))
+    assert data["types"]["Site Visit"]["fields"]["site"]["keys"]["name"] == {"type": "string", "required": True}
+
+
+def test_the_shipped_builtin_profile_declares_material_and_repository_as_maps():
+    import pytest
+
+    if not BUILTIN_PATH.is_file():
+        pytest.skip("okf-standard's profiles/ not beside this script")
+    fields = type_in_force(load_profile(Path("/nonexistent"), read_own=False), "Knowledge Fragment")["fields"]
+    material, repository = fields["material"], fields["repository"]
+    assert (material["type"], material["of"], material["code"], material["level"]) == ("list", "map", "BAD_MATERIAL",
+                                                                                         "warn")
+    assert {k: (d["type"], d["required"]) for k, d in material["keys"].items()} == {
+        "path": ("string", True), "sha256": ("string", True)}
+    assert (repository["type"], repository["code"], repository["level"]) == ("map", "BAD_REPOSITORY", "warn")
+    assert {k: (d["type"], d["required"]) for k, d in repository["keys"].items()} == {
+        "url": ("string", True), "commit": ("string", True)}
+    assert "material" not in type_in_force(load_profile(Path("/nonexistent"), read_own=False), "Knowledge Fragment")[
+        "required"]
 
 
 if __name__ == "__main__":
