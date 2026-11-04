@@ -40,7 +40,7 @@ test:
 	grep -q '\*\*Migration\*\*' /tmp/okf-m1/log.md
 	uv run -q $(S)/okf_migrate.py examples/fixtures/google-acme-retail-v0.2 --to 0.1 --keep-extensions --out /tmp/okf-m2 >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m2 --no-profile | tail -1
 	uv run -q $(S)/okf_migrate.py /tmp/okf-m2 --to 0.2 --out /tmp/okf-m3 --force >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m3 --no-profile --strict | tail -1
-	@echo "[5b] profile migration knowledge/2.0→3.0 of the fixture examples/fixtures/knowledge-2.0 (2 known warnings: 0 errors)"
+	@echo "[5b] profile migration knowledge/2.0→3.0 of the fixture examples/fixtures/knowledge-2.0, the frozen copy (0 errors; its 5 known warnings: BROKEN_LINK and VERIFIED_STALE on ADR-0001, STALE, SECTION_EMPTY x2 on project.md)"
 	rm -rf /tmp/okf-p3 && uv run -q $(S)/okf_migrate.py examples/fixtures/knowledge-2.0 --profile knowledge/3.0 --out /tmp/okf-p3 >/dev/null
 	uv run -q $(S)/okf_lint.py /tmp/okf-p3 | tail -1 | grep ' 0 errors'
 	test -d /tmp/okf-p3/base/decisions && test ! -e /tmp/okf-p3/decisions && grep -q 'knowledge/3.0' /tmp/okf-p3/index.md && grep -q '\*\*Migration\*\*' /tmp/okf-p3/log.md

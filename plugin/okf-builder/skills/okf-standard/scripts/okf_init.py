@@ -38,6 +38,7 @@ from okf_common import (  # noqa: E402
     now_iso,
     parse_yaml,
     placeholder_line,
+    scan_body,
     split_frontmatter,
     table_cells,
 )
@@ -86,13 +87,18 @@ def set_section(text: str, title: str, content: str) -> str:
 def prune_unfilled(text: str) -> str:
     """A rendered template without what was left unfilled: each placeholder line (placeholder_line) goes, a table
     left with its header alone goes with it, and then each section with no content left (content_lines), its
-    heading included. The frontmatter is kept as it is."""
+    heading included. Code fences and HTML comments are kept as they are, and so is the frontmatter."""
     head, sep, body = text.partition("\n---\n") if text.startswith("---\n") else ("", "", text)
     lines = body.split("\n")
+    hidden = [b.code or b.in_comment for b in scan_body(lines)]
     kept: list[str] = []
     i = 0
     while i < len(lines):
         line = lines[i]
+        if hidden[i]:
+            kept.append(line)
+            i += 1
+            continue
         is_header = table_cells(line) is not None and i + 1 < len(lines) and bool(TABLE_SEP_RE.match(lines[i + 1]))
         if is_header:
             j = i + 2
@@ -286,6 +292,13 @@ def test_prune_unfilled_drops_placeholder_lines_header_only_tables_and_emptied_s
     assert prune_unfilled(text) == ("---\ntype: Project\n---\n\n# Purpose\n\nKnown.\n\n# Links\n\n"
                                     "| Resource | URL |\n|---|---|\n| Repository | https://x |\n\n# Notes\n\n## Kept\n\n"
                                     "Text.\n")
+
+
+def test_prune_unfilled_keeps_content_that_holds_braces_code_and_comments():
+    text = ("# Purpose\n\nThe chart sets `{{ .Values.image.tag }}` from CI.\n\n# Scope\n\nJinja uses {{ }} delimiters\n"
+            "run: echo ${{ secrets.DEPLOY_KEY }}\n\n# Build\n\n```yaml\nimage: {{tag}}\n- ...\n```\n\n"
+            "# Notes\n\n<!--\n{{later}}\n-->\nKept.\n")
+    assert prune_unfilled(text) == text
 
 
 def test_does_not_overwrite_without_force(tmp_path):

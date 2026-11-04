@@ -644,6 +644,12 @@ def _citing(d: Doc, layered: bool, prof: Resolved | None) -> bool:
     return d.rel.startswith(BASE_DIR + "/") if layered else d.rel != "project.md"
 
 
+def _is_fragment(fm: dict, prof: Resolved | None) -> bool:
+    """A Knowledge Fragment, its type resolved through the Domain Profile (an alias, a local type extending it)."""
+    t = str(fm.get("type"))
+    return is_a(prof, t, "Knowledge Fragment") if prof is not None else t == "Knowledge Fragment"
+
+
 def check_fragments_cited(docs: list[Doc], bundle: Path, prof: Resolved | None, rep: Report, layered: bool) -> None:
     """A distilled Knowledge Fragment (aliases resolved) that no concept cites: a body link, a sources entry or an
     Open Question's asked_in pointing at it, from a file _citing reads."""
@@ -665,9 +671,7 @@ def check_fragments_cited(docs: list[Doc], bundle: Path, prof: Resolved | None, 
         if not d.rel.startswith(FRAGMENTS_DIR + "/") or d.is_reserved or not d.frontmatter:
             continue
         fm = resolve_aliases(prof, d.frontmatter) if prof is not None else d.frontmatter
-        t = str(fm.get("type"))
-        is_fragment = is_a(prof, t, "Knowledge Fragment") if prof is not None else t == "Knowledge Fragment"
-        if is_fragment and str(fm.get("distillation_status")) == "distilled" and d.path.resolve() not in cited:
+        if _is_fragment(fm, prof) and str(fm.get("distillation_status")) == "distilled" and d.path.resolve() not in cited:
             rep.add("WARN", "FRAGMENT_UNCITED", d.rel, "distilled, but no concept cites it: no file under base/ nor the "
                     "Conflict Log links to it, lists it in sources or names it in asked_in; cite it where its "
                     "knowledge went")
@@ -698,43 +702,84 @@ _LEAK_PATTERNS = (
     ("a Bearer token", re.compile(r"(?i)\bbearer\s+([A-Za-z0-9._~+/=-]{12,})")),
     ("an Authorization header value", re.compile(r"(?i)\bauthorization\s*:\s*(?:(?:basic|token)\s+)?([A-Za-z0-9._~+/=-]{12,})")),
 )
-_LEAK_KEY = re.compile(r"(?i)(?<![\w.-])([\w.-]*(?:token|key|password|passwd|secret)[\w.-]*)[\"']?\s*[:=]\s*(\S.*)")
+_LEAK_KEY = re.compile(r"(?i)(?<![\w.-])([\w.-]*(?:token|key|password|passwd|secret)[\w.-]*)[\"']?\s*[:=]\s*")
+_SECRET_NAME = re.compile(r"(?i)token|password|passwd|secret")  # a key that names a credential, not just a key
 _SLUG = re.compile(r"(?:[A-Za-z]+|[0-9]+)(?:[-_.,:](?:[A-Za-z]+|[0-9]+))*")  # words and numbers: a name, not a secret
 _HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")  # a git commit or a SHA-256 digest
+LEAK_MASK = "[masked]"
 
 
 def _mixed(v: str) -> bool:
     return bool(re.search(r"[A-Za-z]", v)) and bool(re.search(r"[0-9]", v))
 
 
-def _key_value(rest: str) -> str:
-    """The value after 'key:' or 'key=': a quoted string without its quotes, else the run up to a space, ',' or ';'."""
+def _key_value(rest: str) -> tuple[int, str]:
+    """Where the value after 'key:' or 'key=' starts in rest, and the value: a quoted string without its quotes, else
+    the run up to a space, ',', ';', a closing bracket or a quote."""
     if rest[:1] in "\"'":
         end = rest.find(rest[0], 1)
-        return rest[1:end] if end > 0 else rest[1:]
-    return re.match(r"[^\s,;]*", rest).group(0)
+        return 1, rest[1:end] if end > 0 else rest[1:]
+    return 0, re.match(r"[^\s,;)\]\"'<>]*", rest).group(0)
+
+
+def leak_spans(line: str) -> list[tuple[str, int, int]]:
+    """Each credential the line holds: what it is and where its value starts and ends. The patterns of _LEAK_PATTERNS
+    count as they match. A value after a key naming a token, key, password or secret counts only when it is 16+
+    characters, has no space, mixes letters and digits, and is none of: a path (holds '/'), a backtick span, a brace
+    or bracket value, a {{...}} placeholder or a $VARIABLE; nor, unless the key names a token, password or secret
+    (not just a key), words and numbers joined by - _ . , : (a slug, an ADR file name) or a 40/64-hex hash."""
+    out = []
+    for kind, rx in _LEAK_PATTERNS:
+        for m in rx.finditer(line):
+            g = m.lastindex or 0
+            out.append((kind, m.start(g), m.end(g)))
+    for m in _LEAK_KEY.finditer(line):
+        rest = line[m.end():]
+        if rest[:1] in "`{[$" or rest.startswith("{{"):
+            continue
+        off, v = _key_value(rest)
+        named = bool(_SECRET_NAME.search(m.group(1)))
+        if (len(v) >= 16 and " " not in v and _mixed(v) and "/" not in v and not v.startswith(("`", "{", "[", "$"))
+                and "{{" not in v and (named or not (_SLUG.fullmatch(v) or _HASH.fullmatch(v)))):
+            key = m.group(1)
+            kind = f"a value of '{key}'" if len(key) <= 32 else "a value of a key naming a token, key, password or secret"
+            out.append((kind, m.end() + off, m.end() + off + len(v)))
+    return out
 
 
 def leak_kind(line: str) -> str | None:
-    """What credential the line holds, or None. A value after a key naming a token, key, password or secret counts
-    only when it is 16+ characters, has no space, mixes letters and digits, and is none of: a path (holds '/'), a
-    backtick span, a brace or bracket value, a {{...}} placeholder, a $VARIABLE, words and numbers joined by - _ . , :
-    (a slug, an ADR file name) or a 40/64-hex hash."""
-    for kind, rx in _LEAK_PATTERNS:
-        for m in rx.finditer(line):
-            v = m.group(m.lastindex or 0)
-            if _mixed(v) or kind in ("a JSON Web Token", "an AWS access key id", "a Google API key", "a GitHub token"):
-                return kind
-    for m in _LEAK_KEY.finditer(line):
-        rest = m.group(2)
-        if rest[:1] in "`{[$" or "{{" in rest:
-            continue
-        v = _key_value(rest)
-        if (len(v) >= 16 and " " not in v and _mixed(v) and "/" not in v and not v.startswith(("`", "{", "[", "$"))
-                and "{{" not in v and not _SLUG.fullmatch(v) and not _HASH.fullmatch(v)):
-            key = m.group(1)
-            return f"a value of '{key}'" if len(key) <= 32 else "a value of a key naming a token, key, password or secret"
-    return None
+    """What credential the line holds (leak_spans), or None."""
+    spans = leak_spans(line)
+    return min(spans, key=lambda s: s[1])[0] if spans else None
+
+
+def mask_leaks(text: str) -> str:
+    """text with each value leak_spans finds, line by line, replaced by LEAK_MASK."""
+    out = []
+    for line in text.split("\n"):
+        spans = sorted((a, b) for _, a, b in leak_spans(line))
+        merged: list[list[int]] = []
+        for a, b in spans:
+            if merged and a <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], b)
+            else:
+                merged.append([a, b])
+        for a, b in reversed(merged):
+            line = line[:a] + LEAK_MASK + line[b:]
+        out.append(line)
+    return "\n".join(out)
+
+
+def redact_leaks(obj):
+    """obj (a finding, a notice, a --json payload) with every string in it, keys included, passed through mask_leaks:
+    no value SECRET_IN_BUNDLE flags reaches the output through another finding (a status, a link target, a path)."""
+    if isinstance(obj, str):
+        return mask_leaks(obj)
+    if isinstance(obj, dict):
+        return {redact_leaks(k): redact_leaks(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [redact_leaks(v) for v in obj]
+    return obj
 
 
 def check_secrets(docs: list[Doc], rep: Report) -> None:
@@ -757,7 +802,8 @@ def _is_concept(d: Doc, layered: bool) -> bool:
 
 
 def audit_metrics(docs: list[Doc], rep: Report, prof: Resolved | None, now: datetime, layered: bool) -> dict:
-    """The --json metrics: findings per code, concepts per trust level, fragments per distillation_status with the
+    """The --json metrics: findings per code, concepts per trust level, Knowledge Fragments (_is_fragment) per
+    distillation_status with the
     age in days of the oldest pending one (occurred_at, else generated.at), and stale_after_cluster when at least 4
     concepts have stale_after and more than a quarter of them fall in one ISO week (every such week)."""
     trust = {"unverified": 0, "machine-confirmed": 0, "human-reviewed": 0}
@@ -776,7 +822,7 @@ def audit_metrics(docs: list[Doc], rep: Report, prof: Resolved | None, now: date
             if sa is not None:
                 y, w, _ = sa.isocalendar()
                 weeks[f"{y}-W{w:02d}"] += 1
-        elif d.rel.startswith(FRAGMENTS_DIR + "/") and not d.is_reserved:
+        elif d.rel.startswith(FRAGMENTS_DIR + "/") and not d.is_reserved and _is_fragment(fm, prof):
             st = fm.get("distillation_status")
             by_status[str(st) if st is not None else "missing"] += 1
             if str(st) == "pending":
@@ -1025,6 +1071,8 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
         run_validators(bundle, docs, prof, rep, validators)
     if profile and foreign:
         rep.skip_profile_layers(declared)
+    rep.items, rep.skipped = redact_leaks(rep.items), redact_leaks(rep.skipped)
+    rep.notices, rep.ignored = redact_leaks(rep.notices), redact_leaks(rep.ignored)
     rep.metrics = audit_metrics(docs, rep, prof, now, declared == PROFILE_30)
     return rep, version, origin
 
@@ -1055,8 +1103,8 @@ def main(argv=None) -> int:
             return 2
         scan = scan_bundle(bundle)
         prof, findings, notices = profile_structure(bundle, scan.docs)
-        info = {**in_force(prof, bundle_path(bundle, args.profiles)), "findings": findings,
-                "notices": scan_notices(scan) + notices}
+        info = redact_leaks({**in_force(prof, bundle_path(bundle, args.profiles)), "findings": findings,
+                             "notices": scan_notices(scan) + notices})
         print(json.dumps(info, ensure_ascii=False, indent=2, default=str) if args.json else format_in_force(info))
         return 1 if findings else 0
 
@@ -1065,10 +1113,10 @@ def main(argv=None) -> int:
     n_docs = rep.concepts
     by_layer = rep.by_layer()
     if args.json:
-        print(json.dumps({"bundle": str(bundle), "okf_version": version, "version_origin": origin, "concepts": n_docs, "errors": len(rep.errors),
+        print(json.dumps(redact_leaks({"bundle": str(bundle), "okf_version": version, "version_origin": origin, "concepts": n_docs, "errors": len(rep.errors),
                           "warnings": len(rep.warns), "by_layer": by_layer, "profile_outdated": rep.profile_outdated,
                           "notices": rep.notices, "findings": rep.items, "skipped": rep.skipped, "ignored": rep.ignored,
-                          "metrics": rep.metrics},
+                          "metrics": rep.metrics}),
                          ensure_ascii=False, indent=2))
     else:
         for i in rep.items:
@@ -1079,7 +1127,7 @@ def main(argv=None) -> int:
             print(f"NOTICE {OUTDATED_NOTICE}")
         verdict = "CONFORMANT" if not rep.errors else "NOT CONFORMANT"
         layers = " · ".join(f"{x} {c['errors']}/{c['warnings']}" for x, c in by_layer.items())
-        print(f"\n{bundle}: OKF {version} ({origin}) · {n_docs} concepts · {len(rep.errors)} errors · "
+        print(f"\n{mask_leaks(str(bundle))}: OKF {version} ({origin}) · {n_docs} concepts · {len(rep.errors)} errors · "
               f"{len(rep.warns)} warnings ({layers}) → {verdict}")
     if rep.errors or (args.strict and rep.warns):
         return 1
@@ -2872,10 +2920,13 @@ def test_section_empty_reads_project_md_and_a_local_type_as_the_type_it_extends(
 
 def test_each_concept_template_left_unfilled_fires_section_empty(tmp_path):
     """Each template's sections, as okf-capture copies them before filling them in, hold only placeholder text but
-    for the tables, code and fixed text the template writes as content (listed here)."""
+    for the tables, code and fixed text the template writes as content (listed here); a {{...}} inside a line of
+    fixed text (api.md's Contract, reference.md's footnote, domain-profile.md's field list) is content too."""
     from okf_common import split_frontmatter
 
-    content = {"adr.md": {"# Alternatives considered"}, "api.md": {"# Main operations", "# Examples"},
+    content = {"adr.md": {"# Alternatives considered"}, "api.md": {"# Contract", "# Main operations", "# Examples"},
+               "domain-profile.md": {"# Types", "## Client Meeting"},
+               "reference.md": {"# Summary", "# Key points for this project"},
                "architecture-view.md": {"# View", "# Elements"}, "computation.md": {"# Computation"},
                "conflict-log.md": {"# How it is used", "# Conflicts"}, "fragment.md": {"# Distillation"},
                "project.md": {"# Team and ownership", "# Key links", "# Knowledge map"},
@@ -3071,6 +3122,140 @@ def test_json_metrics_count_reported_findings_only_not_skipped_ones(tmp_path, ca
     assert {i["code"] for i in data["skipped"]} >= {"FRAGMENT_UNCITED", "SECTION_EMPTY", "VERIFIED_STALE"}
     assert data["metrics"]["count_per_code"] == dict(Counter(i["code"] for i in data["findings"]))
     assert not set(data["metrics"]["count_per_code"]) & {"FRAGMENT_UNCITED", "SECTION_EMPTY", "VERIFIED_STALE"}
+
+
+# Fix round 1 of okf-flz.2 ------------------------------------------------------------------------------------------
+_FAKE_GHP = _FAKES["ghp"]
+_FAKE_QUERY = "Q9x7Lm2Pz4" + "Rt8Wv6Yb"  # 18 characters, letters and digits: a key = value secret
+
+
+def _outputs(capsys, k: Path) -> str:
+    """Everything lint prints for k: text, --json and --profiles --json."""
+    out = []
+    for args in ([str(k)], [str(k), "--json"], [str(k), "--profiles", "--json"], [str(k), "--profiles"]):
+        main(args)
+        out.append(capsys.readouterr().out)
+    return "\n".join(out)
+
+
+def test_a_value_secret_in_bundle_flags_is_masked_in_every_other_finding_in_text_and_json(tmp_path, capsys):
+    cases = {
+        "status": (_term(fields="").replace("status: draft\n", f"status: {_FAKE_GHP}\n"), "BAD_STATUS"),
+        "link query": (_term("# Definition\n\nA refund.\n\nSee [x](/base/systems/x.md?token=" + _FAKE_QUERY + ").\n"),
+                       "BROKEN_LINK"),
+        "path segment": (_term(f"# Definition\n\nA refund.\n\nSee [x](/base/{_FAKE_GHP}/x.md).\n"), "BROKEN_LINK"),
+    }
+    for n, (name, (text, code)) in enumerate(cases.items()):
+        k = _with_term(_bundle_30(_mkdir(tmp_path / str(n))), text)
+        codes = {i["code"] for i in lint(k)[0].items}
+        assert {"SECRET_IN_BUNDLE", code} <= codes, name
+        out = _outputs(capsys, k)
+        assert code in out and "[masked]" in out, name
+        assert _FAKE_GHP not in out and _FAKE_QUERY not in out and "A1b2C3d4A1b2" not in out, name
+
+
+def test_a_secret_in_a_file_name_is_masked_in_the_path_of_its_findings(tmp_path, capsys):
+    k = _bundle_30(_mkdir(tmp_path))
+    rel = f"base/domain/{_FAKE_GHP}.md"
+    _with_term(k, _term(), rel)
+    assert any(i["code"] == "NAME_KEBAB" for i in lint(k)[0].items)
+    out = _outputs(capsys, k)
+    assert "NAME_KEBAB" in out and _FAKE_GHP not in out
+    _write(k, ".okfignore", f"base/domain/{_FAKE_GHP}.md\n")
+    rep = lint(k)[0]
+    assert rep.ignored and _FAKE_GHP not in json.dumps(rep.ignored) + json.dumps(rep.notices)
+    assert _FAKE_GHP not in _outputs(capsys, k)
+
+
+def test_mask_leaks_masks_only_the_value():
+    assert mask_leaks("status 'x' and " + _FAKE_GHP + " here") == "status 'x' and [masked] here"
+    assert mask_leaks("/x.md?token=" + _FAKE_QUERY + ")") == "/x.md?token=[masked])"
+    assert mask_leaks("broken link: /base/decisions/ADR-0012-adopt-kafka.md") == (
+        "broken link: /base/decisions/ADR-0012-adopt-kafka.md")
+
+
+_HEX40 = "4f3c2b1a0e9d8c7b6a5f" * 2
+_HEX64 = "4f3c2b1a0e9d8c7b" * 4
+
+
+def test_a_key_naming_a_secret_password_or_token_fires_on_a_hash_or_a_slug():
+    for line in (f"client_secret: {_HEX40}", f"webhook_secret: {_HEX64}", "password: hunter-2024-spring-launch",
+                 f"api_token={_HEX40}"):
+        assert leak_kind(line), line
+    for line in (f"resolved_key: {_HEX40}", _HEX40, f"commit {_HEX64}", "decision_key: ADR-0012-adopt-kafka-2026",
+                 "* [ADR-0012](/base/decisions/ADR-0012-adopt-kafka-for-payment-events-2026.md) - The decision.",
+                 "Keys: `types`", "primary_key: id", "# key: { reason, level }"):
+        assert leak_kind(line) is None, line
+
+
+def test_bearer_authorization_and_prefixes_fire_without_digits_and_key_value_needs_16_mixed():
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    for line in ("Authorization: Bearer " + letters, "Authorization: " + letters, "sk" + "-" + letters,
+                 "gl" + "pat-" + letters, "xo" + "xb-" + letters, "xo" + "xp-" + letters):
+        assert leak_kind(line), line
+    for line in ("api_key: Ab12cd", "api_key: " + "Ab12cd34Ef56Gh7", "api_key: " + letters,
+                 "password: " + letters, "api_key: " + "1234567890123456"):
+        assert leak_kind(line) is None, line
+    assert leak_kind("api_key: " + "Ab12cd34Ef56Gh78")  # 16 characters, letters and digits
+
+
+def test_placeholder_line_is_a_whole_placeholder_not_one_in_code_or_after_a_dollar():
+    from okf_common import placeholder_line
+
+    for line in ("{{One unambiguous sentence.}}", "- {{item}}", "  {{later}}  ", "| Board | {{board_url}} |",
+                 "| | | | {{a link to a system}} |"):
+        assert placeholder_line(line), line
+    for line in ("The chart sets `{{ .Values.image.tag }}` from CI.", "Jinja uses {{ }} delimiters",
+                 "run: echo ${{ secrets.DEPLOY_KEY }}", "- `client`: {{why}}", "Canonical spec: `{{path}}`."):
+        assert not placeholder_line(line), line
+    body = ("# Definition\n\nThe chart sets `{{ .Values.image.tag }}` from CI.\n\n"
+            "# Synonyms and related terms\n\nJinja uses {{ }} delimiters\n\n# Where it appears\n\n${{ secrets.X }}\n")
+    rep = Report()
+    check_section_empty(Doc(Path("t.md"), "t.md", {"type": "Term"}, body), "Term", rep)
+    assert rep.items == []
+
+
+def test_body_sections_skip_headings_in_html_comments_and_code_fences():
+    from okf_common import body_sections
+
+    lines = ["# A", "<!--", "# Commented", "-->", "<!-- # inline -->", "````", "```", "# In code", "````",
+             "~~~", "# In tildes", "```", "~~~~", "# B", "```text", "# Fenced", "~~~", "```", "# C"]
+    assert [s.heading for s in body_sections(lines)] == ["# A", "# B", "# C"]
+    assert [s.end for s in body_sections(lines)] == [13, 18, 19]
+
+
+def test_a_commented_out_scope_block_is_not_a_section_and_its_section_is_empty(tmp_path):
+    k = _bundle_30(_mkdir(tmp_path))
+    _write(k, "project.md", "---\ntype: Project\ntitle: P\ndescription: P.\n" + _GEN
+           + "---\n\n# Purpose\n\nP.\n\n# Scope\n\n<!--\n# Scope\n\n- In scope: billing\n-->\n")
+    assert [(i["code"], i["path"], i["line"]) for i in lint(k)[0].items] == [("SECTION_EMPTY", "project.md", 12)]
+    _write(k, "project.md", "---\ntype: Project\ntitle: P\ndescription: P.\n" + _GEN
+           + "---\n\n# Purpose\n\nP.\n\n<!--\n# Scope\n\n- In scope: ...\n-->\n")
+    assert lint(k)[0].items == []
+
+
+def test_json_metrics_oldest_pending_is_the_oldest_of_several_pending_fragments(tmp_path, capsys):
+    k = _bundle_30(_mkdir(tmp_path))
+    old = (k / _FRAGMENT).read_text(encoding="utf-8").replace("occurred_at: 2026-10-31", "occurred_at: 2026-08-01")
+    _with_term(k, old, "fragments/2026-08-01-kickoff.md")
+    m = _metrics(capsys, k)
+    assert m["fragments"] == {"by_status": {"pending": 2},
+                              "oldest_pending_days": (datetime.now(timezone.utc).date() - date(2026, 8, 1)).days}
+
+
+def test_json_metrics_count_only_knowledge_fragments_and_concepts_outside_the_reserved_files(tmp_path, capsys):
+    k = _profiled(tmp_path / "30", "", extra={"fragments/notes.md": _term(), _TERM: _term()})
+    m = _metrics(capsys, k)
+    assert m["fragments"]["by_status"] == {"pending": 1}  # the Term under fragments/ is no Knowledge Fragment
+    assert m["concepts_by_trust"] == {"unverified": 1, "machine-confirmed": 0, "human-reviewed": 0}  # not profile.md
+    k = _fragment_bundle(_mkdir(tmp_path / "20"), _FRAGMENT_FIELDS)  # knowledge/2.0: every concept outside fragments/
+    _with_term(k, _term(), "decisions/a.md")
+    _with_term(k, _term(fields="verified: { by: human:alice, at: 2026-11-01T00:00:00Z }\n"), "loose.md")
+    m = _metrics(capsys, k)
+    assert m["concepts_by_trust"] == {"unverified": 1, "machine-confirmed": 0, "human-reviewed": 1}
+    assert m["fragments"]["by_status"] == {"pending": 1}
+
+
 
 
 if __name__ == "__main__":

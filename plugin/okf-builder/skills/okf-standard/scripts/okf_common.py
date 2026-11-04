@@ -260,11 +260,10 @@ def scan_bundle(bundle: Path) -> Scan:
 # Body sections and placeholder text (SECTION_EMPTY in okf_lint, the project.md okf_init writes)
 # --------------------------------------------------------------------------
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
-FENCE_RE = re.compile(r"^\s*(```|~~~)")
-PLACEHOLDER_RE = re.compile(r"\{\{.*?\}\}")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+PLACEHOLDER_RE = re.compile(r"\{\{[^{}]*\}\}")
 LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*?)\s*$")
 TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$")
-COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 
 
 @dataclass
@@ -279,15 +278,56 @@ class Section:
         return "#" * self.level + " " + self.title
 
 
-def body_sections(lines: list[str]) -> list[Section]:
-    """The '#' to '######' headings of a body outside code fences; a section runs to the next heading of the same
-    or a higher level, so a '#' section holds its '##' subsections."""
-    heads, fenced = [], False
-    for i, line in enumerate(lines):
-        if FENCE_RE.match(line):
-            fenced = not fenced
+@dataclass
+class BodyLine:
+    code: bool  # a code fence line or a line inside one
+    in_comment: bool  # the line starts inside an HTML comment
+    text: str  # the line without its parts inside HTML comments (a code line is kept whole)
+
+
+def scan_body(lines: list[str]) -> list[BodyLine]:
+    """Each line of a body read as Markdown: inside a code fence or not (a fence opened by n backticks or tildes
+    closes only on a line of at least n of the same character and nothing else), and outside a fence, what of it
+    lies outside HTML comments, which may span lines."""
+    out: list[BodyLine] = []
+    fence: tuple[str, int] | None = None
+    in_comment = False
+    for line in lines:
+        if fence is not None:
+            m = FENCE_RE.match(line)
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1] and not m.group(2).strip():
+                fence = None
+            out.append(BodyLine(True, False, line))
             continue
-        m = None if fenced else HEADING_RE.match(line)
+        m = None if in_comment else FENCE_RE.match(line)
+        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+            fence = (m.group(1)[0], len(m.group(1)))
+            out.append(BodyLine(True, False, line))
+            continue
+        starts_in, visible, pos = in_comment, [], 0
+        while True:
+            if in_comment:
+                end = line.find("-->", pos)
+                if end < 0:
+                    break
+                in_comment, pos = False, end + 3
+            else:
+                start = line.find("<!--", pos)
+                if start < 0:
+                    visible.append(line[pos:])
+                    break
+                visible.append(line[pos:start])
+                in_comment, pos = True, start + 4
+        out.append(BodyLine(False, starts_in, "".join(visible)))
+    return out
+
+
+def body_sections(lines: list[str]) -> list[Section]:
+    """The '#' to '######' headings of a body, outside code fences and HTML comments; a section runs to the next
+    heading of the same or a higher level, so a '#' section holds its '##' subsections."""
+    heads = []
+    for i, (line, b) in enumerate(zip(lines, scan_body(lines))):
+        m = None if b.code or b.in_comment else HEADING_RE.match(line)
         if m:
             heads.append((i, len(m.group(1)), m.group(2).strip()))
     out = []
@@ -305,35 +345,39 @@ def table_cells(line: str) -> list[str] | None:
     return [c.strip() for c in s.strip("|").split("|")]
 
 
+def _is_placeholder(text: str) -> bool:
+    """The whole text is one {{...}} placeholder, so not one inside a backtick span or after '$' (${{ secrets.X }})."""
+    return bool(PLACEHOLDER_RE.fullmatch(text.strip()))
+
+
 def placeholder_line(line: str) -> bool:
-    """Template text left unfilled: a line with a {{...}} placeholder, a list item whose text is '...' or ends with
-    ': ...', or a table row whose cells after the first are all empty. A line with a link is never placeholder, nor
-    is a table's separator row; a header row is told apart by placeholder_lines, which sees the next line."""
+    """Template text left unfilled: a line whose whole text, or a list item whose whole text, is a {{...}}
+    placeholder; a list item whose text is '...' or ends with ': ...'; or a table row whose cells after the first
+    are all empty or {{...}} placeholders. A line with a link is never placeholder, nor is a table's separator row; a
+    header row is told apart by content_lines, which sees the next line."""
     if LINK_RE.search(line) or TABLE_SEP_RE.match(line):
         return False
-    if PLACEHOLDER_RE.search(line):
+    if _is_placeholder(line):
         return True
     m = LIST_ITEM_RE.match(line)
-    if m and (m.group(1) == "..." or m.group(1).endswith(": ...")):
+    if m and (m.group(1) == "..." or m.group(1).endswith(": ...") or _is_placeholder(m.group(1))):
         return True
     cells = table_cells(line)
-    return cells is not None and len(cells) > 1 and not any(cells[1:])
+    return cells is not None and len(cells) > 1 and all(not c or _is_placeholder(c) for c in cells[1:])
 
 
 def content_lines(lines: list[str]) -> list[str]:
-    """The lines of a stretch of a body that are content: neither blank, nor headings, nor placeholder text (an
-    HTML comment is removed first). A table's header row and separator row are content, and so is a code fence."""
-    text = COMMENT_RE.sub("", "\n".join(lines)).split("\n")
-    out, fenced = [], False
-    for i, line in enumerate(text):
-        if FENCE_RE.match(line):
-            fenced = not fenced
+    """The lines of a stretch of a body that are content: neither blank, nor headings, nor placeholder text, once
+    their parts inside HTML comments are left out. A table's header row and separator row are content, and so is
+    each line of a code fence."""
+    scanned = scan_body(lines)
+    text = [b.text for b in scanned]
+    out = []
+    for i, (line, b) in enumerate(zip(text, scanned)):
+        if b.code:
             out.append(line)
             continue
-        if fenced:
-            out.append(line)
-            continue
-        if not line.strip() or HEADING_RE.match(line):
+        if not line.strip() or (not b.in_comment and HEADING_RE.match(line)):
             continue
         header = table_cells(line) is not None and i + 1 < len(text) and bool(TABLE_SEP_RE.match(text[i + 1]))
         if header or not placeholder_line(line):
