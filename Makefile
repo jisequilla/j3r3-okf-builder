@@ -24,6 +24,7 @@ test:
 	uv run -q --with pytest $(S)/okf_lint.py --test
 	uv run -q --with pytest $(S)/okf_profile.py --test
 	uv run -q --with pytest $(S)/okf_migrate.py --test
+	uv run -q --with pytest $(S)/okf_audit.py --test
 	@echo "[2] init 0.2 (profile knowledge/3.0) + index + lint --strict"
 	rm -rf /tmp/okf-test && uv run -q $(S)/okf_init.py --root /tmp/okf-test --title T --description D --actor human:test >/dev/null
 	uv run -q $(S)/okf_index.py /tmp/okf-test/knowledge --check && uv run -q $(S)/okf_lint.py /tmp/okf-test/knowledge --strict | tail -1
@@ -73,8 +74,8 @@ test:
 	$(MAKE) -s dogfood
 	@echo "OK"
 dogfood:
-	@echo "[9] dogfood state of $(EX): only its 4 known warnings; every fragment is a Knowledge Fragment with a distillation_status, aliases resolved; the mapped question Runbook.owner has exactly one gap"
-	uv run -q $(S)/okf_lint.py $(EX) --json | python3 -c "import json,sys; c=sorted(f['code'] for f in json.load(sys.stdin)['findings']); assert c == ['BROKEN_LINK', 'FRAGMENT_UNCITED', 'STALE', 'VERIFIED_STALE'], c; print('lint codes', c)"
+	@echo "[9] dogfood state of $(EX): only its 3 known warnings; every fragment is a Knowledge Fragment with a distillation_status, aliases resolved; the mapped question Runbook.owner has exactly one gap"
+	uv run -q $(S)/okf_lint.py $(EX) --json | python3 -c "import json,sys; c=sorted(f['code'] for f in json.load(sys.stdin)['findings']); assert c == ['BROKEN_LINK', 'STALE', 'VERIFIED_STALE'], c; print('lint codes', c)"
 	uv run -q $(S)/okf_lint.py $(EX) --profiles --json | uv run -q --with pyyaml python -c "import json,sys; from pathlib import Path; sys.path.insert(0,'$(S)'); import okf_profile as p, okf_common as c; q=[x for x in json.load(sys.stdin)['questions'] if x.get('field') == 'Runbook.owner']; assert len(q) == 1, 'no question mapped to Runbook.owner in --profiles'; b=Path('$(EX)'); r=p.load_profile(b); docs=[(d.rel, p.resolve_aliases(r, d.frontmatter)) for d in (c.load_doc(b, f) for f in sorted(b.glob('[bf]*/**/*.md'))) if d.frontmatter]; frags=[(rel, fm) for rel, fm in docs if rel.startswith('fragments/') and not rel.endswith(('index.md', 'log.md'))]; bad=[rel for rel, fm in frags if not p.is_a(r, str(fm.get('type')), 'Knowledge Fragment') or 'distillation_status' not in fm]; assert not bad, 'not read as a Knowledge Fragment with a distillation_status: ' + ', '.join(bad); runbooks=[(rel, fm) for rel, fm in docs if p.is_a(r, str(fm.get('type')), 'Runbook')]; gap=[rel for rel, fm in runbooks if fm.get('owner') in (None, '', [], {})]; assert gap == ['base/runbooks/consumer-lag-alert.md'], gap; print(len(frags), 'fragments read as Knowledge Fragments;', q[0]['question'], '->', len(runbooks), 'runbooks, gap', gap)"
 copilot:
 	python3 tools/export_copilot.py --zip
