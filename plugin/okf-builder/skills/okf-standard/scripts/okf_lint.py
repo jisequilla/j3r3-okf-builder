@@ -3232,6 +3232,9 @@ def test_a_commented_out_scope_block_is_not_a_section_and_its_section_is_empty(t
     _write(k, "project.md", "---\ntype: Project\ntitle: P\ndescription: P.\n" + _GEN
            + "---\n\n# Purpose\n\nP.\n\n<!--\n# Scope\n\n- In scope: ...\n-->\n")
     assert lint(k)[0].items == []
+    _write(k, "project.md", "---\ntype: Project\ntitle: P\ndescription: P.\n" + _GEN
+           + "---\n\n# Purpose\n\nP.\n\n# Scope\n\n<!--\n# Scope until 2026\n-->\n\nBilling only.\n")
+    assert lint(k)[0].items == []  # a commented-out heading does not end the section above it
 
 
 def test_json_metrics_oldest_pending_is_the_oldest_of_several_pending_fragments(tmp_path, capsys):
