@@ -18,7 +18,7 @@ C4Context
 
 | Element | Type | Responsibility | Concept |
 |---|---|---|---|
-| | | | [name](/base/systems/name.md) |
+| | | | {{a link to /base/systems/<name>.md}} |
 
 # Principles and constraints
 
@@ -26,4 +26,4 @@ C4Context
 
 # Related decisions
 
-* [ADR-0001](/base/decisions/ADR-0001-....md)
+* {{Decision: a link to /base/decisions/ADR-<nnnn>-<slug>.md}}

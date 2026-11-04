@@ -18,19 +18,19 @@ generated: { by: {{actor}}, at: {{now}} }
 
 | Direction | Counterpart | Protocol | Contract |
 |---|---|---|---|
-| Exposes | | REST | [API](/base/apis/....md) |
+| Exposes | | REST | {{a link to /base/apis/<name>.md}} |
 | Consumes | | | |
 
 # Dependencies
 
-* [Dataset](/base/data/....md)
-* [System](/base/systems/....md)
+* {{Dataset: a link to /base/data/<name>.md}}
+* {{System: a link to /base/systems/<name>.md}}
 
 # Operation
 
-* Runbooks: [Incident X](/base/runbooks/....md)
-* Dashboards:
-* Alerts:
+* Runbooks: ...
+* Dashboards: ...
+* Alerts: ...
 
 # Relevant configuration
 

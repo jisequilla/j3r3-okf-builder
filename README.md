@@ -81,6 +81,8 @@ uv run plugin/okf-builder/skills/okf-standard/scripts/okf_index.py knowledge [--
 uv run plugin/okf-builder/skills/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
 ```
 
+`okf-lint` reports a credential committed in a bundle file as `SECRET_IN_BUNDLE`, a quick check. For pre-commit and CI use [gitleaks](https://github.com/gitleaks/gitleaks), the thorough scanner: `make secrets` runs `gitleaks dir` over this repo's bundles.
+
 ## Using it with GitHub Copilot (and other agents)
 
 The skills follow the [Agent Skills](https://agentskills.io) standard, which Copilot discovers in `.github/skills/` (VS Code agent mode, Copilot CLI, coding agent). `make copilot` builds `dist/copilot/` with:

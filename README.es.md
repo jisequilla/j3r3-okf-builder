@@ -39,6 +39,8 @@ okf-ask         → "¿por qué decidimos X?"
 okf-migrate     → migra 0.1 ↔ 0.2 (siempre con --dry-run primero)
 ```
 
+`okf-lint` informa de una credencial guardada en un fichero del bundle como `SECRET_IN_BUNDLE`, una comprobación rápida. Para pre-commit y CI usa [gitleaks](https://github.com/gitleaks/gitleaks), el escáner a fondo: `make secrets` ejecuta `gitleaks dir` sobre los bundles de este repo.
+
 ## Idioma
 
 Los skills, las plantillas y el conocimiento están en inglés, pero los agentes responden en el idioma de quien les escribe: si les hablas en español, contestan en español.

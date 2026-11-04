@@ -81,6 +81,8 @@ types:
       origin: { type: string, level: warn, required: { level: warn, code: FRAGMENT_NO_FIELD }, note: Where it happened }
       participants: { type: list, of: actor, level: warn, code: BAD_ACTOR, required: { level: warn, code: FRAGMENT_NO_FIELD }, note: "Who took part, as actors" }
       distillation_status: { type: enum, values: [pending, distilled, conflict], code: BAD_DISTILLATION_STATUS, required: { level: warn, code: FRAGMENT_NO_FIELD } }
+      material: { type: list, of: map, keys: { path: { type: string, required: true }, sha256: { type: string, required: true } }, level: warn, code: BAD_MATERIAL, note: "Each file the record was taken from: path, a bundle path or one relative to the bundle root, and sha256, the 64-hex digest of the file as kept" }
+      repository: { type: map, keys: { url: { type: string, required: true }, commit: { type: string, required: true } }, level: warn, code: BAD_REPOSITORY, note: "The repository the record was taken from, at the full 40-hex commit" }
   Open Question:
     directory: /base/questions/
     description: What the team does not know yet, named <kebab-slug>.md
@@ -98,7 +100,7 @@ types:
   Log: {}
 rules:
   - { name: answered-question-names-its-answer, when: { type: Open Question, question_status: answered }, require: [answered_by], level: warn, code: QUESTION_NO_ANSWER }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T21:01:10Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T18:33:13Z }
 sources:
   - { id: types, resource: references/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }
   - { id: domain-profile, resource: references/OKF-STANDARD.md, title: "OKF standard §4.1: Domain Profile" }
@@ -112,11 +114,11 @@ sources:
 
 The types of the standard's type vocabulary, each with its usual directory and the extra fields the standard gives it[^types]. It is the first layer of every bundle's Domain Profile: a bundle without `base/profile.md` is checked against it alone, and a bundle's own profile only adds to it[^domain-profile]. Its content changes only with the standard.
 
-`directory` is the usual directory of a type, written as a bundle path. It is a default, not a rule, so this profile declares no `families`. `Domain Profile` and `Log` are declared by name only: the keys of a Domain Profile are nested maps that no field type describes, and lint checks them itself against §4.1; a `Log` is `log.md` with optional frontmatter.
+`directory` is the usual directory of a type, written as a bundle path. It is a default, not a rule, so this profile declares no `families`. `Domain Profile` and `Log` are declared by name only: the keys of a Domain Profile nest maps inside maps, deeper than the one-level `map` field type describes, and lint checks them itself against §4.1; a `Log` is `log.md` with optional frontmatter.
 
 # What lint reports from it
 
-A requirement that declares a `code` is reported under that code at its declared level, so the per-field checks of a Knowledge Fragment and an Open Question keep the codes and levels they had in code[^domain-profile]: `FRAGMENT_NO_FIELD` and `QUESTION_NO_FIELD` (warnings), `BAD_DISTILLATION_STATUS` and `BAD_QUESTION_STATUS` (errors), `BAD_ACTOR` and `BAD_ISO` (warnings). These are reported in every bundle. A blank value (empty text, list or map) counts as missing.
+A requirement that declares a `code` is reported under that code at its declared level, so the per-field checks of a Knowledge Fragment and an Open Question keep the codes and levels they had in code[^domain-profile]: `FRAGMENT_NO_FIELD` and `QUESTION_NO_FIELD` (warnings), `BAD_DISTILLATION_STATUS` and `BAD_QUESTION_STATUS` (errors), `BAD_ACTOR`, `BAD_ISO`, `BAD_MATERIAL` and `BAD_REPOSITORY` (warnings). These are reported in every bundle. A blank value (empty text, list or map) counts as missing.
 
 A field without a code is checked in a bundle that has a `base/profile.md`, like every item of that bundle's own profile: at its declared level, `error` when absent, under the generic code of §4.1 (`PROFILE_ENUM` for a value outside an enum, `PROFILE_FIELD_TYPE` for a value of another type), with `built-in` as its source[^domain-profile]. A bundle without a `base/profile.md` gets no finding from them. `okf-lint --profiles` lists every field with its type and note.
 
@@ -157,6 +159,8 @@ No extra fields: the common keys of §3.1 and the body headings of their templat
 - `occurred_at` is `YYYY-MM-DD` or ISO 8601 with an offset; another form is `BAD_ISO`, a warning.
 - `participants` is a list of actors; an entry that does not follow the actor convention is `BAD_ACTOR`, a warning. A single value is read as a one-item list.
 - `distillation_status` is `pending`, `distilled` or `conflict`; another value is `BAD_DISTILLATION_STATUS`, an error, because the distillation workflow reads it[^conformance].
+- `material`, optional: a list of maps `{ path, sha256 }`, each file the record was taken from, so a reader can tell the record's source was not altered after capture[^types]. `path` is a bundle path or one relative to the bundle root, `sha256` the 64-hex digest of the file as kept. An item that is not such a map, lacks a key, or holds a `sha256` that is not 64 hex digits (a value YAML reads as a number included) is `BAD_MATERIAL`, a warning. A single map is read as a one-item list. Lint hashes a well-formed item's file when it is in the bundle; that check is the OKF profile's, not this profile's (`FRAGMENT_MATERIAL_CHANGED`)[^conformance].
+- `repository`, optional: a map `{ url, commit }`, the repository the record was taken from, at its full 40-hex commit in either case[^types]. A value that is not such a map, a missing or non-text `url`, or a `commit` that is missing, short or not hex is `BAD_REPOSITORY`, a warning. Lint never fetches it.
 
 ## Open Question
 

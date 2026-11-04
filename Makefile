@@ -5,13 +5,18 @@ SHELL := /bin/bash -eo pipefail
 PLUGIN=plugin/okf-builder
 S=$(PLUGIN)/skills/okf-standard/scripts
 EX ?= examples/knowledge
-.PHONY: plugin lint test dogfood copilot m365 all check-links
+.PHONY: plugin lint test dogfood copilot m365 all check-links secrets
 plugin:
 	cd $(PLUGIN) && zip -qr ../../okf-builder.plugin . -x "*.DS_Store" -x "*__pycache__*"
 	@echo "→ okf-builder.plugin"
 lint:
 	uv run -q $(S)/okf_lint.py knowledge --strict
 	uv run -q $(S)/okf_lint.py examples/knowledge
+# gitleaks is the thorough secret scanner (okf-lint's SECRET_IN_BUNDLE is a quick check); a leak exits non-zero.
+secrets:
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		for d in knowledge examples/knowledge; do echo "gitleaks dir $$d"; gitleaks dir "$$d" --no-banner --redact || exit 1; done; \
+	else echo "secrets: gitleaks is not on PATH, scan skipped (https://github.com/gitleaks/gitleaks)"; fi
 test:
 	@echo "[1] inline tests of each script (uv run --with pytest <script> --test)"
 	uv run -q --with pytest $(S)/okf_init.py --test
@@ -35,7 +40,7 @@ test:
 	grep -q '\*\*Migration\*\*' /tmp/okf-m1/log.md
 	uv run -q $(S)/okf_migrate.py examples/fixtures/google-acme-retail-v0.2 --to 0.1 --keep-extensions --out /tmp/okf-m2 >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m2 --no-profile | tail -1
 	uv run -q $(S)/okf_migrate.py /tmp/okf-m2 --to 0.2 --out /tmp/okf-m3 --force >/dev/null && uv run -q $(S)/okf_lint.py /tmp/okf-m3 --no-profile --strict | tail -1
-	@echo "[5b] profile migration knowledge/2.0→3.0 of the fixture examples/fixtures/knowledge-2.0 (2 known warnings: 0 errors)"
+	@echo "[5b] profile migration knowledge/2.0→3.0 of the fixture examples/fixtures/knowledge-2.0, the frozen copy (0 errors; its 5 known warnings: BROKEN_LINK and VERIFIED_STALE on ADR-0001, STALE, SECTION_EMPTY x2 on project.md)"
 	rm -rf /tmp/okf-p3 && uv run -q $(S)/okf_migrate.py examples/fixtures/knowledge-2.0 --profile knowledge/3.0 --out /tmp/okf-p3 >/dev/null
 	uv run -q $(S)/okf_lint.py /tmp/okf-p3 | tail -1 | grep ' 0 errors'
 	test -d /tmp/okf-p3/base/decisions && test ! -e /tmp/okf-p3/decisions && grep -q 'knowledge/3.0' /tmp/okf-p3/index.md && grep -q '\*\*Migration\*\*' /tmp/okf-p3/log.md
@@ -68,8 +73,8 @@ test:
 	$(MAKE) -s dogfood
 	@echo "OK"
 dogfood:
-	@echo "[9] dogfood state of $(EX): only its 2 known warnings; every fragment is a Knowledge Fragment with a distillation_status, aliases resolved; the mapped question Runbook.owner has exactly one gap"
-	uv run -q $(S)/okf_lint.py $(EX) --json | python3 -c "import json,sys; c=sorted({f['code'] for f in json.load(sys.stdin)['findings']}); assert c == ['BROKEN_LINK', 'STALE'], c; print('lint codes', c)"
+	@echo "[9] dogfood state of $(EX): only its 4 known warnings; every fragment is a Knowledge Fragment with a distillation_status, aliases resolved; the mapped question Runbook.owner has exactly one gap"
+	uv run -q $(S)/okf_lint.py $(EX) --json | python3 -c "import json,sys; c=sorted(f['code'] for f in json.load(sys.stdin)['findings']); assert c == ['BROKEN_LINK', 'FRAGMENT_UNCITED', 'STALE', 'VERIFIED_STALE'], c; print('lint codes', c)"
 	uv run -q $(S)/okf_lint.py $(EX) --profiles --json | uv run -q --with pyyaml python -c "import json,sys; from pathlib import Path; sys.path.insert(0,'$(S)'); import okf_profile as p, okf_common as c; q=[x for x in json.load(sys.stdin)['questions'] if x.get('field') == 'Runbook.owner']; assert len(q) == 1, 'no question mapped to Runbook.owner in --profiles'; b=Path('$(EX)'); r=p.load_profile(b); docs=[(d.rel, p.resolve_aliases(r, d.frontmatter)) for d in (c.load_doc(b, f) for f in sorted(b.glob('[bf]*/**/*.md'))) if d.frontmatter]; frags=[(rel, fm) for rel, fm in docs if rel.startswith('fragments/') and not rel.endswith(('index.md', 'log.md'))]; bad=[rel for rel, fm in frags if not p.is_a(r, str(fm.get('type')), 'Knowledge Fragment') or 'distillation_status' not in fm]; assert not bad, 'not read as a Knowledge Fragment with a distillation_status: ' + ', '.join(bad); runbooks=[(rel, fm) for rel, fm in docs if p.is_a(r, str(fm.get('type')), 'Runbook')]; gap=[rel for rel, fm in runbooks if fm.get('owner') in (None, '', [], {})]; assert gap == ['base/runbooks/consumer-lag-alert.md'], gap; print(len(frags), 'fragments read as Knowledge Fragments;', q[0]['question'], '->', len(runbooks), 'runbooks, gap', gap)"
 copilot:
 	python3 tools/export_copilot.py --zip

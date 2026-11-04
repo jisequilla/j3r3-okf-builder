@@ -25,4 +25,4 @@ FROM ...
 WHERE field = @{{param}}
 ```
 
-Used by [the metric](/base/metrics/{{slug}}.md).
+{{Used by: a link to the metric, /base/metrics/<slug>.md}}

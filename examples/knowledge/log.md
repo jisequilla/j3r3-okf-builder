@@ -1,5 +1,9 @@
 # Bundle history
 
+## 2026-11-04
+* **Creation**: [Platform chat: the retention of the refunds topic](/fragments/2026-11-03-refund-topic-retention-chat.md), a fictional chat captured as a Fragmento (ingerido: false) from a text export kept beside it, `fragments/2026-11-03-refund-topic-retention-chat.txt`, named with its SHA-256 in `material` so lint checks that the source was not altered after capture.
+* **Update**: [Demo Payments](/project.md) is written the way okf_init now writes a project.md: Purpose holds the description, and the sections and rows nobody filled (Scope, Team and ownership, the empty Key links rows) are removed instead of kept as placeholders (SECTION_EMPTY).
+
 ## 2026-11-02
 * **Creation**: [Finance chat: asking for the refund dispute window](/fragments/2026-10-28-finance-dispute-window-ask.md), a fictional chat captured and distilled with the bundle's local names (type Fragmento, ingerido: true); its action item went to the tracker. Finance's fragments are now the bundle's most used name for a fragment, so the next one is written as a Fragmento.
 * **Update**: [Domain Profile of Demo Payments](/base/profile.md) gains the type alias Fragmento (Knowledge Fragment), the value aliases ingerido: true (distillation_status: distilled) and ingerido: false (pending), and the question "Who answers for each runbook?" mapped to Runbook.owner.
