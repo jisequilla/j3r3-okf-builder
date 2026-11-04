@@ -7,7 +7,7 @@ tags: [runbook, spec, compatibility]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T22:32:52Z }
 ---
 
 # Trigger
@@ -22,3 +22,7 @@ A new version of `okf/SPEC.md` upstream (check quarterly, or when this runbook's
 4. Add an upstream fixture of the new version in `examples/fixtures/` and a case in `make test`.
 5. A new ADR if the version policy changes ([ADR-0004](/base/decisions/ADR-0004-dual-support-v01-v02.md)).
 6. Follow [Publish a version](/base/runbooks/release-version.md).
+
+# Rollback
+
+Each upstream update is its own PR. If it turns out wrong, revert that PR's merge: the `references/` copy, the compatibility matrix, the fixture and the code return together. Record the revert in `log.md`, naming the upstream commit that was undone. A version already released with it is fixed by a new release, following [Publish a version](/base/runbooks/release-version.md).

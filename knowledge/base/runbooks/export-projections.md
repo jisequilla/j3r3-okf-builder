@@ -6,7 +6,7 @@ tags: [runbook, release, m365, copilot]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T22:32:52Z }
 ---
 
 # Steps
@@ -32,3 +32,13 @@ M365 Copilot reads `knowledge/` from its one source ([ADR-0014](/base/decisions/
 
 - Git source: connect the repository with the GitHub Cloud Knowledge connector, which indexes `.md` and keeps GitHub permissions. M365 only reads; changes go back by PR.
 - SharePoint source: add the library as a knowledge source of the agent. `.md` is not a documented SharePoint knowledge file type, so check in the tenant that Copilot answers from it.
+
+# Rollback
+
+A platform package is built from a tagged version, so a bad one is replaced by the previous version's, never patched by hand:
+
+- Claude Code: `/plugin marketplace update` after the bad release is fixed, or install the previous version from the marketplace.
+- Claude Cowork: drag in the previous `okf-builder.plugin`, attached to the previous GitHub Release.
+- M365 Copilot Cowork: upload the previous `okf-builder-m365.zip` (previous GitHub Release) in the admin center, or remove the custom app.
+- Copilot Studio / Agent Builder: upload the previous skill zip, rebuilt with `make m365` from the previous tag.
+- Pack copied into another repo: revert that repo's commit that copied it.
