@@ -744,7 +744,7 @@ def _is_fragment(fm: dict, prof: Resolved | None) -> bool:
 # The coverage ledger of a distilled fragment (okf-flz.4): the 4-column table of its # Distillation, Concept last.
 LEDGER_TITLES = ("distillation", "destilado en")
 RECORD_TITLES = ("record", "contenido capturado")
-_NO_CONCEPT_RE = re.compile(r"(?i)no concept\s*\((.*)\)")
+_NO_CONCEPT_RE = re.compile(r"(?i)no concept\s*\(([^()]*)\)")
 _LINK_SEP_RE = re.compile(r"[\s,;]*")
 
 
@@ -763,7 +763,8 @@ class Ledger:
 
 def read_ledger(body: str) -> Ledger:
     """The first table of # Distillation (or «Destilado en») whose header row has 4 cells, its rows matched by position
-    (Item first, Concept last, whatever their titles), and the '##' headings of # Record (or «Contenido capturado»)."""
+    (Item first, Concept last, whatever their titles), and the '##' headings of # Record (or «Contenido capturado»).
+    Lines inside a code fence or an HTML comment are not read: a commented example table is not the ledger."""
     lines = body.split("\n")
     secs = body_sections(lines)
     rows: list[LedgerRow] | None = None
@@ -777,14 +778,14 @@ def read_ledger(body: str) -> Ledger:
             heads += [(h.title, h.line) for h in secs if h.level == 2 and s.line < h.line < s.end]
         elif title in LEDGER_TITLES and rows is None:
             for i in range(s.line + 1, s.end - 1):
-                if scanned[i].code or scanned[i + 1].code:
+                if any(scanned[k].code or scanned[k].in_comment for k in (i, i + 1)):
                     continue
-                cells = table_cells(lines[i])
-                if cells is None or len(cells) != 4 or not TABLE_SEP_RE.match(lines[i + 1]):
+                cells = table_cells(scanned[i].text)
+                if cells is None or len(cells) != 4 or not TABLE_SEP_RE.match(scanned[i + 1].text):
                     continue
                 rows = []
                 for j in range(i + 2, s.end):
-                    row = None if scanned[j].code else table_cells(lines[j])
+                    row = None if scanned[j].code or scanned[j].in_comment else table_cells(scanned[j].text)
                     if row is None:
                         break
                     rows.append(LedgerRow(row[0], row[-1], j))
@@ -792,17 +793,27 @@ def read_ledger(body: str) -> Ledger:
     return Ledger(rows, heads)
 
 
-def concept_cell_ok(cell: str) -> bool:
-    """A Concept cell in one of its three forms: one or more links (separated by commas, semicolons or spaces);
-    'tracker' alone, any case; or 'no concept (<reason>)' with a non-empty reason. Whether a link resolves is not read
-    here: BROKEN_LINK reports it."""
+def concept_cell(cell: str, bundle: Path, doc: Doc) -> str:
+    """How a Concept cell accounts for its row: 'ok' in one of its three forms (one or more bundle links, separated by
+    commas, semicolons or spaces; 'tracker' alone, any case; or 'no concept (<reason>)' with a non-empty reason without
+    parentheses); 'broken' when its links are bundle links and one does not resolve (BROKEN_LINK reports it, and the
+    row does not account for its part); 'gap' for anything else, an external link or a mix of forms included."""
     c = cell.strip()
     if c.lower() == "tracker":
-        return True
+        return "ok"
     m = _NO_CONCEPT_RE.fullmatch(c)
     if m:
-        return bool(m.group(1).strip())
-    return bool(LINK_RE.search(c)) and bool(_LINK_SEP_RE.fullmatch(LINK_RE.sub("", c)))
+        return "ok" if m.group(1).strip() else "gap"
+    if not LINK_RE.search(c) or not _LINK_SEP_RE.fullmatch(LINK_RE.sub("", c)):
+        return "gap"
+    root = bundle.resolve()
+    broken = False
+    for lm in LINK_RE.finditer(c):
+        target = resolve_link(bundle, doc, lm.group(2))
+        if target is None or not target.is_relative_to(root):
+            return "gap"
+        broken = broken or not target.exists()
+    return "broken" if broken else "ok"
 
 
 def _plain(text: str) -> str:
@@ -813,16 +824,22 @@ def _plain(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip().rstrip(".:;,").strip()
 
 
-def ledger_complete(led: Ledger) -> bool:
-    """At least one row, and every row's Concept cell in one of its forms: the fragment's knowledge is accounted for."""
-    return bool(led.rows) and all(concept_cell_ok(r.concept) for r in led.rows)
+def ledger_complete(led: Ledger, bundle: Path, doc: Doc) -> bool:
+    """At least one row, and every row's Concept cell in one of its forms, its links resolving: the fragment's
+    knowledge is accounted for."""
+    return bool(led.rows) and all(concept_cell(r.concept, bundle, doc) == "ok" for r in led.rows)
+
+
+def _names(item: str, heading: str) -> bool:
+    """An Item names a heading when its plain text is the heading's or starts with it at a word boundary."""
+    return re.match(re.escape(heading) + r"(?!\w)", item) is not None
 
 
 def _is_distilled(fm: dict, prof: Resolved | None) -> bool:
     return _is_fragment(fm, prof) and str(fm.get("distillation_status")) == "distilled"
 
 
-def check_ledger(doc: Doc, rep: Report) -> None:
+def check_ledger(doc: Doc, bundle: Path, rep: Report) -> None:
     """FRAGMENT_NO_LEDGER and LEDGER_GAP on a distilled fragment (the caller resolves its type and status)."""
     led = read_ledger(doc.body)
     if not led.rows:
@@ -832,7 +849,7 @@ def check_ledger(doc: Doc, rep: Report) -> None:
         return
     offset = body_offset(doc.path)
     for r in led.rows:
-        if not concept_cell_ok(r.concept):
+        if concept_cell(r.concept, bundle, doc) == "gap":
             n = offset + r.line + 1
             rep.add("WARN", "LEDGER_GAP", doc.rel, f"ledger row '{r.item}' (line {n}) has Concept '{r.concept}': "
                     "write the link(s) to the concept(s) it went into, tracker for an action item, or "
@@ -840,7 +857,7 @@ def check_ledger(doc: Doc, rep: Report) -> None:
     items = [_plain(r.item) for r in led.rows]
     for title, i in led.record_heads:
         want = _plain(title)
-        if want and not any(want in it for it in items):
+        if want and not any(_names(it, want) for it in items):
             n = offset + i + 1
             rep.add("WARN", "LEDGER_GAP", doc.rel, f"record heading '## {title}' (line {n}) is named by no ledger row: "
                     "add a row for it, with its Concept a link, tracker or no concept (<reason>)", line=n)
@@ -868,7 +885,7 @@ def check_fragments_cited(docs: list[Doc], bundle: Path, prof: Resolved | None, 
         if not d.rel.startswith(FRAGMENTS_DIR + "/") or d.is_reserved or not d.frontmatter:
             continue
         fm = resolve_aliases(prof, d.frontmatter) if prof is not None else d.frontmatter
-        if _is_distilled(fm, prof) and d.path.resolve() not in cited and not ledger_complete(read_ledger(d.body)):
+        if _is_distilled(fm, prof) and d.path.resolve() not in cited and not ledger_complete(read_ledger(d.body), bundle, d):
             rep.add("WARN", "FRAGMENT_UNCITED", d.rel, "distilled, but no concept cites it: no file under base/ nor the "
                     "Conflict Log links to it, lists it in sources or names it in asked_in; cite it where its "
                     "knowledge went")
@@ -951,7 +968,7 @@ def check_audit(docs: list[Doc], bundle: Path, prof: Resolved | None, rep: Repor
         if _is_fragment(fm, prof):
             check_material(d, fm, bundle, rep, nested)
             if _is_distilled(fm, prof) and d.rel.startswith(FRAGMENTS_DIR + "/"):
-                check_ledger(d, rep)
+                check_ledger(d, bundle, rep)
     check_fragments_cited(docs, bundle, prof, rep, layered)
 
 
@@ -3218,9 +3235,77 @@ def test_ledger_gap_names_a_record_heading_no_row_names_and_never_judges_a_recor
     assert lint(k)[0].items == []  # paragraphs with a bold lead: a judgment for okf-review's audit mode
 
 
-def test_a_ledger_link_that_does_not_resolve_is_only_a_broken_link(tmp_path):
+def test_a_ledger_link_that_does_not_resolve_is_only_a_broken_link_and_does_not_cover_the_fragment(tmp_path):
     k = _ledger(_distilled_bundle(tmp_path), "| A refund | addition | applied | [Gone](/base/domain/gone.md) |\n")
-    assert [(i["code"], i["path"]) for i in lint(k)[0].items] == [("BROKEN_LINK", _FRAGMENT)]
+    assert [(i["code"], i["path"]) for i in lint(k)[0].items] == [("BROKEN_LINK", _FRAGMENT),
+                                                                 ("FRAGMENT_UNCITED", _FRAGMENT)]
+
+
+def test_a_ledger_link_must_be_a_bundle_link(tmp_path):
+    k = _ledger(_distilled_bundle(tmp_path), "| A refund | addition | applied | [Refund](https://example.com/refund) |\n")
+    assert [i["code"] for i in lint(k)[0].items] == ["LEDGER_GAP", "FRAGMENT_UNCITED"]
+
+
+def test_a_no_concept_reason_has_no_parentheses_and_no_other_form_beside_it(tmp_path):
+    rows = ("| Reason then a link | — | rejected | no concept (r), [L](/base/domain/refund.md) |\n"
+            "| Two reasons | — | rejected | no concept (dropped) tracker (x) |\n")
+    gaps = [i for i in lint(_ledger(_distilled_bundle(tmp_path), _TERM_ROW + rows))[0].items if i["code"] == "LEDGER_GAP"]
+    assert [i["message"].split("'")[1] for i in gaps] == ["Reason then a link", "Two reasons"]
+
+
+def test_a_table_inside_an_html_comment_or_a_code_fence_is_not_the_ledger(tmp_path):
+    example = "<!-- an example:\n| Item | Kind | Outcome | Concept |\n|---|---|---|---|\n" + _TERM_ROW + "-->\n\n"
+    k = _ledger(_distilled_bundle(tmp_path / "c"), example + "| Item | Kind | Outcome | Concept |\n|---|---|---|---|\n"
+                + _GAP_ROW, header="")
+    gaps = [i for i in lint(k)[0].items if i["code"] == "LEDGER_GAP"]
+    assert len(gaps) == 1 and (tmp_path / "c" / _FRAGMENT).read_text(encoding="utf-8").split("\n")[
+        gaps[0]["line"] - 1] == _GAP_ROW.rstrip("\n")  # the real table's row is checked, not the example's
+    k = _ledger(_distilled_bundle(tmp_path / "o"), example, header="")
+    [(path, msg)] = _audit(lint(k)[0], "FRAGMENT_NO_LEDGER")
+    assert path == _FRAGMENT and "no ledger table" in msg
+    trailing = _TERM_ROW.rstrip("\n") + " <!-- an old row:\n" + _GAP_ROW + "-->\n"
+    assert lint(_ledger(_distilled_bundle(tmp_path / "t"), trailing))[0].items == []  # a commented row is not a row
+    fenced = "```\n| Item | Kind | Outcome | Concept |\n|---|---|---|---|\n" + _TERM_ROW + "```\n"
+    k = _ledger(_distilled_bundle(tmp_path / "f"), fenced, header="")
+    [(path, msg)] = _audit(lint(k)[0], "FRAGMENT_NO_LEDGER")
+    assert path == _FRAGMENT and "no ledger table" in msg
+
+
+def test_a_heading_is_named_only_by_an_item_equal_to_it_or_starting_with_it_at_a_word_boundary(tmp_path):
+    record = "## A\n\nText.\n\n## Refund\n\nText.\n\n## Weekend plans\n\nText.\n"
+    rows = ("| Risky transaction | — | rejected | no concept (off topic) |\n"
+            "| Refunds topic | — | rejected | no concept (off topic) |\n"
+            "| Weekend plans: small talk | — | rejected | no concept (off topic) |\n")
+    gaps = [i["message"] for i in lint(_ledger(_distilled_bundle(tmp_path / "n"), rows, record=record))[0].items
+            if i["code"] == "LEDGER_GAP"]
+    assert [m.split("'")[1] for m in gaps] == ["## A", "## Refund"]
+    rows = ("| A: risky transaction | — | rejected | no concept (off topic) |\n"
+            "| **Refund** | — | rejected | no concept (off topic) |\n"
+            "| weekend plans. | — | rejected | no concept (off topic) |\n")
+    assert lint(_ledger(_distilled_bundle(tmp_path / "y"), rows, record=record))[0].items == []
+
+
+def test_ledger_gap_reads_the_spanish_record_title(tmp_path):
+    k = _ledger(_distilled_bundle(tmp_path), _TERM_ROW)
+    f = k / _FRAGMENT
+    f.write_text(f.read_text(encoding="utf-8").replace("# Record\n\nText.\n", "# Contenido capturado\n\n## Ventas\n\nTexto.\n"),
+                 encoding="utf-8")
+    [gap] = [i for i in lint(k)[0].items if i["code"] == "LEDGER_GAP"]
+    assert gap["message"].startswith("record heading '## Ventas'")
+
+
+def test_the_ledger_is_checked_only_on_files_under_fragments(tmp_path):
+    k = _distilled_bundle(tmp_path)
+    (k / "notes").mkdir()
+    (k / _FRAGMENT).rename(k / "notes" / "2026-10-31-meeting.md")
+    codes = {i["code"] for i in lint(k)[0].items}
+    assert "FRAGMENT_NO_LEDGER" not in codes and "LEDGER_GAP" not in codes
+
+
+def test_an_adr_0025_verification_fragment_is_a_complete_ledger(tmp_path):
+    rows = ("| Refund | — | verified | [Refund](/base/domain/refund.md) |\n"
+            "| Refund, as first written | — | not confirmed | [Refund](/base/domain/refund.md) |\n")
+    assert lint(_ledger(_distilled_bundle(tmp_path), rows))[0].items == []  # okf-review step 11's row shape
 
 
 def test_a_complete_ledger_covers_a_fragment_no_concept_cites_and_an_incomplete_one_does_not(tmp_path):
