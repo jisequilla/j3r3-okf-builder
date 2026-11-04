@@ -26,16 +26,17 @@ No `.okfignore` is created; when `knowledge/` holds paths that are not part of t
    - `title`: project name.
    - `description`: one sentence.
    - `repo-url`: the git remote, if there is one.
+   - `purpose`: what problem the project solves and for whom, if the person or the README says it; without it, Purpose holds the description.
    - `actor`: the user's `human:<id>` (derive it from `git config user.email` before the `@`; confirm).
    - `dirs`: the typed directories under `base/`, all of the OKF profile's by default. If the project clearly has no data or metrics (e.g. a library), propose leaving out `data,metrics,computations`.
 3. Run:
    ```bash
    uv run "<skills>/okf-standard/scripts/okf_init.py" --root <root> \
      --title "<title>" --description "<description>" --actor <actor> \
-     --repo-url "<url>" [--dirs a,b,c] [--okf-version 0.2|0.1]
+     --repo-url "<url>" [--purpose "<purpose>"] [--dirs a,b,c] [--okf-version 0.2|0.1]
    ```
    `--okf-version 0.1` only if the bundle must be consumed by tools that understand only 0.1; 0.2 by default.
-4. Fill in `knowledge/project.md`: replace every `{{...}}` placeholder with what is known from the repo (purpose, scope, links). Whatever isn't known, leave as a list with an explicit `TODO`, never unreplaced placeholders.
+4. `knowledge/project.md` holds no placeholder: the script fills the title, description, repository link and Purpose, and leaves out what it cannot fill (Scope, Team and ownership, the other Key links rows), so a fresh bundle has no `SECTION_EMPTY`. Add a section from the project template (`<skills>/okf-standard/templates/project.md`) only when its content is known from the repo or the person; never write empty rows, placeholders or invented people.
 5. Add (or propose adding) to the repo's `CLAUDE.md`:
    ```
    ## Project knowledge

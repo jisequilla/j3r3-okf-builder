@@ -18,12 +18,12 @@ sources: []
 
 # Joins
 
-Joins with [other table](/base/data/other-table.md) on `key`.
+{{Joins: a link to the other table, /base/data/<name>.md, and the key}}
 
 # Partitioning and freshness
 
-- Partition:
-- Freshness SLA:
+- Partition: ...
+- Freshness SLA: ...
 
 # Examples
 

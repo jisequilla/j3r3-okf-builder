@@ -28,10 +28,10 @@ sources: []
 
 # Consequences
 
-- Positive:
-- Negative / accepted debt:
-- Follow-up actions:
+- Positive: ...
+- Negative / accepted debt: ...
+- Follow-up actions: ...
 
 # Related
 
-* [Affected system](/base/systems/...)
+* {{Affected system: a link to /base/systems/<name>.md}}

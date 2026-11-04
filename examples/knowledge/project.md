@@ -5,33 +5,18 @@ description: Demo payments platform
 resource: https://github.com/acme/demo-pagos
 tags: [payments,demo]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:44Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T06:00:00Z }
 ---
 
 # Purpose
 
-{{What problem the project solves, and for whom.}}
-
-# Scope
-
-- Includes: ...
-- Excludes: ...
-
-# Team and ownership
-
-| Role | Person / team | Contact |
-|---|---|---|
-| Owner | | |
-| Tech lead | | |
+Demo payments platform
 
 # Key links
 
 | Resource | URL |
 |---|---|
 | Repository | https://github.com/acme/demo-pagos |
-| Board | |
-| Environments | |
-| Observability | |
 
 # Knowledge map
 

@@ -14,7 +14,7 @@ sources: []
 
 {{Business definition. Numerator, denominator, granularity, filters.}}
 
-Computed by [the sanctioned computation](/base/computations/{{slug}}.md).
+{{Computed by: a link to the sanctioned computation, /base/computations/<slug>.md}}
 
 # Dimensions
 

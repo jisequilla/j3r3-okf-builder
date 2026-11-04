@@ -256,6 +256,91 @@ def scan_bundle(bundle: Path) -> Scan:
     return sc
 
 
+# --------------------------------------------------------------------------
+# Body sections and placeholder text (SECTION_EMPTY in okf_lint, the project.md okf_init writes)
+# --------------------------------------------------------------------------
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
+PLACEHOLDER_RE = re.compile(r"\{\{.*?\}\}")
+LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*?)\s*$")
+TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$")
+COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+
+
+@dataclass
+class Section:
+    level: int  # 1 for '#', 2 for '##'
+    title: str
+    line: int  # index of the heading in the body's lines
+    end: int  # index of the next heading of the same or a higher level, or the number of lines
+
+    @property
+    def heading(self) -> str:
+        return "#" * self.level + " " + self.title
+
+
+def body_sections(lines: list[str]) -> list[Section]:
+    """The '#' to '######' headings of a body outside code fences; a section runs to the next heading of the same
+    or a higher level, so a '#' section holds its '##' subsections."""
+    heads, fenced = [], False
+    for i, line in enumerate(lines):
+        if FENCE_RE.match(line):
+            fenced = not fenced
+            continue
+        m = None if fenced else HEADING_RE.match(line)
+        if m:
+            heads.append((i, len(m.group(1)), m.group(2).strip()))
+    out = []
+    for n, (i, level, title) in enumerate(heads):
+        end = next((j for j, lv, _ in heads[n + 1:] if lv <= level), len(lines))
+        out.append(Section(level, title, i, end))
+    return out
+
+
+def table_cells(line: str) -> list[str] | None:
+    """The cells of a Markdown table row, or None when the line is not one."""
+    s = line.strip()
+    if not s.startswith("|"):
+        return None
+    return [c.strip() for c in s.strip("|").split("|")]
+
+
+def placeholder_line(line: str) -> bool:
+    """Template text left unfilled: a line with a {{...}} placeholder, a list item whose text is '...' or ends with
+    ': ...', or a table row whose cells after the first are all empty. A line with a link is never placeholder, nor
+    is a table's separator row; a header row is told apart by placeholder_lines, which sees the next line."""
+    if LINK_RE.search(line) or TABLE_SEP_RE.match(line):
+        return False
+    if PLACEHOLDER_RE.search(line):
+        return True
+    m = LIST_ITEM_RE.match(line)
+    if m and (m.group(1) == "..." or m.group(1).endswith(": ...")):
+        return True
+    cells = table_cells(line)
+    return cells is not None and len(cells) > 1 and not any(cells[1:])
+
+
+def content_lines(lines: list[str]) -> list[str]:
+    """The lines of a stretch of a body that are content: neither blank, nor headings, nor placeholder text (an
+    HTML comment is removed first). A table's header row and separator row are content, and so is a code fence."""
+    text = COMMENT_RE.sub("", "\n".join(lines)).split("\n")
+    out, fenced = [], False
+    for i, line in enumerate(text):
+        if FENCE_RE.match(line):
+            fenced = not fenced
+            out.append(line)
+            continue
+        if fenced:
+            out.append(line)
+            continue
+        if not line.strip() or HEADING_RE.match(line):
+            continue
+        header = table_cells(line) is not None and i + 1 < len(text) and bool(TABLE_SEP_RE.match(text[i + 1]))
+        if header or not placeholder_line(line):
+            out.append(line)
+    return out
+
+
 def extract_links(body: str) -> list[str]:
     return [m.group(2) for m in LINK_RE.finditer(body)]
 
