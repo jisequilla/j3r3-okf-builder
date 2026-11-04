@@ -57,7 +57,7 @@ NEEDS = {
     "okf-capture":  {"scripts": WRITE_SCRIPTS, "templates": CONCEPT_TEMPLATES},
     "okf-fragment": {"scripts": WRITE_SCRIPTS, "templates": ["fragment.md"]},
     "okf-distill":  {"scripts": WRITE_SCRIPTS, "templates": CONCEPT_TEMPLATES + ["conflict-log.md"]},
-    "okf-review":   {"scripts": ["okf_index.py", "okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
+    "okf-review":   {"scripts": ["okf_index.py", "okf_lint.py", "okf_profile.py", "okf_audit.py", "okf_common.py"], "templates": False},
     "okf-lint":     {"scripts": ["okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
     "okf-index":    {"scripts": ["okf_index.py", "okf_common.py"], "templates": False},
     "okf-migrate":  {"scripts": ["okf_migrate.py", "okf_common.py", "okf_lint.py", "okf_profile.py", "okf_index.py"], "templates": False},

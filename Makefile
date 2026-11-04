@@ -24,6 +24,7 @@ test:
 	uv run -q --with pytest $(S)/okf_lint.py --test
 	uv run -q --with pytest $(S)/okf_profile.py --test
 	uv run -q --with pytest $(S)/okf_migrate.py --test
+	uv run -q --with pytest $(S)/okf_audit.py --test
 	@echo "[2] init 0.2 (profile knowledge/3.0) + index + lint --strict"
 	rm -rf /tmp/okf-test && uv run -q $(S)/okf_init.py --root /tmp/okf-test --title T --description D --actor human:test >/dev/null
 	uv run -q $(S)/okf_index.py /tmp/okf-test/knowledge --check && uv run -q $(S)/okf_lint.py /tmp/okf-test/knowledge --strict | tail -1
