@@ -5,10 +5,10 @@ description: The repo's files belong to one of four homes (product, product buil
 tags: [adr, repo, agents, doctrine, layout]
 status: draft
 adr_id: ADR-0028
-decision_status: proposed
+decision_status: accepted
 supersedes:
 superseded_by:
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T07:21:40Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T22:26:19Z }
 sources:
   - { id: adr-0007, resource: /base/decisions/ADR-0007-single-source-and-projections.md }
   - { id: adr-0009, resource: /base/decisions/ADR-0009-build-in-layers-and-tickets.md }
@@ -66,7 +66,7 @@ Harness-specific practice (for example, the exact phrase that lets a merge throu
 
 | Alternative | Pros | Cons | Reason rejected |
 |---|---|---|---|
-| Four homes; workspace tooling projects knowledge; Doctrine as a local type | One rule for every new file; the practice is versioned, refinable and cited; dogfoods Domain Profiles on the repo's own bundle | One more type and a `base/profile.md` to keep | Proposed |
+| Four homes; workspace tooling projects knowledge; Doctrine as a local type | One rule for every new file; the practice is versioned, refinable and cited; dogfoods Domain Profiles on the repo's own bundle | One more type and a `base/profile.md` to keep | Chosen |
 | Add the lessons to the runbook and the agents policy | No new type | Procedure, rules and lessons mix; a principle loses its evidence; the runbook grows into a diary | The practice changes faster than the procedure |
 | Keep the standard and the templates in the knowledge bundle | The project's knowledge in one place | A template is not a valid concept, so lint reports it broken; the standard has no OKF frontmatter; the shipped text would depend on the bundle's format | Decision 2 |
 | Keep the workflow script in the knowledge bundle | One place for the practice and its tool | Executable code in a bundle that travels to platforms that cannot run it; the bundle would carry its own tooling | Decision 4 |
