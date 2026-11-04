@@ -21,4 +21,4 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T22:48:02Z }
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| Find the refund dispute window (Lucía; an action item, filed in the team's tracker) | — | not distilled | — |
+| Find the refund dispute window (Lucía; an action item, filed in the team's tracker) | — | not distilled | tracker |

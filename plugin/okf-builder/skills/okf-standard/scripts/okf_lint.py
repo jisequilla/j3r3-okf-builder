@@ -54,6 +54,7 @@ import shlex
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -66,11 +67,13 @@ from okf_common import (  # noqa: E402
     RESERVED_PATHS,
     DATE_RE,
     SUPPORTED_VERSIONS,
+    TABLE_SEP_RE,
     V02_KEYS,
     declared_version,
     detect_version,
     KEBAB_RE,
     LAYER_DIRS,
+    LINK_RE,
     PROFILE_20,
     PROFILE_30,
     VALID_STATUS,
@@ -84,6 +87,8 @@ from okf_common import (  # noqa: E402
     is_iso,
     is_iso_date_or_datetime,
     resolve_link,
+    table_cells,
+    scan_body,
     scan_bundle,
     to_dt,
     walk_bundle,
@@ -106,7 +111,7 @@ OKF_PROFILE_CODES = frozenset({
     "PROFILE_PROJECT_TYPE", "PROFILE_NO_GENERATED", "PROFILE_NO_TIMESTAMP", "PROFILE_OUTSIDE_LAYER",
     "PROFILE_MANY_PROJECTS", "PROFILE_MANY_CONFLICT_LOGS",
     "FRAGMENT_UNCITED", "SECTION_EMPTY", "VERIFIED_STALE",  # the mechanical audit checks (check_audit)
-    "FRAGMENT_MATERIAL_CHANGED"})
+    "FRAGMENT_MATERIAL_CHANGED", "FRAGMENT_NO_LEDGER", "LEDGER_GAP"})
 SHIPPED_PROFILES = (PROFILE_20, PROFILE_30)
 
 
@@ -736,9 +741,115 @@ def _is_fragment(fm: dict, prof: Resolved | None) -> bool:
     return is_a(prof, t, "Knowledge Fragment") if prof is not None else t == "Knowledge Fragment"
 
 
+# The coverage ledger of a distilled fragment (okf-flz.4): the 4-column table of its # Distillation, Concept last.
+LEDGER_TITLES = ("distillation", "destilado en")
+RECORD_TITLES = ("record", "contenido capturado")
+_NO_CONCEPT_RE = re.compile(r"(?i)no concept\s*\((.*)\)")
+_LINK_SEP_RE = re.compile(r"[\s,;]*")
+
+
+@dataclass
+class LedgerRow:
+    item: str
+    concept: str
+    line: int  # index in the body's lines
+
+
+@dataclass
+class Ledger:
+    rows: list[LedgerRow] | None  # None: # Distillation holds no 4-column table (or is missing)
+    record_heads: list[tuple[str, int]]  # the '##' headings of # Record, with their index in the body's lines
+
+
+def read_ledger(body: str) -> Ledger:
+    """The first table of # Distillation (or «Destilado en») whose header row has 4 cells, its rows matched by position
+    (Item first, Concept last, whatever their titles), and the '##' headings of # Record (or «Contenido capturado»)."""
+    lines = body.split("\n")
+    secs = body_sections(lines)
+    rows: list[LedgerRow] | None = None
+    heads: list[tuple[str, int]] = []
+    scanned = scan_body(lines)
+    for s in secs:
+        if s.level != 1:
+            continue
+        title = s.title.strip().lower()
+        if title in RECORD_TITLES:
+            heads += [(h.title, h.line) for h in secs if h.level == 2 and s.line < h.line < s.end]
+        elif title in LEDGER_TITLES and rows is None:
+            for i in range(s.line + 1, s.end - 1):
+                if scanned[i].code or scanned[i + 1].code:
+                    continue
+                cells = table_cells(lines[i])
+                if cells is None or len(cells) != 4 or not TABLE_SEP_RE.match(lines[i + 1]):
+                    continue
+                rows = []
+                for j in range(i + 2, s.end):
+                    row = None if scanned[j].code else table_cells(lines[j])
+                    if row is None:
+                        break
+                    rows.append(LedgerRow(row[0], row[-1], j))
+                break
+    return Ledger(rows, heads)
+
+
+def concept_cell_ok(cell: str) -> bool:
+    """A Concept cell in one of its three forms: one or more links (separated by commas, semicolons or spaces);
+    'tracker' alone, any case; or 'no concept (<reason>)' with a non-empty reason. Whether a link resolves is not read
+    here: BROKEN_LINK reports it."""
+    c = cell.strip()
+    if c.lower() == "tracker":
+        return True
+    m = _NO_CONCEPT_RE.fullmatch(c)
+    if m:
+        return bool(m.group(1).strip())
+    return bool(LINK_RE.search(c)) and bool(_LINK_SEP_RE.fullmatch(LINK_RE.sub("", c)))
+
+
+def _plain(text: str) -> str:
+    """Text as a reader names it: links as their text, without emphasis or code marks, lower case, single spaces,
+    without trailing punctuation."""
+    t = LINK_RE.sub(lambda m: m.group(1), text)
+    t = re.sub(r"[*_`]", "", t).lower()
+    return re.sub(r"\s+", " ", t).strip().rstrip(".:;,").strip()
+
+
+def ledger_complete(led: Ledger) -> bool:
+    """At least one row, and every row's Concept cell in one of its forms: the fragment's knowledge is accounted for."""
+    return bool(led.rows) and all(concept_cell_ok(r.concept) for r in led.rows)
+
+
+def _is_distilled(fm: dict, prof: Resolved | None) -> bool:
+    return _is_fragment(fm, prof) and str(fm.get("distillation_status")) == "distilled"
+
+
+def check_ledger(doc: Doc, rep: Report) -> None:
+    """FRAGMENT_NO_LEDGER and LEDGER_GAP on a distilled fragment (the caller resolves its type and status)."""
+    led = read_ledger(doc.body)
+    if not led.rows:
+        rep.add("WARN", "FRAGMENT_NO_LEDGER", doc.rel, "distilled, but its # Distillation has no ledger "
+                + ("table" if led.rows is None else "row") + ": add the table Item | Kind | Outcome | Concept with one "
+                "row per part of # Record, its Concept a link, tracker or no concept (<reason>) (okf-distill step 7)")
+        return
+    offset = body_offset(doc.path)
+    for r in led.rows:
+        if not concept_cell_ok(r.concept):
+            n = offset + r.line + 1
+            rep.add("WARN", "LEDGER_GAP", doc.rel, f"ledger row '{r.item}' (line {n}) has Concept '{r.concept}': "
+                    "write the link(s) to the concept(s) it went into, tracker for an action item, or "
+                    "no concept (<reason>)", line=n)
+    items = [_plain(r.item) for r in led.rows]
+    for title, i in led.record_heads:
+        want = _plain(title)
+        if want and not any(want in it for it in items):
+            n = offset + i + 1
+            rep.add("WARN", "LEDGER_GAP", doc.rel, f"record heading '## {title}' (line {n}) is named by no ledger row: "
+                    "add a row for it, with its Concept a link, tracker or no concept (<reason>)", line=n)
+
+
 def check_fragments_cited(docs: list[Doc], bundle: Path, prof: Resolved | None, rep: Report, layered: bool) -> None:
     """A distilled Knowledge Fragment (aliases resolved) that no concept cites: a body link, a sources entry or an
-    Open Question's asked_in pointing at it, from a file _citing reads."""
+    Open Question's asked_in pointing at it, from a file _citing reads. A complete ledger (ledger_complete) covers it:
+    its rows say where each part went, a tracker or no concept included."""
     cited: set[Path] = set()
     for d in docs:
         if not _citing(d, layered, prof):
@@ -757,7 +868,7 @@ def check_fragments_cited(docs: list[Doc], bundle: Path, prof: Resolved | None, 
         if not d.rel.startswith(FRAGMENTS_DIR + "/") or d.is_reserved or not d.frontmatter:
             continue
         fm = resolve_aliases(prof, d.frontmatter) if prof is not None else d.frontmatter
-        if _is_fragment(fm, prof) and str(fm.get("distillation_status")) == "distilled" and d.path.resolve() not in cited:
+        if _is_distilled(fm, prof) and d.path.resolve() not in cited and not ledger_complete(read_ledger(d.body)):
             rep.add("WARN", "FRAGMENT_UNCITED", d.rel, "distilled, but no concept cites it: no file under base/ nor the "
                     "Conflict Log links to it, lists it in sources or names it in asked_in; cite it where its "
                     "knowledge went")
@@ -829,8 +940,8 @@ def check_material(doc: Doc, fm: dict, bundle: Path, rep: Report, nested: list[s
 
 def check_audit(docs: list[Doc], bundle: Path, prof: Resolved | None, rep: Report, layered: bool,
                 nested: list[str] = ()) -> None:
-    """The okf-profile audit checks: SECTION_EMPTY, VERIFIED_STALE and FRAGMENT_MATERIAL_CHANGED per file,
-    FRAGMENT_UNCITED across the bundle."""
+    """The okf-profile audit checks: SECTION_EMPTY, VERIFIED_STALE, FRAGMENT_MATERIAL_CHANGED, FRAGMENT_NO_LEDGER and
+    LEDGER_GAP per file, FRAGMENT_UNCITED across the bundle."""
     for d in docs:
         if d.is_reserved or not d.frontmatter:
             continue
@@ -839,6 +950,8 @@ def check_audit(docs: list[Doc], bundle: Path, prof: Resolved | None, rep: Repor
         check_verified_stale(d, fm, rep)
         if _is_fragment(fm, prof):
             check_material(d, fm, bundle, rep, nested)
+            if _is_distilled(fm, prof) and d.rel.startswith(FRAGMENTS_DIR + "/"):
+                check_ledger(d, rep)
     check_fragments_cited(docs, bundle, prof, rep, layered)
 
 
@@ -1465,11 +1578,12 @@ def test_kdd_style_fragment_warns_only_for_participants(tmp_path):
     fields = ("occurred_at: 2025-04-25T00:00:00+02:00\norigin: \"Presentación AFTI, diapositivas 3-5\"\n"
               "distillation_status: distilled\n")
     body = ("# Contexto de captura\n\n| Campo | Valor |\n|---|---|\n| Fuente | Presentación |\n\n"
-            "# Contenido capturado\n\n> Texto tal como aparece.\n\n# Destilado en\n\n* Nada.\n")
+            "# Contenido capturado\n\n> Texto tal como aparece.\n\n# Destilado en\n\n"
+            "| Elemento | Tipo | Resultado | Concepto |\n|---|---|---|---|\n"
+            "| La diapositiva | — | no destilado | no concept (nothing to distill) |\n")
     rep, _, _ = lint(_fragment_bundle(tmp_path, fields, body))
-    # distilled, and no concept of this bundle cites it: FRAGMENT_UNCITED as well
-    assert [(i["level"], i["code"], i["path"]) for i in rep.items] == [("WARN", "FRAGMENT_NO_FIELD", _FRAGMENT),
-                                                                     ("WARN", "FRAGMENT_UNCITED", _FRAGMENT)]
+    # distilled, no concept cites it, and its complete ledger (Spanish titles, read by position) covers it
+    assert [(i["level"], i["code"], i["path"]) for i in rep.items] == [("WARN", "FRAGMENT_NO_FIELD", _FRAGMENT)]
     assert "participants" in rep.items[0]["message"]
 
 
@@ -2113,9 +2227,11 @@ def test_a_value_alias_is_read_as_the_value_it_stands_for(tmp_path):
     rep, _, _ = lint(_profiled(tmp_path, keys, _meeting(fields)))
     # distillation_status is present (no FRAGMENT_NO_FIELD) and distilled (the rule holds); neither the
     # local field name nor the alias's key is unknown, and client is not missing
-    assert [(i["code"], i["message"]) for i in rep.items if i["code"] != "FRAGMENT_UNCITED"] == [
+    assert [(i["code"], i["message"]) for i in rep.items
+            if i["code"] not in ("FRAGMENT_UNCITED", "FRAGMENT_NO_LEDGER")] == [
         ("PROFILE_RULE", "rule 'distilled-names-contract': distillation_status is distilled but 'contract' is missing (§4.1)")]
     assert [i["code"] for i in rep.items].count("FRAGMENT_UNCITED") == 1  # the alias reads it as distilled there too
+    assert [i["code"] for i in rep.items].count("FRAGMENT_NO_LEDGER") == 1
     # the concept's own value under the declared name wins
     own = fields + "distillation_status: pending\n"
     assert lint(_profiled(tmp_path / "own", keys, _meeting(own)))[0].items == []
@@ -2237,7 +2353,7 @@ def test_family_requirements_with_their_own_code_apply_under_the_family_only(tmp
                      ("base/questions/legal/b.md", "ERROR", "PROFILE_REQUIRED")]  # nested families: both apply
 
 
-def test_examples_knowledge_lints_with_its_profile_and_its_four_known_warnings():
+def test_examples_knowledge_lints_with_its_profile_and_its_three_known_warnings():
     import pytest
 
     bundle = next((p / "examples" / "knowledge" for p in Path(__file__).resolve().parents
@@ -2248,8 +2364,7 @@ def test_examples_knowledge_lints_with_its_profile_and_its_four_known_warnings()
     assert [(i["level"], i["code"], i["path"]) for i in rep.items] == [
         ("WARN", "BROKEN_LINK", "base/decisions/ADR-0001-adopt-kafka.md"),
         ("WARN", "STALE", "base/runbooks/consumer-lag-alert.md"),
-        ("WARN", "VERIFIED_STALE", "base/decisions/ADR-0001-adopt-kafka.md"),  # rewritten by the 3.0 migration
-        ("WARN", "FRAGMENT_UNCITED", "fragments/2026-10-28-finance-dispute-window-ask.md")]  # its only output: a ticket
+        ("WARN", "VERIFIED_STALE", "base/decisions/ADR-0001-adopt-kafka.md")]  # rewritten by the 3.0 migration
     prof = load_profile(bundle)
     assert prof.has_own and any(t.get("extends") for t in prof.types.values() if t["source"] == OWN_REL)
     assert prof.families and prof.rules[-1]["source"] == OWN_REL and prof.aliases["types"]
@@ -2873,11 +2988,14 @@ def test_every_okf_profile_code_names_the_okf_profile_layer(tmp_path):
     (tmp_path / "c").mkdir()
     c = _audit_bundle(tmp_path / "c")
     d = _material_bundle(tmp_path / "d", changed=True)
-    items = lint(a)[0].items + lint(b, version="0.1")[0].items + lint(c)[0].items + lint(d)[0].items
+    e = _distilled_bundle(tmp_path / "e")
+    items = (lint(a)[0].items + lint(b, version="0.1")[0].items + lint(c)[0].items + lint(d)[0].items
+             + lint(e)[0].items)
     emitted = {"NAME_KEBAB", "NO_OKF_VERSION", "PROFILE_OKF_VERSION", "PROFILE_NO_INDEX", "PROFILE_NO_LOG",
                "PROFILE_NO_PROJECT", "PROFILE_PROJECT_TYPE", "PROFILE_NO_GENERATED", "PROFILE_NO_TIMESTAMP",
                "PROFILE_OUTSIDE_LAYER", "PROFILE_MANY_PROJECTS", "PROFILE_MANY_CONFLICT_LOGS",
-               "FRAGMENT_UNCITED", "SECTION_EMPTY", "VERIFIED_STALE", "FRAGMENT_MATERIAL_CHANGED"}
+               "FRAGMENT_UNCITED", "SECTION_EMPTY", "VERIFIED_STALE", "FRAGMENT_MATERIAL_CHANGED",
+               "FRAGMENT_NO_LEDGER", "LEDGER_GAP"}
     assert emitted <= {i["code"] for i in items} and OKF_PROFILE_CODES == emitted
     assert {i["code"] for i in items if i["layer"] == "okf-profile"} == emitted
     assert all(i["layer"] == "okf-profile" for i in items if i["code"] in emitted)
@@ -2922,16 +3040,31 @@ def _distill(k: Path) -> Path:
     return k
 
 
+def _ledger(k: Path, rows: str, header: str = "| Item | Kind | Outcome | Concept |\n|---|---|---|---|\n",
+            record: str | None = None) -> Path:
+    """Write the fragment's # Distillation as a table with the given rows (and, given, its # Record body)."""
+    f = k / _FRAGMENT
+    text = f.read_text(encoding="utf-8").replace("# Distillation\n\nNone yet.\n", "# Distillation\n\n" + header + rows)
+    if record is not None:
+        text = text.replace("# Record\n\nText.\n", "# Record\n\n" + record)
+    f.write_text(text, encoding="utf-8")
+    return k
+
+
+_GAP_ROW = "| A refund | — | not distilled | — |\n"  # the old action-item form: a LEDGER_GAP
+_TERM_ROW = "| A refund | addition | applied | [Refund](/base/domain/refund.md) |\n"
+
+
 def _distilled_bundle(tmp_path) -> Path:
-    """A 3.0 bundle whose fragment is distilled, with one Term under base/."""
+    """A 3.0 bundle whose fragment is distilled, with no ledger, and one Term under base/."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     return _with_term(_distill(_bundle_30(tmp_path)), _term())
 
 
 def _audit_bundle(tmp_path) -> Path:
     """A 3.0 bundle raising each okf-profile audit code once: an empty template section and a stale human
-    verification on a Term, and a distilled fragment no concept cites."""
-    k = _distilled_bundle(tmp_path)
+    verification on a Term, and a distilled fragment no concept cites, whose ledger row has the old Concept '—'."""
+    k = _ledger(_distilled_bundle(tmp_path), _GAP_ROW)
     _write(k, _TERM, _term("# Definition\n\n{{One unambiguous sentence.}}\n",
                            "verified: { by: human:alice, at: 2026-10-30T18:00:00Z }\n"))
     return k
@@ -2944,9 +3077,9 @@ def _audit(rep: Report, code: str) -> list[tuple[str, str]]:
 def test_the_audit_bundle_raises_each_audit_code_once_and_its_clean_twin_none(tmp_path):
     rep = lint(_audit_bundle(tmp_path / "a"))[0]
     assert sorted((i["level"], i["code"], i["path"], i["layer"]) for i in rep.items) == [
-        ("WARN", "FRAGMENT_UNCITED", _FRAGMENT, "okf-profile"), ("WARN", "SECTION_EMPTY", _TERM, "okf-profile"),
-        ("WARN", "VERIFIED_STALE", _TERM, "okf-profile")]
-    k = _distilled_bundle(tmp_path / "b")
+        ("WARN", "FRAGMENT_UNCITED", _FRAGMENT, "okf-profile"), ("WARN", "LEDGER_GAP", _FRAGMENT, "okf-profile"),
+        ("WARN", "SECTION_EMPTY", _TERM, "okf-profile"), ("WARN", "VERIFIED_STALE", _TERM, "okf-profile")]
+    k = _ledger(_distilled_bundle(tmp_path / "b"), _TERM_ROW)
     _write(k, _TERM, _term(f"# Definition\n\nA refund, see [the meeting]({_MEETING_LINK}).\n",
                            "verified: { by: human:alice, at: 2026-10-31T18:00:00Z }\n"))
     assert lint(k)[0].items == []
@@ -2982,7 +3115,7 @@ def test_fragment_uncited_counts_links_sources_asked_in_the_domain_profile_and_t
             _list_in_indexes(k, rel)
         rep = lint(k)[0]
         assert _audit(rep, "FRAGMENT_UNCITED") == [], name
-        assert rep.items == [], (name, rep.items)
+        assert [i["code"] for i in rep.items] == ["FRAGMENT_NO_LEDGER"], (name, rep.items)  # cited, but no ledger
 
 
 def test_fragment_uncited_ignores_links_from_the_log_the_indexes_and_other_fragments(tmp_path):
@@ -3001,9 +3134,115 @@ def test_fragment_uncited_reads_the_type_and_value_aliases_of_the_domain_profile
             "           { from: { ingerido: false }, to: { distillation_status: pending } }]\n")
     fields = _FRAGMENT_FIELDS.replace("distillation_status: pending\n", "ingerido: true\n")
     rep = lint(_profiled(tmp_path / "d", keys, _concept("Fragmento", fields)))[0]
-    assert [(i["code"], i["layer"]) for i in rep.items] == [("FRAGMENT_UNCITED", "okf-profile")]
+    assert [(i["code"], i["layer"]) for i in rep.items] == [("FRAGMENT_NO_LEDGER", "okf-profile"),
+                                                           ("FRAGMENT_UNCITED", "okf-profile")]
     pending = fields.replace("ingerido: true", "ingerido: false")
     assert lint(_profiled(tmp_path / "p", keys, _concept("Fragmento", pending)))[0].items == []
+
+
+# The coverage ledger (okf-flz.4): FRAGMENT_NO_LEDGER, LEDGER_GAP, and FRAGMENT_UNCITED covered by a complete ledger ---
+def test_the_ledger_is_the_distillation_table_and_each_concept_form_accounts_for_its_row(tmp_path):
+    rows = ("| A refund | addition | applied | [Refund](/base/domain/refund.md), [log](/conflict-log.md) |\n"
+            "| Ship the refunds topic (an action item) | — | not distilled | TRACKER |\n"
+            "| Small talk about the weather | — | rejected | no concept (dropped by human:alice) |\n")
+    record = "## A refund\n\nText.\n\n## Ship the **refunds** topic:\n\nText.\n\n## Small talk about the weather\n\nHi.\n"
+    rep = lint(_ledger(_distilled_bundle(tmp_path), rows, record=record))[0]
+    assert rep.items == []  # every row accounted for, every heading named (case, emphasis, ':' aside), nothing uncited
+    led = read_ledger((tmp_path / _FRAGMENT).read_text(encoding="utf-8").split("---\n", 2)[2])
+    assert [(r.item[:8], r.concept[:9]) for r in led.rows] == [("A refund", "[Refund]("), ("Ship the", "TRACKER"),
+                                                               ("Small ta", "no concep")]
+    assert [h for h, _ in led.record_heads] == ["A refund", "Ship the **refunds** topic:", "Small talk about the weather"]
+
+
+def test_the_okf_distill_skill_builds_the_ledger_with_the_change_set_and_names_its_concept_forms():
+    import pytest
+
+    skill = Path(__file__).resolve().parents[2] / "okf-distill" / "SKILL.md"
+    if not skill.is_file():
+        pytest.skip("okf-distill/SKILL.md not beside this script")
+    text = skill.read_text(encoding="utf-8")
+    assert "**Ledger**" in text and "no concept (dropped by <actor>)" in text
+    step7 = text.split("7. **Fill the fragment's `# Distillation`**", 1)[1].split("\n8. ", 1)[0]
+    assert "`tracker`" in step7 and "`no concept (<reason>)`" in step7 and "`—` for an action item" not in step7
+
+
+def test_fragment_no_ledger_fires_on_a_distilled_fragment_without_a_table_or_rows_and_has_no_date_exemption(tmp_path):
+    k = _distilled_bundle(tmp_path / "none")  # # Distillation holds 'None yet.'
+    [(path, msg)] = _audit(lint(k)[0], "FRAGMENT_NO_LEDGER")
+    assert path == _FRAGMENT and "no ledger table" in msg
+    assert [p for p, _ in _audit(lint(_ledger(_distilled_bundle(tmp_path / "empty"), ""))[0], "FRAGMENT_NO_LEDGER")] \
+        == [_FRAGMENT]  # the header and separator, no row
+    three = "| Item | Kind | Concept |\n|---|---|---|\n| A refund | addition | [Refund](/base/domain/refund.md) |\n"
+    assert _audit(lint(_ledger(_distilled_bundle(tmp_path / "three"), "", header=three))[0], "FRAGMENT_NO_LEDGER")
+    old = _distilled_bundle(tmp_path / "old")
+    f = old / _FRAGMENT
+    f.write_text(f.read_text(encoding="utf-8").replace("occurred_at: 2026-10-31", "occurred_at: 2019-01-01"),
+                 encoding="utf-8")
+    assert [p for p, _ in _audit(lint(old)[0], "FRAGMENT_NO_LEDGER")] == [_FRAGMENT]  # no date exemption
+    assert _audit(lint(_bundle_30(_mkdir(tmp_path / "pending")))[0], "FRAGMENT_NO_LEDGER") == []
+
+
+def test_fragment_no_ledger_reads_a_local_type_and_a_value_alias(tmp_path):
+    keys = _MEETING + "aliases:\n  values: [{ from: { ingerido: true }, to: { distillation_status: distilled } }]\n"
+    fields = _MEETING_FIELDS.replace("distillation_status: pending\n", "ingerido: true\n")
+    rep = lint(_profiled(tmp_path / "a", keys, _meeting(fields)))[0]
+    assert [i["code"] for i in rep.items] == ["FRAGMENT_NO_LEDGER", "FRAGMENT_UNCITED"]
+    body = ("# Registro\n\nText.\n\n# Destilado en\n\n| Punto | Clase | Resultado | Concepto |\n|---|---|---|---|\n"
+            "| Algo | — | no destilado | — |\n")
+    rep = lint(_profiled(tmp_path / "b", keys, _meeting(fields).replace("Text.\n", body)))[0]
+    assert [i["code"] for i in rep.items] == ["LEDGER_GAP", "FRAGMENT_UNCITED"]  # matched by position, titles as written
+
+
+def test_ledger_gap_fires_once_per_row_whose_concept_cell_is_no_form(tmp_path):
+    bad = ("| Old action item | — | not distilled | — |\n| Empty reason | — | rejected | no concept ( ) |\n"
+           "| Mixed | addition | applied | tracker, [Refund](/base/domain/refund.md) |\n"
+           "| Prose | addition | applied | the refund term |\n| Empty | addition | applied |  |\n")
+    good = "| A refund | addition | applied | [Refund](/base/domain/refund.md) |\n"
+    rep = lint(_ledger(_distilled_bundle(tmp_path), good + bad))[0]
+    gaps = [i for i in rep.items if i["code"] == "LEDGER_GAP"]
+    assert [i["message"].split("'")[1] for i in gaps] == ["Old action item", "Empty reason", "Mixed", "Prose", "Empty"]
+    lines = (tmp_path / _FRAGMENT).read_text(encoding="utf-8").split("\n")
+    assert [lines[i["line"] - 1].split(" | ")[0] for i in gaps] == [
+        "| Old action item", "| Empty reason", "| Mixed", "| Prose", "| Empty"] and all(i["path"] == _FRAGMENT for i in gaps)
+    assert [i["code"] for i in rep.items if i["code"] != "LEDGER_GAP"] == ["FRAGMENT_UNCITED"]  # the ledger is not complete
+
+
+def test_ledger_gap_names_a_record_heading_no_row_names_and_never_judges_a_record_without_headings(tmp_path):
+    record = "## Refund events\n\nText.\n\n## Retention\n\nText.\n"
+    k = _ledger(_distilled_bundle(tmp_path / "h"),
+                "| Refund events | addition | applied | [Refund](/base/domain/refund.md) |\n", record=record)
+    [gap] = [i for i in lint(k)[0].items if i["code"] == "LEDGER_GAP"]
+    assert gap["message"].startswith("record heading '## Retention'")
+    assert (tmp_path / "h" / _FRAGMENT).read_text(encoding="utf-8").split("\n")[gap["line"] - 1] == "## Retention"
+    k = _ledger(_distilled_bundle(tmp_path / "p"), _TERM_ROW, record="**Refund events.** Text.\n\n**Retention.** Text.\n")
+    assert lint(k)[0].items == []  # paragraphs with a bold lead: a judgment for okf-review's audit mode
+
+
+def test_a_ledger_link_that_does_not_resolve_is_only_a_broken_link(tmp_path):
+    k = _ledger(_distilled_bundle(tmp_path), "| A refund | addition | applied | [Gone](/base/domain/gone.md) |\n")
+    assert [(i["code"], i["path"]) for i in lint(k)[0].items] == [("BROKEN_LINK", _FRAGMENT)]
+
+
+def test_a_complete_ledger_covers_a_fragment_no_concept_cites_and_an_incomplete_one_does_not(tmp_path):
+    k = _ledger(_distilled_bundle(tmp_path / "t"), "| Ship it (an action item) | — | not distilled | tracker |\n")
+    assert lint(k)[0].items == []  # its only output is a ticket: no FRAGMENT_UNCITED
+    k = _ledger(_distilled_bundle(tmp_path / "g"), "| Ship it | — | not distilled | tracker |\n" + _GAP_ROW)
+    assert [i["code"] for i in lint(k)[0].items] == ["LEDGER_GAP", "FRAGMENT_UNCITED"]
+
+
+def test_the_standard_describes_the_ledger_in_section_4_and_lists_both_codes_in_section_7():
+    import pytest
+
+    std = Path(__file__).resolve().parent.parent / "references" / "OKF-STANDARD.md"
+    if not std.is_file():
+        pytest.skip("okf-standard/references/OKF-STANDARD.md not beside this script")
+    text = std.read_text(encoding="utf-8")
+    row = next(line for line in text.splitlines() if line.startswith("| `Knowledge Fragment` |"))
+    assert "ledger" in row and "`tracker`" in row and "`no concept (<reason>)`" in row
+    s7 = text.split("\n## 7.", 1)[1]
+    for code in ("FRAGMENT_NO_LEDGER", "LEDGER_GAP"):
+        assert f"| `{code}` | warning | `okf-profile` |" in s7, code
+        assert f"`{code}`" in s7.split("| `okf-profile` | The OKF profile itself", 1)[1].split("\n", 1)[0], code
 
 
 # SECTION_EMPTY ------------------------------------------------------------------------------------------------------
@@ -3232,7 +3471,7 @@ def test_json_metrics_are_always_present_and_count_findings_trust_and_fragments(
     _with_term(k, _term(fields="verified: { by: process:ci, at: 2026-11-01T00:00:00Z }\n"), "base/domain/b.md")
     _with_term(k, _term(), "base/domain/c.md")
     m = _metrics(capsys, k)
-    assert m["count_per_code"] == {"FRAGMENT_UNCITED": 1, "SECTION_EMPTY": 1, "VERIFIED_STALE": 1}
+    assert m["count_per_code"] == {"FRAGMENT_UNCITED": 1, "LEDGER_GAP": 1, "SECTION_EMPTY": 1, "VERIFIED_STALE": 1}
     assert m["concepts_by_trust"] == {"unverified": 1, "machine-confirmed": 1, "human-reviewed": 1}
     assert m["fragments"] == {"by_status": {"distilled": 1}, "oldest_pending_days": None}
     assert "stale_after_cluster" not in m
