@@ -1,7 +1,7 @@
 ---
 type: Architecture Decision
 title: "ADR-0028: Where things go: four homes, workspace tooling as a projection of knowledge, and a Doctrine for how we build"
-description: The repo's files belong to one of four homes (product, product build, knowledge, workspace); the knowledge bundle carries no executable code except a Domain Profile's validators; workspace tooling such as an agent workflow is a projection of a knowledge concept and names it; how the repo builds with agents becomes a Doctrine, a local type refined as practice teaches.
+description: The repo's files belong to one of four homes (product, product build, knowledge, workspace); the product is the only source of the standard and the templates, and their root copies are generated; the knowledge bundle carries no executable code except a Domain Profile's validators; workspace tooling such as an agent workflow is a projection of a knowledge concept and names it; how the repo builds with agents becomes a Doctrine, a local type refined as practice teaches.
 tags: [adr, repo, agents, doctrine, layout]
 status: draft
 adr_id: ADR-0028
@@ -27,6 +27,8 @@ Running ticket A2 of the knowledge audit taught practice that is written nowhere
 
 Asking where the workflow script should live showed that the repo has no rule for where anything goes. Its files fall into kinds that are not named: `tools/` holds the platform package exporters, a root `templates/` copy duplicates the source templates and is kept identical by a `diff` in `make test` (the README calls it "canonical copy"[^readme], while [ADR-0007](/base/decisions/ADR-0007-single-source-and-projections.md) makes `plugin/okf-builder/skills/` the single source[^adr-0007]), and the standard exists as two identical copies.
 
+Asked in structured questions, the repository's owner chose to keep the standard and the templates in the product with generated root copies, to rename `tools/` to `build/`, to keep the agents policy apart from the doctrine, and a Doctrine local type.
+
 # Decision
 
 1. **Every file belongs to one of four homes**, named by what it is, not by who uses it:
@@ -34,14 +36,17 @@ Asking where the workflow script should live showed that the repo has no rule fo
    | Home | What it holds | Where |
    |---|---|---|
    | Product | what is shipped: skills, scripts, templates, the standard | `plugin/`, `standard/` |
-   | Product build | what turns the source into platform packages and checks it | `Makefile`, `tools/`, `tests/` |
+   | Product build | what turns the source into platform packages and checks it | `Makefile`, `build/` (today `tools/`), `tests/` |
    | Knowledge | what the project knows and how it works, readable on any platform | `knowledge/` |
    | Workspace | how agents operate in this repo, specific to a tool | `.claude/`, `.agents/`, `.beads/`, the context files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) |
 
-2. **The knowledge bundle carries no executable code**, except the validators a Domain Profile declares ([ADR-0026](/base/decisions/ADR-0026-built-in-domain-profile.md)), which the standard runs only on request[^adr-0026]. The bundle travels and is projected to platforms that cannot run code, and `okf_lint` judges it: it does not carry its own judge.
-3. **Workspace tooling is a projection of a knowledge concept**, as the knowledge-architect agent is a per-platform projection of its role ([ADR-0013](/base/decisions/ADR-0013-agent-projections.md))[^adr-0013]: an agent workflow names in its header the runbook or doctrine it carries out, and that concept names the workflow in `resource`. A change to how the repo works starts in the concept; the projection follows. Projections drift by nature ([ADR-0022](/base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md)), so the link both ways is what lets a review find the drift[^adr-0022].
-4. **Agent workflows live in `.claude/workflows/`**, versioned, where Claude Code finds saved workflows by name. The first is the layer-ticket workflow that runs the runbook.
-5. **How the repo builds with agents becomes a Doctrine**: a local type declared in a new `knowledge/base/profile.md`, in `base/doctrine/`. A doctrine is a set of principles, each with its statement, why it holds and the evidence that taught it (a link to an ADR, a fragment or a PR). It is edited in place as practice teaches (a new `generated.at` and a `log.md` entry); new practice enters as a fragment and is distilled with `okf-distill`, approved by a person. A principle that becomes a decision is an ADR; the doctrine then links it.
+2. **The product is the only source of the standard and the templates.** The source is `plugin/okf-builder/skills/okf-standard/` (`references/OKF-STANDARD.md`, `references/OKF-COMPATIBILITY.md`, `templates/`), as [ADR-0007](/base/decisions/ADR-0007-single-source-and-projections.md) makes the plugin the single source. The root `standard/` and `templates/` copies, kept so people browsing the repo find them, are generated by `make`, and `make test` fails when they are out of date; nobody edits them. The knowledge bundle holds what the project knows about the standard and the templates (the [OKF standard](/base/references/okf-standard.md) Reference, the ADRs, `log.md`), never their text: a template is a concept with holes (`{{now}}` is not a datetime), so a bundle cannot hold one without reporting it broken, and the standard's text has no OKF frontmatter.
+3. **The product build directory is `build/`**: `tools/` is renamed, so the name says its home. The `tools/okf/` path the okf-lint skill suggests for other repos' CI is a different thing and does not change.
+4. **The knowledge bundle carries no executable code**, except the validators a Domain Profile declares ([ADR-0026](/base/decisions/ADR-0026-built-in-domain-profile.md)), which the standard runs only on request[^adr-0026]. The bundle travels and is projected to platforms that cannot run code, and `okf_lint` judges it: it does not carry its own judge.
+5. **Workspace tooling is a projection of a knowledge concept**, as the knowledge-architect agent is a per-platform projection of its role ([ADR-0013](/base/decisions/ADR-0013-agent-projections.md))[^adr-0013]: an agent workflow names in its header the runbook or doctrine it carries out, and that concept names the workflow in `resource`. A change to how the repo works starts in the concept; the projection follows. Projections drift by nature ([ADR-0022](/base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md)), so the link both ways is what lets a review find the drift[^adr-0022].
+6. **Agent workflows live in `.claude/workflows/`**, versioned, where Claude Code finds saved workflows by name. The first is the layer-ticket workflow that runs the runbook.
+7. **How the repo builds with agents becomes a Doctrine**: a local type declared in a new `knowledge/base/profile.md`, in `base/doctrine/`. A doctrine is a set of principles, each with its statement, why it holds and the evidence that taught it (a link to an ADR, a fragment or a PR). It is edited in place as practice teaches (a new `generated.at` and a `log.md` entry); new practice enters as a fragment and is distilled with `okf-distill`, approved by a person. A principle that becomes a decision is an ADR; the doctrine then links it.
+8. **The agents policy stays a Policy, and the doctrine links it.** [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md), the source of `AGENTS.md`, remains the short list of rules every agent obeys; the doctrine holds the principles with their reasons and evidence. A rule that comes out of the doctrine is added to the policy.
 
 # Doctrine outline (first doctrine: building with agents)
 
@@ -63,18 +68,15 @@ Harness-specific practice (for example, the exact phrase that lets a merge throu
 |---|---|---|---|
 | Four homes; workspace tooling projects knowledge; Doctrine as a local type | One rule for every new file; the practice is versioned, refinable and cited; dogfoods Domain Profiles on the repo's own bundle | One more type and a `base/profile.md` to keep | Proposed |
 | Add the lessons to the runbook and the agents policy | No new type | Procedure, rules and lessons mix; a principle loses its evidence; the runbook grows into a diary | The practice changes faster than the procedure |
-| Keep the workflow script in the knowledge bundle | One place for the practice and its tool | Executable code in a bundle that travels to platforms that cannot run it; the bundle would carry its own tooling | Decision 2 |
+| Keep the standard and the templates in the knowledge bundle | The project's knowledge in one place | A template is not a valid concept, so lint reports it broken; the standard has no OKF frontmatter; the shipped text would depend on the bundle's format | Decision 2 |
+| Keep the workflow script in the knowledge bundle | One place for the practice and its tool | Executable code in a bundle that travels to platforms that cannot run it; the bundle would carry its own tooling | Decision 4 |
 | Keep the workflow in the session folder | Nothing to maintain | Unversioned; invisible to other sessions and people | The problem this ADR answers |
 
 # Consequences
 
 - Positive: a new file has one obvious home; the practice of building with agents is versioned, cited and refined through the product's own fragment → distill loop; the workflow is runnable by name from any session in the repo.
 - Negative / accepted debt: the doctrine and the workflow can drift; only the links both ways and a review catch it. `base/profile.md` adds a Domain Profile to a bundle that had none.
-- Open points for the owner, settled while building:
-  - the root `templates/` copy and the standard's second copy: keep them as checked copies, generate them with `make`, or drop the root `templates/` (it predates ADR-0007 and the README calls it canonical);
-  - whether `tools/` keeps its name or becomes `build/`;
-  - whether the agents policy (`AGENTS.md`'s source) becomes part of the doctrine or stays a Policy the doctrine links.
-- Follow-up actions: `knowledge/base/profile.md` with the Doctrine type; a fragment of the 2026-11-04 session and the first doctrine distilled from it; the workflow in `.claude/workflows/` with links both ways; the runbook naming the workflow and the doctrine; the README map naming the four homes.
+- Follow-up actions: `make` generates the root `standard/` and `templates/` copies and `make test` checks them, the README calling the plugin the source; `tools/` renamed `build/` in the Makefile, README, AGENTS.md, the exporters' own usage lines and the [Platform package exporters](/base/systems/exporters.md) system; `knowledge/base/profile.md` with the Doctrine type; a fragment of the 2026-11-04 session and the first doctrine distilled from it; the workflow in `.claude/workflows/` with links both ways; the runbook naming the workflow and the doctrine; the README map naming the four homes.
 
 # Related
 
