@@ -13,7 +13,7 @@ Usage:
   tag to its full SHA (`git rev-parse`).
 - Without --since, or for a bundle outside a git repository, the git facts are skipped with a notice.
 - With one, compares the reference commit with the working tree (`git diff --name-status -M`) and
-  lists every concept or fragment deleted or renamed since then. A change is recorded when the old
+  lists every concept or fragment deleted (and not back on disk) or renamed since then. A change is recorded when the old
   path was `status: deprecated` at the reference commit (`git show`) or when an entry of the root
   log.md that its version at the reference commit lacks names the old path; otherwise it is a finding:
   DELETED_UNRECORDED or RENAMED_UNRECORDED. index.md, log.md and projections/ are not concepts.
@@ -94,7 +94,7 @@ def deleted_and_renamed(bundle: Path, sha: str) -> list[dict]:
     for line in out.splitlines():
         parts = line.split("\t")
         status = parts[0]
-        if status == "D" and len(parts) == 2 and is_concept_path(parts[1]):
+        if status == "D" and len(parts) == 2 and is_concept_path(parts[1]) and not (bundle / parts[1]).exists():
             changes.append({"change": "deleted", "path": parts[1]})
         elif status.startswith("R") and len(parts) == 3 and is_concept_path(parts[1]):
             changes.append({"change": "renamed", "path": parts[1], "to": parts[2]})
@@ -181,7 +181,7 @@ def audit(bundle: Path, since: str | None) -> dict:
                 continue
             what = f"renamed to {c['to']}" if c["change"] == "renamed" else "deleted"
             finding = {"code": "RENAMED_UNRECORDED" if c["change"] == "renamed" else "DELETED_UNRECORDED",
-                       "level": "warn", "path": c["path"],
+                       "level": "WARN", "path": c["path"],
                        "message": f"{what} since {since} ({sha[:12]}) without a deprecation at the reference point "
                                   "or a log.md entry added since then naming it"}
             if "to" in c:
@@ -321,6 +321,16 @@ def test_a_tag_and_a_date_resolve_to_the_reference_commit(tmp_path):
     assert [f["path"] for f in audit(k, "2026-11-02")["findings"]] == ["base/domain/beta.md"]
 
 
+def test_a_file_put_back_but_not_yet_added_is_not_deleted(tmp_path):
+    k, first = _repo(tmp_path)
+    alpha = k / "base" / "domain" / "alpha.md"
+    text = alpha.read_text(encoding="utf-8")
+    alpha.unlink()
+    _commit(tmp_path, "drop alpha")
+    alpha.write_text(text, encoding="utf-8")  # untracked: git diff against the working tree still says D
+    assert audit(k, first)["changes"] == []
+
+
 def test_reserved_files_and_projections_are_not_concepts(tmp_path):
     k, _ = _repo(tmp_path)
     (k / "projections").mkdir()
@@ -372,7 +382,7 @@ def test_json_output_lists_the_findings(tmp_path, capsys):
     _commit(tmp_path, "drop alpha")
     assert main([str(k), "--since", first, "--json"]) == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["findings"][0]["code"] == "DELETED_UNRECORDED" and out["findings"][0]["level"] == "warn"
+    assert out["findings"][0]["code"] == "DELETED_UNRECORDED" and out["findings"][0]["level"] == "WARN"
 
 
 def test_git_refuses_any_command_but_read_only_ones(tmp_path):
