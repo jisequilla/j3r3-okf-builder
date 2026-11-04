@@ -1,6 +1,6 @@
 ---
 name: okf-review
-description: Runs the double check of an OKF bundle. Lists what changed since a reference point, the changes to its Domain Profile, the concepts that break it, the open and proposed conflicts of the Conflict Log, the open questions by owner and the draft concepts no person has verified, then records the person's decision on each conflict. Use when the user says "double check", "what is pending review", "review the knowledge changes", "resolve this conflict", "okf review", or after okf-distill has left a fragment in conflict.
+description: Runs the double check of an OKF bundle. Lists what changed since a reference point, the changes to its Domain Profile, the concepts that break it, the open and proposed conflicts of the Conflict Log, the open questions by owner and the draft concepts no person has verified, then records the person's decision on each conflict. Its audit mode groups lint's findings by what a person must do, adds the concepts deleted or renamed unrecorded since a reference point and the gaps that need judgment, and records the person's decision on each finding. Use when the user says "double check", "what is pending review", "review the knowledge changes", "resolve this conflict", "audit the bundle", "knowledge audit", "what is missing", "okf review", or after okf-distill has left a fragment in conflict.
 ---
 
 # okf-review
@@ -8,6 +8,8 @@ description: Runs the double check of an OKF bundle. Lists what changed since a 
 > **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`. Without uv, `python3` works if PyYAML is installed.
 
 The double check: shows a person what changed in the bundle, what is in dispute and what nobody has reviewed, and records what that person decides. It decides nothing itself.
+
+When the person asks for an audit ("audit the bundle", "knowledge audit", "what is missing", optionally since a commit, tag or date), follow **Audit mode** below instead of the steps.
 
 ## Steps
 
@@ -45,3 +47,47 @@ The double check: shows a person what changed in the bundle, what is in dispute 
     ```
     Fix any ERROR before finishing.
 13. **Close**: what was decided and by whom, what is still open (conflicts, and open questions by owner, the due ones first), the concepts still awaiting review, and the concepts that still break the Domain Profile.
+
+## Audit mode
+
+The audit lists what the bundle is missing or gets wrong, one finding per item with the concept and the evidence, and records what the person decides on each. It changes nothing before the person decides.
+
+1. **Find the bundle** as in step 1: its version, its OKF profile, the Domain Profile in force and its aliases.
+2. **Git facts.** The reference point is only the one the person names: a commit, a tag or a date (for a date, the last commit before it); step 2's default does not apply here. Run:
+   ```bash
+   uv run "<skills>/okf-standard/scripts/okf_audit.py" <bundle> --since <ref> --json   # without a reference point: no --since
+   ```
+   It runs only read-only git (`log`, `diff`, `rev-parse`, `show`, `ls-files`, `hash-object` without `-w`) and leaves out what lint leaves out (`.okfignore`, nested bundles, non-OKF directories, files that are not concepts). Without a reference point, or for a bundle outside a git repository, it skips the git facts and says so in `notices`: tell the person, and that naming a commit, tag or date adds them. With one, each of its `findings` is a finding: `DELETED_UNRECORDED` (a concept or fragment deleted, neither `deprecated` at the reference commit nor recorded by an entry added since to the root `log.md` or its directory's, a **Deprecation** or one saying it was deprecated, removed or superseded; the message names untracked files of the same name) or `RENAMED_UNRECORDED` (renamed, by git's rename detection or as an untracked file of identical content, with `to`, and no entry added since naming both paths). Audit entries never record a change. Its other `notices` (an accepted-as-is item it cannot read, raised again) go to the person. `reference.commit` is the reference point's full commit.
+   **Earlier audits.** Its `accepted_as_is` lists the findings earlier audits at the same reference point accepted as is (matched by the full commit, so a date and a tag of the same commit are one reference point; outside git, by the reference as typed; with none, `none`): leave each out of this audit and say how many were left out.
+3. **Mechanical part**: `uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --json`. Group its findings and `metrics` by what a person must do, as lint reports them; never re-derive them by hand:
+
+   | Action | Codes and metrics |
+   |---|---|
+   | Rotate a secret | `SECRET_IN_BUNDLE`: remove it, rotate it, scan the history with gitleaks; never show the value |
+   | Restore a fragment's material | `FRAGMENT_MATERIAL_CHANGED`: put back the file its `sha256` names, or deprecate the fragment and capture a new one; never change the `sha256` to match |
+   | Verify again | `VERIFIED_STALE`, `STALE`: a recorded verification (step 11), a new `stale_after` or a deprecation |
+   | Distill | `FRAGMENT_NO_LEDGER`, `LEDGER_GAP`, `FRAGMENT_UNCITED`; `metrics.fragments.by_status` pending and `oldest_pending_days` (`okf-distill`) |
+   | Cite | `FOOTNOTE_NO_SOURCE` |
+   | Fix a link | `BROKEN_LINK`, `LINK_OUTSIDE` |
+   | Fill a section | `SECTION_EMPTY` |
+   | Answer or drop a question | `QUESTION_REVIEW_DUE`, `QUESTION_NO_ANSWER` |
+   | Other lint findings | every other code, with lint's message |
+
+   `metrics.concepts_by_trust` and `stale_after_cluster` are shown as figures, never as findings.
+4. **Judgment part.** Read the concepts and propose, one finding per item, each with the concept's bundle path and the evidence (the lines, the links, the other concepts):
+   - **Unwritten terms and systems**: a term or a system that other concepts mention and no `Term` or `System` concept (aliases and local types resolved) defines.
+   - **Missing sections**: an Architecture Decision without its alternatives or its consequences, a Runbook without steps or a rollback: the section absent, or present with content that says nothing lint can tell (`TBD`, `n/a`). A section lint reports as `SECTION_EMPTY` is already in the mechanical part: not raised again.
+   - **Unfootnoted claims**: in a concept with `sources`, a claim of the body that no `[^id]` footnote supports.
+   - **Uncited sources** (`SOURCE_UNCITED`): a `sources` entry that no `[^id]` footnote of the body cites (the reverse, a footnote with no source, is lint's `FOOTNOTE_NO_SOURCE`).
+   - **Contradictions**: two concepts that state incompatible things and have no row in the Conflict Log.
+   - **Links to retired targets** (`LINK_TO_RETIRED`): a concept linking to a `deprecated` concept outside that concept's own `supersedes`/`superseded_by` chain; a concept linking to an Open Question that is `answered` or `dropped`; an `answered` or `dropped` question that still lists `blocks`. Links from `index.md` and `log.md` are not findings.
+   - **Free-text records**: a distilled fragment whose `# Record` has no `##` headings (bold-lead paragraphs) and a part that no row of its `# Distillation` ledger accounts for.
+
+   A finding inside an Architecture Decision, whatever its `decision_status`, is offered only as accept as is, a new ADR that supersedes it (`okf-capture`) or the tracker: an ADR's body is never edited. The one exception is a committed secret (`SECRET_IN_BUNDLE`): it is removed from the ADR and rotated, since removing a credential does not change the decision, and the log entry says so, naming the ADR and never the value.
+5. **Present** the findings numbered, grouped as the git facts, the mechanical part by action and the judgment part, with how many accepted earlier were left out. Ask the person to decide each one: **fix now** (applied with the rules of the skill that owns it: `okf-capture` for a concept, with a new `generated.at`; `okf-distill` for a fragment's ledger; step 11 for a verification), **open question** (an `Open Question` with its `owner`, `okf-capture`), **conflict** (a row in the Conflict Log, state `proposed`), **accept as is**, or **tracker** (listed for the person to file, never written into `base/`). Suggest one if useful; never pick it. A finding not decided stays out of the record and is listed at the close.
+6. **Record** the decisions as one **Update** entry under today's date in `knowledge/log.md`, in this form, with the person's `human:<id>` (ask for it):
+   ```markdown
+   * **Update**: Audit since `<the reference point as given, or none>` (reference `<reference.commit; outside git, the reference as typed; none>`): <N> findings, <M> left out as accepted earlier; fixed now: <links>; open questions: <links>; conflicts: <C-NNN>; tracker: <short names>; decided by human:<id>. Accepted as is: `/base/<dir>/<file>.md` (<short name of the finding>); `/fragments/<file>.md` (<short name>).
+   ```
+   `Accepted as is:` comes last, each item a bundle path in backticks and a short name in parentheses with no parentheses inside, so a later audit at the same reference point reads them; leave the part out when nothing was accepted. Add the **Creation**, **Update** and **Deprecation** entries of what the fixes changed, then index and validate as in step 12.
+7. **Close**: what was decided and by whom, the findings left undecided, and the number left out as accepted earlier.
