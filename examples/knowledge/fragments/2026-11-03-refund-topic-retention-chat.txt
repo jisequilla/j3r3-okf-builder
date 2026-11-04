@@ -1,0 +1,4 @@
+[2026-11-03 10:02] Tomás: The refunds topic is live. Retention is the bus default, 7 days, until the retention question is answered.
+[2026-11-03 10:05] María: Finance said 120 days. Can the topic keep that long?
+[2026-11-03 10:09] Tomás: Yes, with tiered storage. I would rather not change it before the payments sync decides.
+[2026-11-03 10:10] María: Agreed. I will bring both numbers to the sync.
