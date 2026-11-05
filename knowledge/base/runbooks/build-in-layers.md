@@ -6,7 +6,7 @@ tags: [runbook, process, agents]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T04:25:13Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T21:49:39Z }
 ---
 
 # Trigger
@@ -28,7 +28,7 @@ A change that touches several layers (standard, scripts, skills, `knowledge/`) o
 5. **Run each ticket** with the agent workflow `okf-layer-ticket` (`.claude/workflows/okf-layer-ticket.js`), which carries out the [Building with agents](/base/doctrine/building-with-agents.md) doctrine: one ticket per run, launched only after the owner's written message naming that ticket (see Warnings), with the args `{ ticket, ticketPath, commonPath, bead, continueBranch? }` (the ticket's id, its file, the context file common to every ticket, its tracker record and, to resume an interrupted builder, the branch holding its WIP commit). The workflow runs these stages:
    1. *Pre-flight*: an agent reads the ticket against the code and flags false premises, ambiguities and decisions that belong to the owner.
    2. *Builder*: works in a worktree, proves each criterion (revert → red → restore), pastes the output into the PR body and opens the PR as a draft.
-   3. *Review*: one or two reviewers with fresh context, without the builder's report. Use two lenses (correctness, tests) if the standard, the linter or a skill is touched. Findings are classified against the ticket's blocking bar as blocking, to fix or nit; only blocking findings force a round of fixes.
+   3. *Review*: two reviewers with fresh context, without the builder's report, one per lens: correctness (the diff does what the ticket says, without contradicting the ADRs the ticket or the common context names, and without regressions) and tests (each criterion's check would fail if the change were reverted). Findings are classified against the ticket's blocking bar as blocking, to fix or nit; only blocking findings force a round of fixes.
    4. *Fixes*: at most two rounds; if that is not enough, the ticket goes back to the owner.
 6. **Verify and merge from the main session:** run `make test` and `make lint` on main with the branch merged, merge the PR and close the record citing the PR. Pending nits go to a single follow-up record.
 7. **Push main before the next layer.** The agents' worktrees branch off `origin/main`, not the local main: a layer merged only locally is invisible to the next one.

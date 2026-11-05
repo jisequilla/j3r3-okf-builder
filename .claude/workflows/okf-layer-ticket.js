@@ -41,14 +41,14 @@ phase('Build')
 const notes = [...pre.false_premises, ...pre.ambiguities].map(s => `- ${s}`).join('\n') || '- none'
 const build = await agent(`${READ}
 You are the builder. You are in an isolated git worktree of the repo. ${args.continueBranch
-  ? `A previous builder was interrupted. Its partial work is the local WIP commit on branch ${args.continueBranch} (not pushed): git fetch origin; git checkout ${args.continueBranch}. Read the ticket again (it gained a "Settled for the builder" section), review what the WIP did against it, keep what is right, fix what is not, and finish the rest. Before pushing, squash the WIP into your final commit(s) so no "WIP" commit reaches the PR (git reset --soft origin/main, then commit). Implement`
+  ? `A previous builder was interrupted. Its partial work is the local WIP commit on branch ${args.continueBranch} (not pushed): git fetch origin; git checkout ${args.continueBranch}. Read the ticket again (it may have changed since that builder started, for example with decisions settled for the builder), review what the WIP did against it, keep what is right, fix what is not, and finish the rest. Before pushing, squash the WIP into your final commit(s) so no "WIP" commit reaches the PR (git reset --soft origin/main, then commit). Implement`
   : `Start a branch from origin/main (git fetch origin; git checkout -b ${bead.replace(/\./g, '-')} origin/main). Implement`} the ticket within its closed file list. Pre-flight notes to take into account:
 ${notes}
 Prove each acceptance criterion by revert → red → restore where it is code, and by the stated check otherwise. Run make test and make lint. Commit, push, and open a DRAFT PR to main with gh (gh auth switch -u jisequilla first) whose body has: what changed, each criterion with the pasted evidence, and "Ticket: ${ticket} (bead ${bead})". If you must stop (a needed file outside the list, a criterion impossible), still push what you have, open the draft PR and explain in stopped_reason; otherwise stopped_reason is "".`, { label: `build:${ticket}`, phase: 'Build', schema: BUILD, isolation: 'worktree' })
 if (!build || !build.pr_number) return { ticket, stage: 'build', pre, build }
 
 const LENSES = [
-  { key: 'correctness', text: 'Lens: correctness. Does the diff do what the ticket table says, without contradicting ADR-0018/0019 or the common context, and without regressions?' },
+  { key: 'correctness', text: 'Lens: correctness. Does the diff do what the ticket table says, without contradicting the ADRs the ticket or the common context names, and without regressions?' },
   { key: 'tests', text: 'Lens: tests. Is each acceptance criterion really proven (would its test fail if the change were reverted)? Are the make test steps and script --test cases sound? Read the evidence pasted in the PR body; do NOT run make test (it collides on /tmp paths); you may run single script --test commands from a fresh checkout of the PR branch in the scratchpad.' },
 ]
 const review = (round) => parallel(LENSES.map(l => () => agent(`${READ}
