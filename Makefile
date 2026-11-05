@@ -78,6 +78,8 @@ test:
 	for b in knowledge examples/knowledge; do uv run -q $(S)/okf_lint.py $$b --json | python3 -c "import json,sys; assert not json.load(sys.stdin)['profile_outdated'], '$$b: profile outdated'"; done
 	rm -rf /tmp/okf-fx && mkdir -p /tmp/okf-fx && git archive 00e510e examples/knowledge | tar -x -C /tmp/okf-fx
 	diff -r /tmp/okf-fx/examples/knowledge examples/fixtures/knowledge-2.0
+	@echo "[8b] each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways (ADR-0028 decision 5)"
+	python3 -c "import re,pathlib; ws=sorted(pathlib.Path('.claude/workflows').glob('*.js')); assert ws, 'no workflow in .claude/workflows'; cs=[(str(p.relative_to('knowledge')), m.group(1)) for p in sorted(pathlib.Path('knowledge').rglob('*.md')) for m in [re.search(r'^resource: (/\.claude/workflows/\S+)\s*$$', p.read_text(encoding='utf-8'), re.M)] if m]; bad=[r + ': named by ' + c + ', missing' for c, r in cs if not pathlib.Path(r[1:]).is_file()]; bad+=[str(w) + ': no concept names it in resource' for w in ws if not [c for c, r in cs if r == '/' + str(w)]]; bad+=[str(w) + ': does not name knowledge/' + c for w in ws for c, r in cs if r == '/' + str(w) and 'knowledge/' + c not in w.read_text(encoding='utf-8')]; assert not bad, '; '.join(bad); print(len(ws), 'workflows linked both ways with', len(cs), 'concepts')"
 	$(MAKE) -s dogfood
 	@echo "OK"
 dogfood:
