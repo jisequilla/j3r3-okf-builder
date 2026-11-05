@@ -6,7 +6,7 @@ tags: [runbook, process, agents]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T02:47:27Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T04:25:13Z }
 ---
 
 # Trigger
@@ -25,7 +25,7 @@ A change that touches several layers (standard, scripts, skills, `knowledge/`) o
    - exact verification commands (`make test`, `make lint`, the layer's grep);
    - the blocking bar: which failures block the merge (for example, a criterion not met or a regression in an existing check) and which do not (edge cases outside the ticket's input table). Without a bar written in advance, each review round finds new exotic cases and the fixes do not converge.
 4. **Open one record per ticket** in whichever tracker is used and store the ticket text in it.
-5. **Run each ticket:**
+5. **Run each ticket** with the agent workflow `okf-layer-ticket` (`.claude/workflows/okf-layer-ticket.js`), which carries out the [Building with agents](/base/doctrine/building-with-agents.md) doctrine: one ticket per run, launched only after the owner's written message naming that ticket (see Warnings), with the args `{ ticket, ticketPath, commonPath, bead, continueBranch? }` (the ticket's id, its file, the context file common to every ticket, its tracker record and, to resume an interrupted builder, the branch holding its WIP commit). The workflow runs these stages:
    1. *Pre-flight*: an agent reads the ticket against the code and flags false premises, ambiguities and decisions that belong to the owner.
    2. *Builder*: works in a worktree, proves each criterion (revert → red → restore), pastes the output into the PR body and opens the PR as a draft.
    3. *Review*: one or two reviewers with fresh context, without the builder's report. Use two lenses (correctness, tests) if the standard, the linter or a skill is touched. Findings are classified against the ticket's blocking bar as blocking, to fix or nit; only blocking findings force a round of fixes.
@@ -45,3 +45,8 @@ A change that touches several layers (standard, scripts, skills, `knowledge/`) o
 # Rollback
 
 Each ticket is its own PR: revert the merge of the affected PR. If a layer already has dependent tickets merged, revert in reverse layer order.
+
+# Related
+
+* [Building with agents](/base/doctrine/building-with-agents.md)
+* [ADR-0009: Build multi-stage changes in layers and delegated tickets](/base/decisions/ADR-0009-build-in-layers-and-tickets.md)
