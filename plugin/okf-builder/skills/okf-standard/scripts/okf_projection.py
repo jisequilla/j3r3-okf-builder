@@ -17,8 +17,9 @@ Usage:
 - Drift by nature (decision 4), the warning PROJ_DRIFT: a composed ref whose SHA-256 (the file's bytes; for a
   projection directory, its content.md) is not the recorded one; a rendered projection whose `render`, run with
   --run-render, writes a file into $OKF_PROJECTION_OUT that differs from the file of the same relative path in the
-  projection's directory, or that is absent there (or, inside git, not tracked there). A render that fails or runs
-  over 120 s is the error PROJ_RENDER_FAILED, its output's last lines masked as okf_lint masks a validator's.
+  projection's directory, or that is absent there (or, inside git, not tracked there, unless the projection is
+  transient, which is never committed). A render that fails or runs over 120 s is the error PROJ_RENDER_FAILED, its
+  output's last lines masked as okf_lint masks a validator's; on a timeout the render's whole process group is killed.
 - Without --run-render nothing is executed: rendered projections are listed under not_checked. Recomputable ones are
   listed under to_recompute, for a person; frozen ones under frozen, not checked for drift.
 - --record-hashes SLUG writes each ref's current sha256 into a composed projection's projection.yaml in place, every
@@ -33,9 +34,11 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -201,30 +204,46 @@ def _tail(text: str) -> str:
     return out[-RENDER_OUTPUT_MAX:] if len(out) > RENDER_OUTPUT_MAX else out
 
 
-def run_render(bundle: Path, slug: str, command: str) -> list[dict]:
-    """Run a rendered projection's render into an empty directory and compare what it writes (ADR-0030 decision 2)."""
+def _kill_group(proc: subprocess.Popen) -> None:
+    """Kill the render and every process it started (its own session); proc.kill() where there is no killpg."""
+    if hasattr(os, "killpg"):
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+            return
+        except (ProcessLookupError, PermissionError):
+            pass
+    proc.kill()
+
+
+def run_render(bundle: Path, slug: str, command: str, lifecycle: str | None = None) -> list[dict]:
+    """Run a rendered projection's render into an empty directory and compare what it writes (ADR-0030 decision 2).
+    A transient projection is never committed, so its files are not checked against git."""
     pdir = bundle / PROJECTIONS_DIR / slug
     findings: list[dict] = []
     with tempfile.TemporaryDirectory(prefix="okf-projection-") as out:
         env = {**os.environ, OUT_ENV: out}
         why, output = None, ""
         try:
-            p = subprocess.run(command, shell=True, cwd=bundle, env=env, capture_output=True, text=True,
-                               errors="replace", stdin=subprocess.DEVNULL, timeout=RENDER_TIMEOUT)
-            if p.returncode != 0:
-                why, output = f"exit {p.returncode}", p.stdout + p.stderr
-        except subprocess.TimeoutExpired as e:
-            def text(b) -> str:
-                return b.decode("utf-8", "replace") if isinstance(b, bytes) else (b or "")
-            why, output = f"timed out after {RENDER_TIMEOUT}s", text(e.stdout) + text(e.stderr)
+            proc = subprocess.Popen(command, shell=True, cwd=bundle, env=env, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True, errors="replace", stdin=subprocess.DEVNULL,
+                                    start_new_session=True)
         except OSError as e:
             why, output = "could not start", str(e)
+        else:
+            try:
+                stdout, stderr = proc.communicate(timeout=RENDER_TIMEOUT)
+                if proc.returncode != 0:
+                    why, output = f"exit {proc.returncode}", stdout + stderr
+            except subprocess.TimeoutExpired:
+                _kill_group(proc)
+                stdout, stderr = proc.communicate()
+                why, output = f"timed out after {RENDER_TIMEOUT}s", (stdout or "") + (stderr or "")
         if why:
             tail = _tail(output)
             return [{"code": "PROJ_RENDER_FAILED", "level": "ERROR", "slug": slug,
                      "message": f"render failed ({why})" + (f": {tail}" if tail else "")}]
         written = sorted(f for f in Path(out).rglob("*") if f.is_file())
-        tracked = tracked_files(pdir) if written else None
+        tracked = tracked_files(pdir) if written and lifecycle != "transient" else None
         for f in written:
             rel = f.relative_to(out).as_posix()
             committed = pdir / rel
@@ -287,7 +306,7 @@ def check(bundle: Path, run_render_flag: bool = False) -> dict:
             report["findings"] += composed_drift(bundle, slug, m)
         elif nature == "rendered":
             if run_render_flag:
-                report["findings"] += run_render(bundle, slug, m["render"])
+                report["findings"] += run_render(bundle, slug, m["render"], m.get("lifecycle"))
             else:
                 report["not_checked"].append(slug)
     if report["not_checked"]:
@@ -451,10 +470,11 @@ def test_missing_keys_are_proj_missing_key_naming_the_key(tmp_path):
         "rendered": "lifecycle: canonical\nnature: rendered\nintent: x\n",
         "composed": "lifecycle: canonical\nnature: composed\nintent: x\n",
         "deliverable": "lifecycle: deliverable\nnature: recomputable\nintent: x\n",
+        "no-intent": "lifecycle: canonical\nnature: recomputable\n",
     })
     msgs = {(f["slug"], f["message"].split("'")[1]) for f in check(k)["findings"] if f["code"] == "PROJ_MISSING_KEY"}
     assert msgs == {("bare", "lifecycle"), ("bare", "nature"), ("rendered", "refs"), ("rendered", "render"),
-                    ("composed", "refs"), ("deliverable", "versions")}
+                    ("composed", "refs"), ("deliverable", "versions"), ("no-intent", "intent")}
 
 
 def test_bad_values_are_proj_bad_value(tmp_path):
@@ -561,6 +581,24 @@ def test_run_render_inside_git_flags_a_file_that_is_not_committed(tmp_path, monk
     assert check(k, run_render_flag=True)["findings"] == []
 
 
+def test_run_render_inside_git_does_not_ask_a_transient_projection_to_be_committed(tmp_path, monkeypatch):
+    for key, v in _ENV.items():
+        monkeypatch.setenv(key, v)
+    render = "render: 'echo hi > \"$OKF_PROJECTION_OUT/out.txt\"'"
+    k = _bundle(tmp_path, {
+        "can": _canonical().replace("render: 'true'", render),
+        "tra": _canonical().replace("lifecycle: canonical", "lifecycle: transient").replace("render: 'true'", render),
+    })
+    for slug in ("can", "tra"):
+        (k / "projections" / slug / "out.txt").write_text("hi\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q"], check=True)
+    [f] = check(k, run_render_flag=True)["findings"]
+    assert (f["code"], f["slug"]) == ("PROJ_DRIFT", "can") and "out.txt is not committed" in f["message"]
+    (k / "projections" / "tra" / "out.txt").write_text("edited\n", encoding="utf-8")
+    assert [(f["slug"], "differs" in f["message"]) for f in check(k, run_render_flag=True)["findings"]] == [
+        ("can", False), ("tra", True)]  # a transient render is still compared byte for byte
+
+
 def test_a_failing_or_slow_render_is_proj_render_failed_with_its_output_masked(tmp_path, monkeypatch):
     k = _bundle(tmp_path, {"r": _canonical().replace(
         "render: 'true'", "render: 'echo token=FAKE-TOKEN-0001; echo boom >&2; exit 3'")})
@@ -572,6 +610,17 @@ def test_a_failing_or_slow_render_is_proj_render_failed_with_its_output_masked(t
                                                     encoding="utf-8")
     [f] = check(k, run_render_flag=True)["findings"]
     assert f["code"] == "PROJ_RENDER_FAILED" and "timed out" in f["message"]
+
+
+def test_a_render_timeout_kills_the_processes_the_render_started(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], "RENDER_TIMEOUT", 1)
+    marker = tmp_path / "child-survived"
+    k = _bundle(tmp_path, {"r": _canonical().replace(
+        "render: 'true'", f"render: \"sh -c 'sleep 5; touch {marker}' & wait\"")})
+    [f] = check(k, run_render_flag=True)["findings"]
+    assert f["code"] == "PROJ_RENDER_FAILED" and "timed out after 1s" in f["message"]
+    time.sleep(6)
+    assert not marker.exists()
 
 
 def test_recomputable_is_validated_and_listed_to_recompute(tmp_path):

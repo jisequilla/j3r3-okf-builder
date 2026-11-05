@@ -116,7 +116,7 @@ A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.ya
 
 | Nature | What it is | How drift is checked |
 |---|---|---|
-| `rendered` | A deterministic function of its refs | Only with `--run-render`: `render` runs through the shell from the bundle root with `OKF_PROJECTION_OUT` naming an empty temporary directory, for at most 120 s; each file it writes there is compared with the file of the same relative path in the projection's directory, and a file that differs, is absent there or, in a git work tree, is not tracked there is drift. Nothing is recorded |
+| `rendered` | A deterministic function of its refs | Only with `--run-render`: `render` runs through the shell from the bundle root with `OKF_PROJECTION_OUT` naming an empty temporary directory, for at most 120 s, after which it and every process it started are killed; each file it writes there is compared with the file of the same relative path in the projection's directory, and a file that differs, is absent there or, in a git work tree, is not tracked there (except in a `transient` projection, which is never committed) is drift. Nothing is recorded |
 | `composed` | Prose a person or a model selected and wrote from its refs | A ref whose current SHA-256 (of the file's bytes; for a projection directory, of its `content.md`) differs from the recorded `sha256` |
 | `recomputable` | `content.md` is a procedure over an external source; the render holds the dated values | Listed for a person to recompute by hand: rerun the procedure and propose the difference |
 
