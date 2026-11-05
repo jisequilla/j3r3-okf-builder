@@ -85,7 +85,7 @@ What is in force for a concept is the built-in Domain Profile, `<skills>/okf-sta
 `<skills>` = the directory that holds the `okf-*` skills (the parent of this skill). This skill carries the scripts and templates the others use:
 
 ```
-<skills>/okf-standard/scripts/okf_init.py | okf_lint.py | okf_profile.py | okf_index.py | okf_migrate.py | okf_audit.py | okf_common.py
+<skills>/okf-standard/scripts/okf_init.py | okf_lint.py | okf_profile.py | okf_index.py | okf_migrate.py | okf_audit.py | okf_projection.py | okf_common.py
 <skills>/okf-standard/templates/*.md
 <skills>/okf-standard/profiles/knowledge-3.0.md       # the built-in Domain Profile; okf_lint.py --profiles lists it as "built-in"
 <skills>/okf-standard/references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
