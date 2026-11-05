@@ -1,13 +1,13 @@
 ---
 type: System
 title: Platform package exporters
-description: tools/export_copilot.py and tools/export_m365.py generate the platform packages of the skills for other repos and for Microsoft 365 Copilot.
-resource: /tools
+description: build/export_copilot.py and build/export_m365.py generate the platform packages of the skills for other repos and for Microsoft 365 Copilot.
+resource: /build
 tags: [system, exporters, m365, copilot]
 status: draft
 owner: human:jisequilla
 runtime: python3
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T03:47:41Z }
 ---
 
 # Responsibility
@@ -22,7 +22,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
 
 - They replace the `<skills>/` convention with the concrete path of the target.
 - M365: each skill is self-contained and gets only the scripts and templates it uses (`NEEDS` table), to respect the limit of 20 companion files: `okf-init` the templates `okf_init.py` renders; `okf-capture` the 15 concept templates; `okf-fragment` `fragment.md`; `okf-distill` the concept templates and `conflict-log.md`; `okf-review` no templates. The M365 okf-standard keeps only `references/`, and its template table says each template is carried by the skill that writes that type. They add `license`/`metadata` and an environment note that matches what the skill ships, and the build fails if a skill's text names a script or template its copy does not carry. `okf-distill` sits at the limit: a new template needs room made first.
-- The knowledge-architect agent package is generated from `plugin/okf-builder/agents/knowledge-architect.md`: the body becomes `instructions`, and `tools/m365-agent.json` gives the `agent_skills` and the conversation starters ([ADR-0017](/base/decisions/ADR-0017-agent-skills-per-platform.md)). Each configured skill is copied into the package, because `agent_skills` must point inside the same app package and an app carries one declarative agent. The exporter fails if the body passes 8,000 characters, or if the configured skills are empty, pass 8, repeat a skill, or name one the Claude agent does not list or the plugin does not have. It is a separate package with no app-level `agentSkills`, so it cannot break the Cowork plugin; whether one package can carry both is untested.
+- The knowledge-architect agent package is generated from `plugin/okf-builder/agents/knowledge-architect.md`: the body becomes `instructions`, and `build/m365-agent.json` gives the `agent_skills` and the conversation starters ([ADR-0017](/base/decisions/ADR-0017-agent-skills-per-platform.md)). Each configured skill is copied into the package, because `agent_skills` must point inside the same app package and an app carries one declarative agent. The exporter fails if the body passes 8,000 characters, or if the configured skills are empty, pass 8, repeat a skill, or name one the Claude agent does not list or the plugin does not have. It is a separate package with no app-level `agentSkills`, so it cannot break the Cowork plugin; whether one package can carry both is untested.
 - The M365 manifests use stable GUIDs (uuid5 of the repo URL, one per package).
 
 # Operation
