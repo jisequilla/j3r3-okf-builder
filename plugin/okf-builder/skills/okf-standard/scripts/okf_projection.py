@@ -619,7 +619,7 @@ def test_record_hashes_refuses_and_changes_nothing(tmp_path, capsys):
     multi = "lifecycle: canonical\nnature: composed\nintent: x\nrefs:\n  - { path: /base/domain/alpha.md,\n      sha256: " + "0" * 64 + " }\n"
     k = _bundle(tmp_path, {
         "block": block, "multi": multi,
-        "r": _canonical(),
+        "r": _canonical(f"[{{ path: /base/domain/alpha.md, sha256: {'0' * 64} }}]"),
         "frz": _canonical(f"[{{ path: /base/domain/alpha.md, sha256: {'0' * 64} }}]", nature="composed", extra="frozen: true\n"),
         "gone": _canonical(f"[{{ path: /base/domain/gone.md, sha256: {'0' * 64} }}]", nature="composed"),
     })
@@ -628,6 +628,7 @@ def test_record_hashes_refuses_and_changes_nothing(tmp_path, capsys):
         assert main([str(k), "--record-hashes", slug]) == 2, slug
     err = capsys.readouterr().err
     assert "refs[0] /base/domain/alpha.md is not a one-line" in err and "nothing changed" in err
+    assert "r is not a composed projection (nature: rendered)" in err
     assert {p: p.read_bytes() for p in (k / "projections").rglob(MANIFEST)} == before
 
 
