@@ -96,7 +96,7 @@ knowledge/
 
 ### 2.1 Projections
 
-A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.yaml`, its manifest; `content.md`, its content (for a recomputable projection, the procedure); `render/<renderer>.md`, one input per renderer, when it is rendered; and `deliverables/`, the rendered files, latest version only. It is not OKF: no OKF tool reads it, and its own tools are `okf_projection.py` and the `okf-projection` skill (ADR-0030).
+A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.yaml`, its manifest; `content.md`, its content (for a recomputable projection, the procedure); `render/<renderer>.md`, one input per renderer, when it is rendered; and `deliverables/`, the rendered files, latest version only. It is not OKF: no OKF tool treats it as a concept (`okf-distill` reads only its `refs`), and its own tools are `okf_projection.py` and the `okf-projection` skill (ADR-0030).
 
 **`projection.yaml`** (ADR-0022 decision 2):
 
