@@ -11,7 +11,7 @@ Copilot (VS Code agent mode, Copilot CLI and coding agent) discovers Agent Skill
   4. Writes an AGENTS.md snippet with the inventory and the rule for reading knowledge/.
 
 Usage:
-    python3 tools/export_copilot.py [--out dist/copilot] [--skills-dir .github/skills] [--zip]
+    python3 build/export_copilot.py [--out dist/copilot] [--skills-dir .github/skills] [--zip]
 """
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ Copy the contents of this directory to the root of your repository:
 The scripts (`okf_init/lint/index/migrate.py`) are in `{skills_dir}/okf-standard/scripts/` and need Python ≥ 3.9
 and PyYAML: `uv run` installs it, or plain `python3` works where it is installed. In Copilot, running scripts asks for confirmation unless you add `allowed-tools` to the SKILL.md.
 
-Generated from the okf-builder plugin with `tools/export_copilot.py`; do not edit here: edit the plugin and export again.
+Generated from the okf-builder plugin with `build/export_copilot.py`; do not edit here: edit the plugin and export again.
 """, encoding="utf-8")
 
     print(f"{n} skills exported to {out} ({skills_dir})")

@@ -57,7 +57,7 @@ OWN_REL = "base/profile.md"
 BUILTIN = "built-in"  # the source label of the built-in layer
 BUILTIN_LABEL = "<skills>/okf-standard/profiles/knowledge-3.0.md"
 # scripts/ sits beside profiles/ in okf-standard. A copy without profiles/ reads BUILTIN_TEXT, the copy of that
-# file an exported package inlines here (tools/export_m365.py), and without either falls back to the names of §4
+# file an exported package inlines here (build/export_m365.py), and without either falls back to the names of §4
 BUILTIN_PATH = Path(__file__).resolve().parent.parent / "profiles" / "knowledge-3.0.md"
 BUILTIN_TEXT: str | None = None
 STANDARD_TYPE_NAMES = ("Project", "Architecture View", "Architecture Decision", "Term", "Glossary", "System", "API",

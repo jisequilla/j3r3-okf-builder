@@ -3,9 +3,17 @@
 SHELL := /bin/bash -eo pipefail
 .SHELLFLAGS := -c
 PLUGIN=plugin/okf-builder
-S=$(PLUGIN)/skills/okf-standard/scripts
+REF=$(PLUGIN)/skills/okf-standard
+S=$(REF)/scripts
 EX ?= examples/knowledge
-.PHONY: plugin lint test dogfood copilot m365 all check-links secrets
+# The root standard/ and templates/ are generated from $(REF): edit there, then run make copies.
+COPIES_OUT ?= .
+.PHONY: copies plugin lint test dogfood copilot m365 all check-links secrets
+copies:
+	rm -rf $(COPIES_OUT)/standard $(COPIES_OUT)/templates
+	mkdir -p $(COPIES_OUT)/standard $(COPIES_OUT)/templates
+	cp $(REF)/references/OKF-STANDARD.md $(REF)/references/OKF-COMPATIBILITY.md $(COPIES_OUT)/standard/
+	cp $(REF)/templates/*.md $(COPIES_OUT)/templates/
 plugin:
 	cd $(PLUGIN) && zip -qr ../../okf-builder.plugin . -x "*.DS_Store" -x "*__pycache__*"
 	@echo "→ okf-builder.plugin"
@@ -46,7 +54,7 @@ test:
 	uv run -q $(S)/okf_lint.py /tmp/okf-p3 | tail -1 | grep ' 0 errors'
 	test -d /tmp/okf-p3/base/decisions && test ! -e /tmp/okf-p3/decisions && grep -q 'knowledge/3.0' /tmp/okf-p3/index.md && grep -q '\*\*Migration\*\*' /tmp/okf-p3/log.md
 	@echo "[6] M365 export: within the companion limit, each exported skill self-contained, and its okf_migrate.py migrating examples/fixtures/knowledge-2.0"
-	python3 tools/export_m365.py >/dev/null
+	python3 build/export_m365.py >/dev/null
 	rm -rf /tmp/okf-m365 && uv run -q dist/m365/package/skills/okf-init/scripts/okf_init.py --root /tmp/okf-m365 --title T --description D --actor human:test >/dev/null
 	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
 	rm -rf /tmp/okf-m365p3 && uv run -q dist/m365/package/skills/okf-migrate/scripts/okf_migrate.py examples/fixtures/knowledge-2.0 --profile knowledge/3.0 --out /tmp/okf-m365p3 >/dev/null
@@ -59,14 +67,13 @@ test:
 	printf -- '---\ntype: Open Question\ntitle: A\ndescription: A.\nowner: human:test\nquestion_status: answered\nasked_in: /fragments/2026-11-02-meeting.md\ngenerated: { by: human:test, at: 2026-11-02T00:00:00Z }\n---\n\n# Question\n\nWhom?\n' > /tmp/okf-m365q/base/questions/whom.md
 	uv run -q dist/m365/package/skills/okf-lint/scripts/okf_lint.py /tmp/okf-m365q --json > /tmp/okf-m365q.json || test $$? -eq 1
 	python3 -c "import json; c={i['code'] for i in json.load(open('/tmp/okf-m365q.json'))['findings']}; w={'FRAGMENT_NO_FIELD','BAD_ACTOR','BAD_DISTILLATION_STATUS','BAD_QUESTION_STATUS','QUESTION_NO_ANSWER'}; assert w <= c, c; print('exported okf-lint reports', ', '.join(sorted(w)))"
-	@echo "[7] canonical copies match the source; the built-in Domain Profile matches §4 and is inlined byte for byte in each exported okf_profile.py; M365 agent within its limits and matching tools/m365-agent.json"
-	uv run -q $(S)/okf_profile.py --check-builtin standard/OKF-STANDARD.md
+	@echo "[7] the committed root copies match the ones make copies generates; the built-in Domain Profile matches §4 and is inlined byte for byte in each exported okf_profile.py; M365 agent within its limits and matching build/m365-agent.json"
+	uv run -q $(S)/okf_profile.py --check-builtin $(REF)/references/OKF-STANDARD.md
 	python3 -c "import ast,glob,sys; src=open('$(PLUGIN)/skills/okf-standard/profiles/knowledge-3.0.md','rb').read(); fs=sorted(glob.glob('dist/m365/*/skills/*/scripts/okf_profile.py')); assert fs, 'no exported okf_profile.py'; bad=[f for f in fs if [n.value.value.encode('utf-8') for n in ast.parse(open(f,encoding='utf-8').read()).body if isinstance(n,ast.AnnAssign) and getattr(n.target,'id','')=='BUILTIN_TEXT' and isinstance(n.value,ast.Constant) and isinstance(n.value.value,str)] != [src]]; assert not bad, 'inlined built-in profile differs from the source: ' + ', '.join(bad); print(len(fs), 'exported okf_profile.py inline the built-in profile byte for byte')"
-	diff -rq templates $(PLUGIN)/skills/okf-standard/templates
-	diff -q standard/OKF-STANDARD.md $(PLUGIN)/skills/okf-standard/references/OKF-STANDARD.md
-	diff -q standard/OKF-COMPATIBILITY.md $(PLUGIN)/skills/okf-standard/references/OKF-COMPATIBILITY.md
+	rm -rf /tmp/okf-copies && $(MAKE) -s copies COPIES_OUT=/tmp/okf-copies
+	diff -rq standard /tmp/okf-copies/standard && diff -rq templates /tmp/okf-copies/templates || { echo "root copies are stale: run make copies"; exit 1; }
 	test -f dist/m365/okf-knowledge-architect-m365.zip
-	python3 -c "import json; d=json.load(open('dist/m365/agent-package/declarativeAgent.json')); c=json.load(open('tools/m365-agent.json')); assert len(d['instructions']) <= 8000 and len(d['agent_skills']) <= 8, d['name']; assert [s['folder'] for s in d['agent_skills']] == ['./skills/' + k for k in c['agent_skills']], 'agent_skills differ from tools/m365-agent.json'; print('agent', len(d['instructions']), 'chars,', len(d['agent_skills']), 'M365 skills')"
+	python3 -c "import json; d=json.load(open('dist/m365/agent-package/declarativeAgent.json')); c=json.load(open('build/m365-agent.json')); assert len(d['instructions']) <= 8000 and len(d['agent_skills']) <= 8, d['name']; assert [s['folder'] for s in d['agent_skills']] == ['./skills/' + k for k in c['agent_skills']], 'agent_skills differ from build/m365-agent.json'; print('agent', len(d['instructions']), 'chars,', len(d['agent_skills']), 'M365 skills')"
 	@echo "[8] this repo's bundles are on knowledge/3.0; the 2.0 fixture equals examples/knowledge at 00e510e, before its migration"
 	for b in knowledge examples/knowledge; do uv run -q $(S)/okf_lint.py $$b --json | python3 -c "import json,sys; assert not json.load(sys.stdin)['profile_outdated'], '$$b: profile outdated'"; done
 	rm -rf /tmp/okf-fx && mkdir -p /tmp/okf-fx && git archive 00e510e examples/knowledge | tar -x -C /tmp/okf-fx
@@ -78,11 +85,11 @@ dogfood:
 	uv run -q $(S)/okf_lint.py $(EX) --json | python3 -c "import json,sys; c=sorted(f['code'] for f in json.load(sys.stdin)['findings']); assert c == ['BROKEN_LINK', 'STALE', 'VERIFIED_STALE'], c; print('lint codes', c)"
 	uv run -q $(S)/okf_lint.py $(EX) --profiles --json | uv run -q --with pyyaml python -c "import json,sys; from pathlib import Path; sys.path.insert(0,'$(S)'); import okf_profile as p, okf_common as c; q=[x for x in json.load(sys.stdin)['questions'] if x.get('field') == 'Runbook.owner']; assert len(q) == 1, 'no question mapped to Runbook.owner in --profiles'; b=Path('$(EX)'); r=p.load_profile(b); docs=[(d.rel, p.resolve_aliases(r, d.frontmatter)) for d in (c.load_doc(b, f) for f in sorted(b.glob('[bf]*/**/*.md'))) if d.frontmatter]; frags=[(rel, fm) for rel, fm in docs if rel.startswith('fragments/') and not rel.endswith(('index.md', 'log.md'))]; bad=[rel for rel, fm in frags if not p.is_a(r, str(fm.get('type')), 'Knowledge Fragment') or 'distillation_status' not in fm]; assert not bad, 'not read as a Knowledge Fragment with a distillation_status: ' + ', '.join(bad); runbooks=[(rel, fm) for rel, fm in docs if p.is_a(r, str(fm.get('type')), 'Runbook')]; gap=[rel for rel, fm in runbooks if fm.get('owner') in (None, '', [], {})]; assert gap == ['base/runbooks/consumer-lag-alert.md'], gap; print(len(frags), 'fragments read as Knowledge Fragments;', q[0]['question'], '->', len(runbooks), 'runbooks, gap', gap)"
 copilot:
-	python3 tools/export_copilot.py --zip
+	python3 build/export_copilot.py --zip
 	@echo "→ dist/copilot (copy to the root of the target repo) · dist/okf-copilot-pack.zip"
 m365:
-	python3 tools/export_m365.py
+	python3 build/export_m365.py
 	@echo "→ dist/m365/okf-builder-m365.zip (M365 Cowork plugin) · dist/m365/skills/*.zip (Copilot Studio / Agent Builder)"
-all: test plugin copilot m365
+all: copies test plugin copilot m365
 check-links:
 	@test "$$(readlink .claude/skills)" = "../plugin/okf-builder/skills" && test "$$(readlink .agents/skills)" = "../plugin/okf-builder/skills" && echo "link packages .claude/skills and .agents/skills OK" || (echo "broken symlinks: ln -sfn ../plugin/okf-builder/skills .claude/skills .agents/skills"; exit 1)

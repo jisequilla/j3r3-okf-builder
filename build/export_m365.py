@@ -12,7 +12,7 @@ Builds two outputs from plugin/okf-builder/:
   dist/m365/okf-knowledge-architect-m365.zip
                                           The knowledge-architect declarative agent (v1.9),
                                           generated from plugin/okf-builder/agents/, with its own
-                                          copy of the skills tools/m365-agent.json lists
+                                          copy of the skills build/m365-agent.json lists
                                           (agent_skills must point inside the same app package).
 
 Differences from the Claude plugin that this exporter resolves:
@@ -24,10 +24,10 @@ Differences from the Claude plugin that this exporter resolves:
   - SKILL.md name == folder name (rule ASKILL-P006).
   - Declarative agent limits: instructions ≤ 8,000 characters, ≤ 8 agent_skills, name ≤ 100,
     description ≤ 1,000, one declarative agent per app. The Claude agent lists every skill it
-    uses; tools/m365-agent.json picks the M365 subset and the conversation starters (ADR-0017).
+    uses; build/m365-agent.json picks the M365 subset and the conversation starters (ADR-0017).
 
 Usage:
-    python3 tools/export_m365.py [--out dist/m365] [--developer "Name"] [--website URL]
+    python3 build/export_m365.py [--out dist/m365] [--developer "Name"] [--website URL]
 """
 from __future__ import annotations
 
@@ -226,7 +226,7 @@ def make_icons(out: Path) -> None:
 
 
 AGENT_SRC = PLUGIN / "agents" / "knowledge-architect.md"
-AGENT_CONFIG = ROOT / "tools" / "m365-agent.json"
+AGENT_CONFIG = ROOT / "build" / "m365-agent.json"
 AGENT_LIMITS = {"instructions": 8000, "skills": 8, "name": 100, "description": 1000}
 
 
@@ -390,7 +390,7 @@ A bundle has one source, a Git repository or a SharePoint document library, and 
   OneDrive sync client; add the library as a knowledge source of the agent. Microsoft does not document `.md` as a
   SharePoint knowledge file type, so check in the tenant that Copilot answers from those files before relying on it.
 
-Generated with `tools/export_m365.py`; do not edit here.
+Generated with `build/export_m365.py`; do not edit here.
 """, encoding="utf-8")
     print(f"→ {zp}\n→ {azp}\n→ {out / 'skills'}/*.zip\n{len(skills)} skills")
     return 0

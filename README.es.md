@@ -23,7 +23,18 @@ Los skills viven una vez en `plugin/okf-builder/skills/`; cada plataforma recibe
 - **Claude Cowork**: `make plugin` genera `okf-builder.plugin`; cárgalo en Cowork.
 - **Microsoft 365 Copilot**: `make m365` genera `dist/m365/okf-builder-m365.zip` (plugin de Cowork) y `dist/m365/skills/*.zip` (un zip por skill para Copilot Studio / Agent Builder).
 
-`make all` genera todo tras pasar `make test`. En Windows sin `core.symlinks`, usa `make copilot` y copia.
+`make all` regenera las copias de la raíz y genera todo tras pasar `make test`. En Windows sin `core.symlinks`, usa `make copilot` y copia.
+
+## Contenido
+
+Cada fichero pertenece a uno de cuatro hogares ([ADR-0028](knowledge/base/decisions/ADR-0028-where-things-go.md)):
+
+- **Producto**: `plugin/okf-builder/` (la única fuente: skills, scripts, plantillas, el estándar y el agente `knowledge-architect`), `standard/`, `templates/` y `.claude-plugin/marketplace.json`.
+- **Construcción del producto**: `Makefile`, `build/` (exportadores de Copilot y M365, y la configuración del agente de M365), `tests/` y `examples/`.
+- **Conocimiento**: `knowledge/`, el bundle OKF del propio proyecto.
+- **Espacio de trabajo**: `.claude/`, `.agents/`, `.beads/` y los ficheros de contexto (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`).
+
+El plugin es la única fuente del estándar y las plantillas: `standard/` y `templates/` en la raíz son copias generadas por `make copies`, y `make test` falla si están desfasadas. Para cambiarlas, edita `plugin/okf-builder/skills/okf-standard/` y ejecuta `make copies`.
 
 ## Uso
 

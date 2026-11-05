@@ -4,7 +4,7 @@ title: Knowledge architect
 description: How okf-builder serves the KDD knowledge architect role, which the KDD bundle defines; this concept fixes the skills its agent carries, what it hands to a person and its fragment contract with the functional architect.
 tags: [role, knowledge-architect, agents, kdd]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T12:36:45Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T03:47:41Z }
 sources:
   - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.3, human-verified" }
   - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, ten skills" }
@@ -37,7 +37,7 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 
 # The agent's skills
 
-The Claude agent preloads all 10 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `tools/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0017].
+The Claude agent preloads all 10 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `build/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0017].
 
 The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds); a person verified v1.3 at kdd-knowledge commit `5a6412d`, and its agent under ADR-0025 at `929515c`[^kdd-role]. `make m365` generates the M365 declarative agent from the same file ([Exporters](/base/systems/exporters.md)).
 
