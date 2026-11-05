@@ -7,7 +7,7 @@ status: draft
 occurred_at: 2026-11-04
 origin: Claude Code session in this repository (session_01EXD26xr5Q7ukXurEECSv4b), continued from 2026-11-03
 participants: [human:jisequilla, okf-builder/claude-opus-5-5]
-distillation_status: pending
+distillation_status: distilled
 repository: { url: https://github.com/jisequilla/j3r3-okf-builder, commit: "97c1b7d8e2376e5f5a9386a10e7523e6093ea427" }
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T22:28:27Z }
 ---
@@ -50,3 +50,19 @@ Written by the agent from its own session, in order. [The start of the session, 
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
+| Provenance note (written by the agent from its own session) | — | context | no concept (provenance of the record) |
+| A1 merged | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| Ticket files lost | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| A2, first pre-flight | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| A2, second pre-flight | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| A2, third pre-flight | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| Builder killed by sleep | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| A2 review: a secret printed | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| A hollow comparison | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| Where things go | Domain Profile | applied | [Domain Profile of okf-builder](/base/profile.md), [Building with agents](/base/doctrine/building-with-agents.md) |
+| A3 | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| A4 | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| A5 | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| Branch hygiene | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| v0.9.0 | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
+| How the owner decided | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |

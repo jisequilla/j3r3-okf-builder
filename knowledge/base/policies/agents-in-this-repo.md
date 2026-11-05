@@ -7,7 +7,7 @@ tags: [policy, agents]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:59:05Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T04:06:24Z }
 ---
 
 # Rule
@@ -22,3 +22,4 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:59:05Z }
 # Related
 
 * [ADR-0007](/base/decisions/ADR-0007-single-source-and-projections.md) · [ADR-0008](/base/decisions/ADR-0008-dogfooding.md)
+* [Building with agents](/base/doctrine/building-with-agents.md): the doctrine whose principles explain these rules and the runs that taught them
