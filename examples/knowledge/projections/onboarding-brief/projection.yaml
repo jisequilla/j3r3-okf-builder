@@ -1,0 +1,10 @@
+lifecycle: canonical
+nature: composed
+intent: >-
+  For a new on-call engineer of Demo Payments: what the payment event bus is and what to do when
+  one of its runbooks fires, from the example's runbooks and accepted decisions. Short, one page,
+  plain steps; no history of how the decisions were reached and nothing beyond these refs.
+refs:
+  - { path: /base/decisions/ADR-0001-adopt-kafka.md, sha256: f4cc6916728a53efcf6ef7c558555ac5bd96f1bdb0f44c828dbfbc39b8047df1 }
+  - { path: /base/runbooks/consumer-lag-alert.md, sha256: 2c583d1914b082db7acfcb3d36dc484de0403fd832cde900b4b08c726f970fd4 }
+  - { path: /base/runbooks/payments-dead-letter-replay.md, sha256: c9d631e2cb30a97378c81b4d15629681e28916015dff2740dc3513fb51cf6310 }
