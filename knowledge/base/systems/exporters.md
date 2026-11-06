@@ -7,7 +7,7 @@ tags: [system, exporters, m365, copilot]
 status: draft
 owner: human:jisequilla
 runtime: python3
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T03:47:41Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T20:30:00Z }
 ---
 
 # Responsibility
@@ -24,6 +24,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T03:47:41Z }
 - M365: each skill is self-contained and gets only the scripts and templates it uses (`NEEDS` table), to respect the limit of 20 companion files: `okf-init` the templates `okf_init.py` renders; `okf-capture` the 15 concept templates; `okf-fragment` `fragment.md`; `okf-distill` the concept templates and `conflict-log.md`; `okf-review` no templates. The M365 okf-standard keeps only `references/`, and its template table says each template is carried by the skill that writes that type. They add `license`/`metadata` and an environment note that matches what the skill ships, and the build fails if a skill's text names a script or template its copy does not carry. `okf-distill` sits at the limit: a new template needs room made first.
 - The knowledge-architect agent package is generated from `plugin/okf-builder/agents/knowledge-architect.md`: the body becomes `instructions`, and `build/m365-agent.json` gives the `agent_skills` and the conversation starters ([ADR-0017](/base/decisions/ADR-0017-agent-skills-per-platform.md)). Each configured skill is copied into the package, because `agent_skills` must point inside the same app package and an app carries one declarative agent. The exporter fails if the body passes 8,000 characters, or if the configured skills are empty, pass 8, repeat a skill, or name one the Claude agent does not list or the plugin does not have. It is a separate package with no app-level `agentSkills`, so it cannot break the Cowork plugin; whether one package can carry both is untested.
 - The M365 manifests use stable GUIDs (uuid5 of the repo URL, one per package).
+- `make test` exports the Copilot pack and checks that it carries every skill and that the `@okf` agent names each one; `build/check_skills.py` checks each `SKILL.md`, in the plugin and in the pack: frontmatter that parses, `name` equal to its directory within 64 characters, a `description` within 1,024 characters (1,536 with the name) and written in the third person outside quoted trigger phrases.
 
 # Operation
 
