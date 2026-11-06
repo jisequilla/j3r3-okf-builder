@@ -32,8 +32,7 @@ APP_JSON = """{
   "useMarkdownLinks": true,
   "newLinkFormat": "relative",
   "alwaysUpdateLinks": true
-}
-"""
+}"""
 
 GITIGNORE = """*
 !app.json
@@ -43,8 +42,8 @@ GITIGNORE = """*
 KNOWLEDGE_BASE = """filters:
   and:
     - file.ext == "md"
-    - file.name != "index.md"
-    - file.name != "log.md"
+    - file.basename != "index"
+    - file.basename != "log"
 formulas:
   author: generated.by
   written: generated.at
@@ -219,15 +218,29 @@ def test_base_has_the_five_views_by_layer(tmp_path):
     b = _bundle(tmp_path)
     main([str(b)])
     base = yaml.safe_load((b / "knowledge.base").read_text(encoding="utf-8"))
-    assert base["filters"] == {"and": ['file.ext == "md"', 'file.name != "index.md"', 'file.name != "log.md"']}
+    # Bases' file.name drops the extension, so index.md and log.md are left out by basename
+    assert base["filters"] == {"and": ['file.ext == "md"', 'file.basename != "index"', 'file.basename != "log"']}
+    assert len(base["views"]) == 5
     views = {v["name"]: v for v in base["views"]}
-    assert list(views) == ["Decisions", "Awaiting human review", "By type", "Going stale", "Fragments"]
-    folders = {name: [f for f in v["filters"]["and"] if f.startswith("file.inFolder(")] for name, v in views.items()}
-    assert folders == {"Decisions": ['file.inFolder("base")'], "Awaiting human review": ['file.inFolder("base")'],
-                       "By type": ['file.inFolder("base")'], "Going stale": ['file.inFolder("base")'],
-                       "Fragments": ['file.inFolder("fragments")']}
-    assert views["Fragments"]["groupBy"]["property"] == "distillation_status"
-    assert views["Fragments"]["order"] == ["file.name", "occurred_at", "origin", "participants"]
+    # ADR-0032 decision 3: (filters, groupBy property or None, columns) per view
+    adr = {
+        "Decisions": (['file.inFolder("base")', 'type == "Architecture Decision"'], "decision_status",
+                      ["file.name", "title", "decision_status", "status", "formula.written"]),
+        "Awaiting human review": (['file.inFolder("base")', 'status == "draft"'], None,
+                                  ["file.name", "type", "formula.author", "formula.written"]),
+        "By type": (['file.inFolder("base")'], "type", ["file.name", "description", "status"]),
+        "Going stale": (['file.inFolder("base")', "stale_after"], None,
+                        ["file.name", "type", "stale_after", "formula.stale_in_days"]),
+        "Fragments": (['file.inFolder("fragments")'], "distillation_status",
+                      ["file.name", "occurred_at", "origin", "participants"]),
+    }
+    assert list(views) == list(adr)
+    for name, (filters, group, order) in adr.items():
+        v = views[name]
+        assert v["type"] == "table", name
+        assert v["filters"] == {"and": filters}, name
+        assert (v.get("groupBy") or {}).get("property") == group, name
+        assert v["order"] == order, name
 
 
 def test_app_json_keeps_links_relative_and_updated(tmp_path):
@@ -235,8 +248,12 @@ def test_app_json_keeps_links_relative_and_updated(tmp_path):
 
     b = _bundle(tmp_path)
     main([str(b)])
-    app = json.loads((b / ".obsidian/app.json").read_text(encoding="utf-8"))
-    assert app == {"useMarkdownLinks": True, "newLinkFormat": "relative", "alwaysUpdateLinks": True}
+    raw = (b / ".obsidian/app.json").read_text(encoding="utf-8")
+    want = {"useMarkdownLinks": True, "newLinkFormat": "relative", "alwaysUpdateLinks": True}
+    assert json.loads(raw) == want
+    # Obsidian saves app.json as JSON.stringify(settings, null, 2), with no final newline; any other bytes are
+    # rewritten when a reader opens the vault, leaving the committed file modified
+    assert raw == json.dumps(want, indent=2)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 filters:
   and:
     - file.ext == "md"
-    - file.name != "index.md"
-    - file.name != "log.md"
+    - file.basename != "index"
+    - file.basename != "log"
 formulas:
   author: generated.by
   written: generated.at
