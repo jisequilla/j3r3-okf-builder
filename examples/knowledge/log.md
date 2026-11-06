@@ -1,5 +1,8 @@
 # Bundle history
 
+## 2026-11-06
+* **Creation**: the projection `projections/onboarding-brief/`, canonical and composed: a short on-call brief for a new engineer of Demo Payments, composed from [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md), the [Payments consumer lag alert](/base/runbooks/consumer-lag-alert.md) and the [Payments dead-letter replay](/base/runbooks/payments-dead-letter-replay.md) with the okf-projection skill; its ref hashes written by `okf_projection.py --record-hashes onboarding-brief`. It is not a concept: okf-lint skips it and `okf_projection.py` checks it.
+
 ## 2026-11-04
 * **Update**: [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md) cites the [payments sync on refund events](/fragments/2026-11-02-refund-events-review.md), which confirms Kafka as the event bus; the fragment's ledger gains that row, so every part of its record has one, and its action item's Concept is `tracker`, like the one of the [finance chat asking for the dispute window](/fragments/2026-10-28-finance-dispute-window-ask.md), whose complete ledger now covers it (no FRAGMENT_UNCITED).
 * **Creation**: [Platform chat: the retention of the refunds topic](/fragments/2026-11-03-refund-topic-retention-chat.md), a fictional chat captured as a Fragmento (ingerido: false) from a text export kept beside it, `fragments/2026-11-03-refund-topic-retention-chat.txt`, named with its SHA-256 in `material` so lint checks that the source was not altered after capture.
