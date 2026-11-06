@@ -16,9 +16,10 @@ Usage:
     reader's window state, graph, theme or plugins;
   - knowledge.base: five Bases views, four over base/ (Decisions, Awaiting human review, By type, Going stale) and
     one over fragments/ (Fragments), with index.md and log.md left out.
-- Never overwrites an existing file unless given --force; prints `created <path>` or `skipped (exists) <path>` for
-  each file. The content is fixed text, so a run is deterministic and idempotent.
-- Exit: 2, writing nothing, when the bundle has no index.md; else 0.
+- Never overwrites an existing file unless given --force; prints `created <path>`, `rewritten <path>` (with --force)
+  or `skipped (exists) <path>` for each file. The content is fixed text, so a run is deterministic and idempotent.
+- Exit: 2, writing nothing, when the bundle has no index.md or a path the setup needs is taken by something else
+  (`.obsidian` as a file, `knowledge.base` as a directory); else 0.
 """
 from __future__ import annotations
 
@@ -128,11 +129,24 @@ FILES = {
 
 
 def write(path: Path, content: str, force: bool) -> str:
-    if path.exists() and not force:
+    existed = path.exists()
+    if existed and not force:
         return f"skipped (exists) {path}"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-    return f"created {path}"
+    return f"{'rewritten' if existed else 'created'} {path}"
+
+
+def blocked(root: Path) -> list[str]:
+    """The paths the setup needs that something else holds: a parent that is not a directory, a target that is one."""
+    out = []
+    for rel in FILES:
+        target = root / rel
+        if target.parent.exists() and not target.parent.is_dir():
+            out.append(f"{target.parent} is not a directory")
+        elif target.is_dir():
+            out.append(f"{target} is a directory")
+    return sorted(set(out))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -144,6 +158,11 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.bundle).resolve()
     if not (root / "index.md").is_file():
         sys.stderr.write(f"okf_obsidian: {root} is not an OKF bundle (no index.md)\n")
+        return 2
+    taken = blocked(root)
+    if taken:
+        for msg in taken:
+            sys.stderr.write(f"okf_obsidian: {msg}; nothing written\n")
         return 2
     for rel, content in FILES.items():
         print(write(root / rel, content, args.force))
@@ -190,7 +209,8 @@ def test_existing_app_json_left_untouched(tmp_path, capsys):
     (b / ".obsidian/app.json").write_text(own, encoding="utf-8")
     assert main([str(b)]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[0] == f"skipped (exists) {b / '.obsidian/app.json'}"
+    assert out == [f"skipped (exists) {b / '.obsidian/app.json'}", f"created {b / '.obsidian/.gitignore'}",
+                   f"created {b / 'knowledge.base'}"]
     assert (b / ".obsidian/app.json").read_text(encoding="utf-8") == own
     assert (b / ".obsidian/.gitignore").read_text(encoding="utf-8") == GITIGNORE
     assert (b / "knowledge.base").read_text(encoding="utf-8") == KNOWLEDGE_BASE
@@ -202,8 +222,26 @@ def test_force_rewrites_all_three(tmp_path, capsys):
     for rel in FILES:
         (b / rel).write_text("edited\n", encoding="utf-8")
     assert main([str(b), "--force"]) == 0
-    assert capsys.readouterr().out.splitlines() == [f"created {b / rel}" for rel in FILES]
+    assert capsys.readouterr().out.splitlines() == [f"rewritten {b / rel}" for rel in FILES]
     assert _snapshot(b) == {rel: content.encode("utf-8") for rel, content in FILES.items()}
+
+
+def test_force_on_a_fresh_bundle_reports_created(tmp_path, capsys):
+    b = _bundle(tmp_path)
+    assert main([str(b), "--force"]) == 0
+    assert capsys.readouterr().out.splitlines() == [f"created {b / rel}" for rel in FILES]
+
+
+def test_taken_paths_are_exit_2_and_write_nothing(tmp_path, capsys):
+    b = _bundle(tmp_path)
+    (b / ".obsidian").write_text("not a directory\n", encoding="utf-8")
+    (b / "knowledge.base").mkdir()
+    assert main([str(b), "--force"]) == 2
+    err = capsys.readouterr().err
+    assert f"{b / '.obsidian'} is not a directory" in err and f"{b / 'knowledge.base'} is a directory" in err
+    assert (b / ".obsidian").read_text(encoding="utf-8") == "not a directory\n"
+    assert sorted(p.name for p in b.iterdir()) == [".obsidian", "index.md", "knowledge.base"]
+    assert list((b / "knowledge.base").iterdir()) == []
 
 
 def test_no_index_is_exit_2_and_writes_nothing(tmp_path, capsys):
