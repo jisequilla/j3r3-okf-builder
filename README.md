@@ -28,7 +28,7 @@ Every file belongs to one of four homes ([ADR-0028](knowledge/base/decisions/ADR
 
 | Home | Path | What it is |
 |---|---|---|
-| Product | `plugin/okf-builder/` | Plugin / single source: the skills `okf-standard`, `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate` + Python scripts run with uv (PEP 723), the templates, the standard, and the `knowledge-architect` agent. |
+| Product | `plugin/okf-builder/` | Plugin / single source: the skills `okf-standard`, `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate`, `okf-projection` + Python scripts run with uv (PEP 723), the templates, the standard, and the `knowledge-architect` agent. |
 | Product | `standard/OKF-STANDARD.md` | The standard: the `knowledge/3.0` profile (structure, frontmatter, types, lifecycle, conformance). Generated copy of `okf-standard/references/OKF-STANDARD.md`. |
 | Product | `standard/OKF-COMPATIBILITY.md` | OKF v0.1 ↔ v0.2 differences, field matrix, mapping rules and versioning policy. Generated copy of `okf-standard/references/OKF-COMPATIBILITY.md`. |
 | Product | `templates/` | Concept templates (`{{placeholders}}`): ADR, runbook, playbook, system, API, table, metric, computation, term, policy, view, reference, project, fragment, conflict log. Generated copy of `okf-standard/templates/`. |
@@ -70,6 +70,7 @@ okf-lint        → validates spec + profile (CI-ready: uv run tools/okf/okf_lin
 okf-index       → regenerates index.md from the frontmatter
 okf-ask         → "why did we decide X?" by navigating the bundle and citing trust level
 okf-migrate     → detects the version and migrates 0.1 ↔ 0.2 (always --dry-run first)
+okf-projection  → creates, checks, refreshes and renders the projections in projections/; applies only what you approve
 ```
 
 ### Fragments and distillation
@@ -93,7 +94,7 @@ uv run plugin/okf-builder/skills/okf-standard/scripts/okf_audit.py knowledge [--
 
 The skills follow the [Agent Skills](https://agentskills.io) standard, which Copilot discovers in `.github/skills/` (VS Code agent mode, Copilot CLI, coding agent). `make copilot` builds `dist/copilot/` with:
 
-- `.github/skills/okf-*/` — the 10 skills with scripts and templates, paths rewritten (no `${CLAUDE_PLUGIN_ROOT}`).
+- `.github/skills/okf-*/` — the 11 skills with scripts and templates, paths rewritten (no `${CLAUDE_PLUGIN_ROOT}`).
 - `.github/agents/okf.agent.md` — the `@okf` custom agent.
 - `AGENTS.okf.md` — a fragment for `AGENTS.md`.
 
@@ -103,8 +104,8 @@ Copy `dist/copilot/.` into the root of the target repo. Claude Code also reads `
 
 M365 Copilot (Cowork, Copilot Studio, Agent Builder) accepts Agent Skills in the same `SKILL.md` format. `make m365` builds:
 
-- `dist/m365/okf-builder-m365.zip` — an **M365 Copilot Cowork** plugin (manifest v1.28 + 10 self-contained skills). Uploaded by an admin (Manage apps → Upload custom app) or personally with `atk install --file-path … --scope Personal`. Cowork currently requires the Frontier program.
-- `dist/m365/okf-knowledge-architect-m365.zip` — the **knowledge-architect declarative agent**, generated from the plugin agent, with its own copy of the 8 skills chosen in `build/m365-agent.json`; the Claude agent preloads all 10. A separate package, installed the same way; not yet tested in a tenant.
+- `dist/m365/okf-builder-m365.zip` — an **M365 Copilot Cowork** plugin (manifest v1.28 + 11 self-contained skills). Uploaded by an admin (Manage apps → Upload custom app) or personally with `atk install --file-path … --scope Personal`. Cowork currently requires the Frontier program.
+- `dist/m365/okf-knowledge-architect-m365.zip` — the **knowledge-architect declarative agent**, generated from the plugin agent, with its own copy of the 8 skills chosen in `build/m365-agent.json`; the Claude agent preloads all 11. A separate package, installed the same way; not yet tested in a tenant.
 - `dist/m365/skills/okf-*.zip` — one zip per skill for **Copilot Studio / Agent Builder** → Build → Skills → Upload a skill (GA).
 
 M365 Copilot reads the knowledge (`knowledge/`) from its one source ([ADR-0014](knowledge/base/decisions/ADR-0014-knowledge-repository-storage.md)): a Git repository through the GitHub Cloud Knowledge connector, which indexes `.md`, or a SharePoint library for teams without Git. Microsoft does not document `.md` as a SharePoint knowledge file type, so check it in your tenant.

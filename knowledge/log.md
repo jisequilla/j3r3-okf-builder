@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-06
+* **Update**: the projection skill of [ADR-0031](/base/decisions/ADR-0031-projection-tools-transient-exception.md) (okf-t3z.2): the [okf-builder plugin](/base/systems/plugin-okf-builder.md) has 11 skills, `okf-projection` creating, checking, refreshing and rendering projections with `okf_projection.py`, and `okf-distill`'s closing step lists the projections to refresh from `okf_projection.py --json`, changing nothing in `projections/`; the [knowledge architect](/base/roles/knowledge-architect.md) preloads all 11 and routes projection requests to `okf-projection`, while its M365 agent keeps its 8 skills; the plugin's description names profile knowledge/3.0.
 * **Creation**: [ADR-0031](/base/decisions/ADR-0031-projection-tools-transient-exception.md): ADR-0030 restated, with the exception that a transient projection's rendered files are never required to be committed, since ADR-0022 defines a transient projection as not committed; found by the review of okf-t3z.1; decided by human:jisequilla in answer to a structured question; supersedes ADR-0030.
 * **Deprecation**: [ADR-0030](/base/decisions/ADR-0030-projection-tools.md), superseded by ADR-0031; the [OKF scripts](/base/systems/scripts-okf.md), the standard's §2.1 and `okf_projection.py` name ADR-0031.
 

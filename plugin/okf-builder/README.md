@@ -16,6 +16,7 @@ A Claude Code / Cowork plugin that manages a project's knowledge as an **OKF bun
 | `okf-index` | Regenerates the `index.md` files from the frontmatter. |
 | `okf-ask` | Answers questions about the project by navigating the bundle and citing sources and trust level. |
 | `okf-migrate` | Detects the OKF version and migrates 0.1 ↔ 0.2 (with `--out` to export downgraded copies). |
+| `okf-projection` | Creates, checks, refreshes and renders the projections in `projections/`; applies a refresh only after the person approves and runs a render only when asked. |
 
 ## Scripts (Python ≥ 3.9 and PyYAML; run with `uv run`)
 
@@ -26,6 +27,7 @@ okf_init.py   --root . --title "…" --description "…" --actor human:<id>
 okf_lint.py   [knowledge] [--json] [--strict] [--no-profile]
 okf_index.py  [knowledge] [--check] [--dir sub]
 okf_migrate.py [knowledge] --to 0.2|0.1 [--actor A] [--keep-extensions] [--out DIR] [--dry-run] [--file rel.md]
+okf_projection.py [knowledge] [--json] [--strict] [--run-render] [--record-hashes SLUG]
 ```
 
 They can be copied into `tools/okf/` of any repo for CI; the CI job needs uv (for example `astral-sh/setup-uv`) or PyYAML.

@@ -54,7 +54,7 @@ test:
 	rm -rf /tmp/okf-p3 && uv run -q $(S)/okf_migrate.py examples/fixtures/knowledge-2.0 --profile knowledge/3.0 --out /tmp/okf-p3 >/dev/null
 	uv run -q $(S)/okf_lint.py /tmp/okf-p3 | tail -1 | grep ' 0 errors'
 	test -d /tmp/okf-p3/base/decisions && test ! -e /tmp/okf-p3/decisions && grep -q 'knowledge/3.0' /tmp/okf-p3/index.md && grep -q '\*\*Migration\*\*' /tmp/okf-p3/log.md
-	@echo "[6] M365 export: within the companion limit, each exported skill self-contained, and its okf_migrate.py migrating examples/fixtures/knowledge-2.0"
+	@echo "[6] M365 export: within the companion limit, each exported skill self-contained, its okf_migrate.py migrating examples/fixtures/knowledge-2.0 and its okf_projection.py running"
 	python3 build/export_m365.py >/dev/null
 	rm -rf /tmp/okf-m365 && uv run -q dist/m365/package/skills/okf-init/scripts/okf_init.py --root /tmp/okf-m365 --title T --description D --actor human:test >/dev/null
 	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
@@ -62,6 +62,9 @@ test:
 	uv run -q dist/m365/package/skills/okf-migrate/scripts/okf_lint.py /tmp/okf-m365p3 | tail -1 | grep ' 0 errors'
 	for d in dist/m365/package/skills/*/scripts; do test ! -f $$d/okf_lint.py || test -f $$d/okf_profile.py || { echo "$$d: okf_lint.py without okf_profile.py"; exit 1; }; done
 	for s in okf-capture okf-fragment okf-distill; do grep -q 'scripts/okf_migrate.py' dist/m365/package/skills/$$s/SKILL.md && test -f dist/m365/package/skills/$$s/scripts/okf_migrate.py || { echo "$$s: names okf_migrate.py but does not ship it"; exit 1; }; done
+	grep -q 'scripts/okf_projection.py' dist/m365/package/skills/okf-projection/SKILL.md && test -f dist/m365/package/skills/okf-projection/scripts/okf_projection.py || { echo "okf-projection: names okf_projection.py but does not ship it"; exit 1; }
+	grep -q '(okf-projection skill) scripts/okf_projection.py' dist/m365/package/skills/okf-distill/SKILL.md && test ! -e dist/m365/package/skills/okf-distill/scripts/okf_projection.py || { echo "okf-distill: does not point to okf-projection's okf_projection.py"; exit 1; }
+	uv run -q dist/m365/package/skills/okf-projection/scripts/okf_projection.py /tmp/okf-m365/knowledge --json | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['projections'] == [] and r['findings'] == [], r; print('exported okf_projection.py runs: 0 projections, 0 findings')"
 	rm -rf /tmp/okf-m365q && cp -R /tmp/okf-m365/knowledge /tmp/okf-m365q
 	printf -- '---\ntype: Knowledge Fragment\ntitle: M\ndescription: M.\nparticipants: [Alice]\ndistillation_status: done\ngenerated: { by: human:test, at: 2026-11-02T00:00:00Z }\n---\n\n# Record\n\nText.\n' > /tmp/okf-m365q/fragments/2026-11-02-meeting.md
 	printf -- '---\ntype: Open Question\ntitle: Q\ndescription: Q.\nowner: human:test\nquestion_status: closed\nasked_in: /fragments/2026-11-02-meeting.md\ngenerated: { by: human:test, at: 2026-11-02T00:00:00Z }\n---\n\n# Question\n\nWho?\n' > /tmp/okf-m365q/base/questions/who.md

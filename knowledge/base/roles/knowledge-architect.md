@@ -4,7 +4,7 @@ title: Knowledge architect
 description: How okf-builder serves the KDD knowledge architect role, which the KDD bundle defines; this concept fixes the skills its agent carries, what it hands to a person and its fragment contract with the functional architect.
 tags: [role, knowledge-architect, agents, kdd]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T03:47:41Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T00:30:03Z }
 sources:
   - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.3, human-verified" }
   - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, ten skills" }
@@ -13,6 +13,7 @@ sources:
   - { id: adr-0025, resource: /base/decisions/ADR-0025-verification-recorded-by-question.md }
   - { id: adr-0017, resource: /base/decisions/ADR-0017-agent-skills-per-platform.md }
   - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }
+  - { id: adr-0031, resource: /base/decisions/ADR-0031-projection-tools-transient-exception.md }
 ---
 
 # Definition
@@ -37,7 +38,7 @@ The role can be held by a person or by an agent, and the tasks are the same eith
 
 # The agent's skills
 
-The Claude agent preloads all 10 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `build/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0017].
+The Claude agent preloads all 11 plugin skills[^adr-0017]. The Microsoft 365 agent carries at most 8, the M365 limit, chosen in `build/m365-agent.json`: `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-index`, `okf-lint` and `okf-ask`. `okf-standard` and `okf-migrate` stay out of it[^adr-0017], and so does `okf-projection`, which ships in the M365 packages but not in the agent[^adr-0031]. The agent routes projection requests to `okf-projection` and never answers from `projections/`.
 
 The agent's source is `plugin/okf-builder/agents/knowledge-architect.md`, written from this profile and from the KDD agent definition as of kdd-knowledge commit `e4afa95`[^kdd-agent-v2]. At that commit the KDD role is v1.2 (distillation in five kinds); a person verified v1.3 at kdd-knowledge commit `5a6412d`, and its agent under ADR-0025 at `929515c`[^kdd-role]. `make m365` generates the M365 declarative agent from the same file ([Exporters](/base/systems/exporters.md)).
 
@@ -67,7 +68,7 @@ The two agents live in separate repositories. As long as both keep to the fragme
 
 # Differences with the KDD bundle
 
-- The KDD agent definition lists all 10 skills[^kdd-agent], as the Claude agent preloads them. The Microsoft 365 agent carries 8, without `okf-standard` and `okf-migrate`[^adr-0017].
+- The KDD agent definition lists 10 skills[^kdd-agent], every plugin skill except `okf-projection`; the Claude agent preloads all 11. The Microsoft 365 agent carries 8, without `okf-standard`, `okf-migrate` and `okf-projection`[^adr-0017][^adr-0031].
 - The KDD bundle's validation policy also accepts a person's written chat confirmation when the changes apply that person's answers literally, as a local exception to [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md) decided by its owner[^kdd-agent]. The okf-builder agent never applies it.
 - The KDD bundle keeps its own agent definition next to the okf-builder agent. The two are kept in step by hand: a change to one is carried to the other in the same piece of work.
 
@@ -88,3 +89,4 @@ The two agents live in separate repositories. As long as both keep to the fragme
 [^adr-0025]: ADR-0025, decisions 3 and 4.
 [^adr-0017]: ADR-0017, decisions 3 and 5.
 [^adr-0024]: ADR-0024, decisions 6, 7 and 10.
+[^adr-0031]: ADR-0031, decision 4.

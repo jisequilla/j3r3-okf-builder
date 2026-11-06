@@ -62,7 +62,11 @@ NEEDS = {
     "okf-index":    {"scripts": ["okf_index.py", "okf_common.py"], "templates": False},
     "okf-migrate":  {"scripts": ["okf_migrate.py", "okf_common.py", "okf_lint.py", "okf_profile.py", "okf_index.py"], "templates": False},
     "okf-ask":      {"scripts": ["okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
+    "okf-projection": {"scripts": ["okf_projection.py", "okf_lint.py", "okf_profile.py", "okf_common.py"], "templates": False},
 }
+# A script only one skill ships: another skill that names it points to that skill's copy, so the script adds no
+# companion file to it (okf-distill already carries the 20 the limit allows)
+SCRIPT_HOMES = {"okf_projection.py": "okf-projection"}
 MAX_COMPANIONS = 20
 # The built-in Domain Profile goes inside each exported okf_profile.py, so it adds no companion file
 BUILTIN_PROFILE = PLUGIN / "skills" / "okf-standard" / "profiles" / "knowledge-3.0.md"
@@ -111,6 +115,9 @@ def rewrite(text: str, skill: str) -> str:
     if skill == "okf-standard":
         text = INVENTORY_RE.sub(M365_INVENTORY, text)
         text = text.replace("<skills>/okf-standard/references/", "references/")
+    for script, home in SCRIPT_HOMES.items():
+        if skill != home and script not in NEEDS[skill]["scripts"]:
+            text = text.replace(f"<skills>/okf-standard/scripts/{script}", f"({home} skill) scripts/{script}")
     # Each M365 skill is self-contained: <skills>/okf-standard/scripts → the skill's own scripts/
     text = text.replace("<skills>/okf-standard/scripts/", "scripts/")
     if NEEDS[skill]["templates"]:
