@@ -86,7 +86,10 @@ uv run plugin/okf-builder/skills/okf-standard/scripts/okf_index.py knowledge [--
 uv run plugin/okf-builder/skills/okf-standard/scripts/okf_migrate.py knowledge --to 0.2 --dry-run
 uv run plugin/okf-builder/skills/okf-standard/scripts/okf_profile.py knowledge [--json]
 uv run plugin/okf-builder/skills/okf-standard/scripts/okf_audit.py knowledge [--since <ref>] [--json]
+uv run plugin/okf-builder/skills/okf-standard/scripts/okf_obsidian.py knowledge [--force]
 ```
+
+`okf_obsidian.py` writes the Obsidian viewer setup of a bundle ([ADR-0032](knowledge/base/decisions/ADR-0032-obsidian-viewer-setup.md)): `.obsidian/app.json`, `.obsidian/.gitignore` and `knowledge.base`, so the bundle opens in Obsidian as a vault with Bases views over `base/` and `fragments/`; it never overwrites a file without `--force`. This repository commits its own (`make obsidian`).
 
 `okf-lint` reports a credential committed in a bundle file as `SECRET_IN_BUNDLE`, a quick check. For pre-commit and CI use [gitleaks](https://github.com/gitleaks/gitleaks), the thorough scanner: `make secrets` runs `gitleaks dir` over this repo's bundles.
 

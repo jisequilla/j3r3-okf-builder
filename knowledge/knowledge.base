@@ -1,0 +1,79 @@
+filters:
+  and:
+    - file.ext == "md"
+    - file.basename != "index"
+    - file.basename != "log"
+formulas:
+  author: generated.by
+  written: generated.at
+  stale_in_days: if(stale_after, (date(stale_after) - today()).days.round(0), "")
+properties:
+  formula.author:
+    displayName: Written by
+  formula.written:
+    displayName: Written at
+  formula.stale_in_days:
+    displayName: Days to stale
+views:
+  - type: table
+    name: Decisions
+    filters:
+      and:
+        - file.inFolder("base")
+        - type == "Architecture Decision"
+    groupBy:
+      property: decision_status
+      direction: ASC
+    order:
+      - file.name
+      - title
+      - decision_status
+      - status
+      - formula.written
+  - type: table
+    name: Awaiting human review
+    filters:
+      and:
+        - file.inFolder("base")
+        - status == "draft"
+    order:
+      - file.name
+      - type
+      - formula.author
+      - formula.written
+  - type: table
+    name: By type
+    filters:
+      and:
+        - file.inFolder("base")
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - file.name
+      - description
+      - status
+  - type: table
+    name: Going stale
+    filters:
+      and:
+        - file.inFolder("base")
+        - stale_after
+    order:
+      - file.name
+      - type
+      - stale_after
+      - formula.stale_in_days
+  - type: table
+    name: Fragments
+    filters:
+      and:
+        - file.inFolder("fragments")
+    groupBy:
+      property: distillation_status
+      direction: ASC
+    order:
+      - file.name
+      - occurred_at
+      - origin
+      - participants

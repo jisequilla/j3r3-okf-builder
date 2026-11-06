@@ -7,7 +7,7 @@ tags: [system, plugin, skills]
 status: draft
 owner: human:jisequilla
 runtime: agent-skills
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T00:30:03Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T18:32:07Z }
 ---
 
 # Responsibility
@@ -19,7 +19,7 @@ Give any agent the instructions to create, maintain, validate, query and migrate
 | Skill | Typical triggers | Uses |
 |---|---|---|
 | okf-standard | "what is OKF", "which type do I use", "0.1 vs 0.2" | references/, templates/ |
-| okf-init | "initialize OKF", "create knowledge" | okf_init.py |
+| okf-init | "initialize OKF", "create knowledge", "open the knowledge in Obsidian" | okf_init.py, okf_lint.py, okf_obsidian.py ([ADR-0032](/base/decisions/ADR-0032-obsidian-viewer-setup.md)) |
 | okf-capture | "document this decision", "create a runbook" | templates, okf_index.py, okf_lint.py, okf_migrate.py --file |
 | okf-fragment | "capture this meeting", "save this transcript" | templates/fragment.md, okf_index.py, okf_lint.py, okf_migrate.py --file |
 | okf-distill | "distill this fragment", "what does this meeting change" | concept templates, templates/conflict-log.md, okf_index.py, okf_lint.py, okf_migrate.py --file, okf_projection.py --json |

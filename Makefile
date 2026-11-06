@@ -8,7 +8,7 @@ S=$(REF)/scripts
 EX ?= examples/knowledge
 # The root standard/ and templates/ are generated from $(REF): edit there, then run make copies.
 COPIES_OUT ?= .
-.PHONY: copies plugin lint test dogfood copilot m365 all check-links secrets
+.PHONY: copies plugin lint test dogfood copilot m365 obsidian all check-links secrets
 copies:
 	rm -rf $(COPIES_OUT)/standard $(COPIES_OUT)/templates
 	mkdir -p $(COPIES_OUT)/standard $(COPIES_OUT)/templates
@@ -34,6 +34,7 @@ test:
 	uv run -q --with pytest $(S)/okf_migrate.py --test
 	uv run -q --with pytest $(S)/okf_audit.py --test
 	uv run -q --with pytest $(S)/okf_projection.py --test
+	uv run -q --with pytest $(S)/okf_obsidian.py --test
 	@echo "[2] init 0.2 (profile knowledge/3.0) + index + lint --strict"
 	rm -rf /tmp/okf-test && uv run -q $(S)/okf_init.py --root /tmp/okf-test --title T --description D --actor human:test >/dev/null
 	uv run -q $(S)/okf_index.py /tmp/okf-test/knowledge --check && uv run -q $(S)/okf_lint.py /tmp/okf-test/knowledge --strict | tail -1
@@ -54,7 +55,7 @@ test:
 	rm -rf /tmp/okf-p3 && uv run -q $(S)/okf_migrate.py examples/fixtures/knowledge-2.0 --profile knowledge/3.0 --out /tmp/okf-p3 >/dev/null
 	uv run -q $(S)/okf_lint.py /tmp/okf-p3 | tail -1 | grep ' 0 errors'
 	test -d /tmp/okf-p3/base/decisions && test ! -e /tmp/okf-p3/decisions && grep -q 'knowledge/3.0' /tmp/okf-p3/index.md && grep -q '\*\*Migration\*\*' /tmp/okf-p3/log.md
-	@echo "[6] M365 export: within the companion limit, each exported skill self-contained, its okf_migrate.py migrating examples/fixtures/knowledge-2.0 and its okf_projection.py running"
+	@echo "[6] M365 export: within the companion limit, each exported skill self-contained, its okf_migrate.py migrating examples/fixtures/knowledge-2.0, its okf_projection.py running and its okf-init shipping a running okf_obsidian.py"
 	python3 build/export_m365.py >/dev/null
 	rm -rf /tmp/okf-m365 && uv run -q dist/m365/package/skills/okf-init/scripts/okf_init.py --root /tmp/okf-m365 --title T --description D --actor human:test >/dev/null
 	uv run -q dist/m365/package/skills/okf-init/scripts/okf_lint.py /tmp/okf-m365/knowledge --strict | tail -1
@@ -65,6 +66,9 @@ test:
 	grep -q 'scripts/okf_projection.py' dist/m365/package/skills/okf-projection/SKILL.md && test -f dist/m365/package/skills/okf-projection/scripts/okf_projection.py || { echo "okf-projection: names okf_projection.py but does not ship it"; exit 1; }
 	grep -q '(okf-projection skill) scripts/okf_projection.py' dist/m365/package/skills/okf-distill/SKILL.md && test ! -e dist/m365/package/skills/okf-distill/scripts/okf_projection.py || { echo "okf-distill: does not point to okf-projection's okf_projection.py"; exit 1; }
 	uv run -q dist/m365/package/skills/okf-projection/scripts/okf_projection.py /tmp/okf-m365/knowledge --json | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['projections'] == [] and r['findings'] == [], r; print('exported okf_projection.py runs: 0 projections, 0 findings')"
+	grep -q 'scripts/okf_obsidian.py' dist/m365/package/skills/okf-init/SKILL.md && test -f dist/m365/package/skills/okf-init/scripts/okf_obsidian.py || { echo "okf-init: names okf_obsidian.py but does not ship it"; exit 1; }
+	rm -rf /tmp/okf-m365o && cp -R /tmp/okf-m365/knowledge /tmp/okf-m365o
+	uv run -q dist/m365/package/skills/okf-init/scripts/okf_obsidian.py /tmp/okf-m365o >/dev/null && test -f /tmp/okf-m365o/.obsidian/app.json && test -f /tmp/okf-m365o/.obsidian/.gitignore && test -f /tmp/okf-m365o/knowledge.base && echo 'exported okf_obsidian.py writes the viewer setup'
 	rm -rf /tmp/okf-m365q && cp -R /tmp/okf-m365/knowledge /tmp/okf-m365q
 	printf -- '---\ntype: Knowledge Fragment\ntitle: M\ndescription: M.\nparticipants: [Alice]\ndistillation_status: done\ngenerated: { by: human:test, at: 2026-11-02T00:00:00Z }\n---\n\n# Record\n\nText.\n' > /tmp/okf-m365q/fragments/2026-11-02-meeting.md
 	printf -- '---\ntype: Open Question\ntitle: Q\ndescription: Q.\nowner: human:test\nquestion_status: closed\nasked_in: /fragments/2026-11-02-meeting.md\ngenerated: { by: human:test, at: 2026-11-02T00:00:00Z }\n---\n\n# Question\n\nWho?\n' > /tmp/okf-m365q/base/questions/who.md
@@ -97,6 +101,8 @@ copilot:
 m365:
 	python3 build/export_m365.py
 	@echo "→ dist/m365/okf-builder-m365.zip (M365 Cowork plugin) · dist/m365/skills/*.zip (Copilot Studio / Agent Builder)"
+obsidian:
+	uv run -q $(S)/okf_obsidian.py knowledge
 all: copies test plugin copilot m365
 check-links:
 	@test "$$(readlink .claude/skills)" = "../plugin/okf-builder/skills" && test "$$(readlink .agents/skills)" = "../plugin/okf-builder/skills" && echo "link packages .claude/skills and .agents/skills OK" || (echo "broken symlinks: ln -sfn ../plugin/okf-builder/skills .claude/skills .agents/skills"; exit 1)

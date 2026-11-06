@@ -28,6 +28,7 @@ okf_lint.py   [knowledge] [--json] [--strict] [--no-profile]
 okf_index.py  [knowledge] [--check] [--dir sub]
 okf_migrate.py [knowledge] --to 0.2|0.1 [--actor A] [--keep-extensions] [--out DIR] [--dry-run] [--file rel.md]
 okf_projection.py [knowledge] [--json] [--strict] [--run-render] [--record-hashes SLUG]
+okf_obsidian.py knowledge [--force]
 ```
 
 They can be copied into `tools/okf/` of any repo for CI; the CI job needs uv (for example `astral-sh/setup-uv`) or PyYAML.
