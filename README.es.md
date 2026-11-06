@@ -48,6 +48,7 @@ okf-lint        → valida spec + perfil
 okf-index       → regenera index.md desde el frontmatter
 okf-ask         → "¿por qué decidimos X?"
 okf-migrate     → migra 0.1 ↔ 0.2 (siempre con --dry-run primero)
+okf-projection  → crea, comprueba, refresca y renderiza las proyecciones de projections/; aplica solo lo que apruebas
 ```
 
 `okf-lint` informa de una credencial guardada en un fichero del bundle como `SECRET_IN_BUNDLE`, una comprobación rápida. Para pre-commit y CI usa [gitleaks](https://github.com/gitleaks/gitleaks), el escáner a fondo: `make secrets` ejecuta `gitleaks dir` sobre los bundles de este repo.
