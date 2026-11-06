@@ -50,8 +50,9 @@ CONTENT = "content.md"
 LIFECYCLES = ("canonical", "deliverable", "transient")  # ordered from the most stable
 NATURES = ("rendered", "composed", "recomputable")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
-REF_RE = re.compile(r"^/(?:base/[^/].*|projections/[^/]+(?:/.+)?)$")
+REF_RE = re.compile(r"^/(?:base/[^/].*|projections/[^/]+(?:/.*)?)$")
 RENDER_TIMEOUT = 120
+KILL_WAIT = 5  # seconds to read what a killed render left, before its pipes are closed
 RENDER_TAIL = 20  # last lines of a failed render's output kept in the finding
 RENDER_OUTPUT_MAX = 2000
 OUT_ENV = "OKF_PROJECTION_OUT"
@@ -205,7 +206,8 @@ def _tail(text: str) -> str:
 
 
 def _kill_group(proc: subprocess.Popen) -> None:
-    """Kill the render and every process it started (its own session); proc.kill() where there is no killpg."""
+    """Kill the render and every process in its session; proc.kill() where there is no killpg. A descendant that left
+    the session (setsid) is beyond it: _drain does not wait for it."""
     if hasattr(os, "killpg"):
         try:
             os.killpg(proc.pid, signal.SIGKILL)
@@ -213,6 +215,22 @@ def _kill_group(proc: subprocess.Popen) -> None:
         except (ProcessLookupError, PermissionError):
             pass
     proc.kill()
+
+
+def _drain(proc: subprocess.Popen) -> tuple[str, str]:
+    """What a killed render wrote, read for at most KILL_WAIT seconds: a descendant that left its session may still
+    hold the pipes open, so they are closed and the check goes on without the rest of its output."""
+    try:
+        return proc.communicate(timeout=KILL_WAIT)
+    except subprocess.TimeoutExpired:
+        for pipe in (proc.stdout, proc.stderr):
+            if pipe is not None:
+                pipe.close()
+        try:
+            proc.wait(timeout=KILL_WAIT)
+        except subprocess.TimeoutExpired:
+            pass
+        return "", ""
 
 
 def run_render(bundle: Path, slug: str, command: str, lifecycle: str | None = None) -> list[dict]:
@@ -236,7 +254,7 @@ def run_render(bundle: Path, slug: str, command: str, lifecycle: str | None = No
                     why, output = f"exit {proc.returncode}", stdout + stderr
             except subprocess.TimeoutExpired:
                 _kill_group(proc)
-                stdout, stderr = proc.communicate()
+                stdout, stderr = _drain(proc)
                 why, output = f"timed out after {RENDER_TIMEOUT}s", (stdout or "") + (stderr or "")
         if why:
             tail = _tail(output)
@@ -502,7 +520,7 @@ def test_a_ref_to_a_missing_path_or_projection_is_proj_ref_missing(tmp_path):
         "a": _canonical("[/base/domain/gone.md]"),
         "b": _canonical("[/projections/nowhere]"),
         "c": _canonical("[/projections/a/missing.md]"),
-        "d": _canonical("[/projections/a, /projections/a/projection.yaml, /base/domain]"),
+        "d": _canonical("[/projections/a, /projections/a/, /projections/a/projection.yaml, /base/domain]"),
     })
     assert _codes(check(k)) == [("PROJ_REF_MISSING", "a"), ("PROJ_REF_MISSING", "b"), ("PROJ_REF_MISSING", "c")]
 
@@ -597,6 +615,9 @@ def test_run_render_inside_git_does_not_ask_a_transient_projection_to_be_committ
     (k / "projections" / "tra" / "out.txt").write_text("edited\n", encoding="utf-8")
     assert [(f["slug"], "differs" in f["message"]) for f in check(k, run_render_flag=True)["findings"]] == [
         ("can", False), ("tra", True)]  # a transient render is still compared byte for byte
+    (k / "projections" / "tra" / "out.txt").unlink()
+    assert [(f["slug"], "is not in the projection's directory" in f["message"])
+            for f in check(k, run_render_flag=True)["findings"]] == [("can", False), ("tra", True)]
 
 
 def test_a_failing_or_slow_render_is_proj_render_failed_with_its_output_masked(tmp_path, monkeypatch):
@@ -612,15 +633,47 @@ def test_a_failing_or_slow_render_is_proj_render_failed_with_its_output_masked(t
     assert f["code"] == "PROJ_RENDER_FAILED" and "timed out" in f["message"]
 
 
+def _alive(pid: int) -> bool:
+    """Whether pid is still running, waiting up to 2 s for a killed process to be reaped (a zombie is not alive)."""
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+        if not state or state.startswith("Z"):
+            return False
+        time.sleep(0.05)
+    return True
+
+
 def test_a_render_timeout_kills_the_processes_the_render_started(tmp_path, monkeypatch):
     monkeypatch.setattr(sys.modules[__name__], "RENDER_TIMEOUT", 1)
-    marker = tmp_path / "child-survived"
+    pidfile = tmp_path / "child.pid"
     k = _bundle(tmp_path, {"r": _canonical().replace(
-        "render: 'true'", f"render: \"sh -c 'sleep 5; touch {marker}' & wait\"")})
+        "render: 'true'", f"render: \"sh -c 'echo $$ > {pidfile}; exec sleep 30' & wait\"")})
     [f] = check(k, run_render_flag=True)["findings"]
     assert f["code"] == "PROJ_RENDER_FAILED" and "timed out after 1s" in f["message"]
-    time.sleep(6)
-    assert not marker.exists()
+    assert not _alive(int(pidfile.read_text().strip()))
+
+
+def test_a_descendant_that_left_the_session_does_not_hold_the_check(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], "RENDER_TIMEOUT", 1)
+    monkeypatch.setattr(sys.modules[__name__], "KILL_WAIT", 1)
+    pidfile = tmp_path / "escaped.pid"
+    escape = f"import os, time; os.setsid(); open({str(pidfile)!r}, 'w').write(str(os.getpid())); time.sleep(30)"
+    render = "render: " + json.dumps(f"{sys.executable} -c \"{escape}\" & wait")
+    k = _bundle(tmp_path, {"r": _canonical().replace("render: 'true'", render)})
+    start = time.monotonic()
+    try:
+        [f] = check(k, run_render_flag=True)["findings"]
+        elapsed = time.monotonic() - start
+    finally:
+        if pidfile.exists():
+            os.kill(int(pidfile.read_text().strip()), signal.SIGKILL)
+    assert f["code"] == "PROJ_RENDER_FAILED" and "timed out after 1s" in f["message"]
+    assert elapsed < 6, elapsed  # 1 s timeout + at most 2 x KILL_WAIT, not the descendant's 30 s
 
 
 def test_recomputable_is_validated_and_listed_to_recompute(tmp_path):
