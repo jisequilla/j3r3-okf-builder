@@ -80,7 +80,7 @@ knowledge/
 - `index.md` and `log.md` are **reserved names** at any level: they are never used for a concept.
 - A project can add its own directories under `base/` (e.g. `base/integrations/`, `base/security/`). They are documented in `base/index.md`.
 - `base/` may be organised **by type**, as `okf-init` creates it, or **by domain** (`base/clients/`, `base/payments/`). The usual directory of each type (§4) is a default, not a rule. A bundle that wants to say what each directory holds declares it in the `families` of its Domain Profile, `base/profile.md` (§4.1); `base/index.md` lists `base/profile.md` with the directories.
-- `projections/` is not OKF content: `okf-lint`, `okf-index` and `okf-ask` skip it, and no OKF tool treats a projection as a concept. A projection is a derivation with its own manifest and its own tools (ADR-0022, ADR-0030; §2.1), not knowledge. After a distillation, `okf-distill` reads only the `refs` of each `projection.yaml` to list the projections whose refs changed for refresh.
+- `projections/` is not OKF content: `okf-lint`, `okf-index` and `okf-ask` skip it, and no OKF tool treats a projection as a concept. A projection is a derivation with its own manifest and its own tools (ADR-0022, ADR-0031; §2.1), not knowledge. After a distillation, `okf-distill` reads only the `refs` of each `projection.yaml` to list the projections whose refs changed for refresh.
 - **`.okfignore`** at the bundle root lists the paths that are not part of the bundle, one gitignore-style glob per line: a line that starts with `#` is a comment, `!` re-includes what an earlier line excluded, a trailing `/` matches directories only, a `/` at the start or inside a pattern anchors it at the root (otherwise it matches a name at any depth), and `**` crosses directories; the last matching line wins, and a path under an excluded directory cannot be re-included. `okf-lint` does not read what it matches: it is no concept, is not counted, need not be listed in an `index.md`, and appears in `--json` under `ignored` and in one notice. It never excludes the root's reserved files (`index.md`, `log.md`, `project.md`, `conflict-log.md`, ADR-0018), the `index.md` of any directory or `base/profile.md`, nor `base/` while it holds `base/profile.md`: such a match is read as usual and reported as one notice, `cannot ignore <path>: reserved`. The file itself is not a concept. Hidden directories and `projections/` are skipped without it.
 - **A nested bundle** is a subdirectory other than `fragments/`, `base/` and `projections/` whose `index.md` declares its own `okf_version` (in its frontmatter, which an `index.md` below the root otherwise never has, §5.1). It is another bundle, not part of this one: `okf-lint` skips it as a whole with one notice naming its path, the parent `index.md` need not list it, a link into it is an ordinary link, and `okf-lint <that directory>` lints it on its own.
 - **What a fragment's content becomes** (ADR-0021), the routing `okf-distill` applies:
@@ -96,7 +96,7 @@ knowledge/
 
 ### 2.1 Projections
 
-A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.yaml`, its manifest; `content.md`, its content (for a recomputable projection, the procedure); `render/<renderer>.md`, one input per renderer, when it is rendered; and `deliverables/`, the rendered files, latest version only. It is not OKF: no OKF tool treats it as a concept (`okf-distill` reads only its `refs`), and its own tools are `okf_projection.py` and the `okf-projection` skill (ADR-0030).
+A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.yaml`, its manifest; `content.md`, its content (for a recomputable projection, the procedure); `render/<renderer>.md`, one input per renderer, when it is rendered; and `deliverables/`, the rendered files, latest version only. It is not OKF: no OKF tool treats it as a concept (`okf-distill` reads only its `refs`), and its own tools are `okf_projection.py` and the `okf-projection` skill (ADR-0031).
 
 **`projection.yaml`** (ADR-0022 decision 2):
 
@@ -120,7 +120,7 @@ A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.ya
 | `composed` | Prose a person or a model selected and wrote from its refs | A ref whose current SHA-256 (of the file's bytes; for a projection directory, of its `content.md`) differs from the recorded `sha256` |
 | `recomputable` | `content.md` is a procedure over an external source; the render holds the dated values | Listed for a person to recompute by hand: rerun the procedure and propose the difference |
 
-**`okf_projection.py`** (ADR-0030): `uv run <skills>/okf-standard/scripts/okf_projection.py [bundle] [--json] [--strict] [--run-render] [--record-hashes SLUG]`. Without a bundle it finds `knowledge/` upwards from the current directory. It reads every `projections/<slug>/projection.yaml` (hidden entries and plain files such as `.gitkeep` are ignored) and reports:
+**`okf_projection.py`** (ADR-0031): `uv run <skills>/okf-standard/scripts/okf_projection.py [bundle] [--json] [--strict] [--run-render] [--record-hashes SLUG]`. Without a bundle it finds `knowledge/` upwards from the current directory. It reads every `projections/<slug>/projection.yaml` (hidden entries and plain files such as `.gitkeep` are ignored) and reports:
 
 | Code | Level | When |
 |---|---|---|

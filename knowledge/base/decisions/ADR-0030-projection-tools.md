@@ -3,11 +3,11 @@ type: Architecture Decision
 title: "ADR-0030: The projection tools are a script and a skill, run a render only on request, and list recomputable projections for a person"
 description: okf_projection.py checks projection.yaml, the dependency rule and drift by nature, and the okf-projection skill creates, refreshes and renders projections; okf_lint stays OKF-only; a rendered projection's render command runs only on an explicit flag; a recomputable projection is listed for a person to recompute; the skill ships in the M365 packages but not in the M365 agent.
 tags: [adr, standard, projections, skills]
-status: draft
+status: deprecated
 adr_id: ADR-0030
-decision_status: accepted
+decision_status: superseded
 supersedes:
-superseded_by:
+superseded_by: /base/decisions/ADR-0031-projection-tools-transient-exception.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T23:14:53Z }
 sources:
   - { id: adr-0022, resource: /base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md }

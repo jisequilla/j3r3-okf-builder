@@ -7,7 +7,7 @@ tags: [system, scripts, python]
 status: draft
 owner: human:jisequilla
 runtime: uv
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T23:34:17Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T00:17:51Z }
 ---
 
 # Responsibility
@@ -20,7 +20,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T23:34:17Z }
 | okf_index.py | Regenerates `index.md` per directory from frontmatter | `--check` for CI |
 | okf_migrate.py | 0.1 ↔ 0.2, `--dry-run`, `--out`, `--keep-extensions`, `--file` | files + entry in log.md |
 | okf_audit.py | Repository history for `okf-review`'s audit mode: concepts deleted or renamed since a reference point (read-only) | `--since`, `--json` |
-| okf_projection.py | Knowledge projections ([ADR-0022](/base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md), [ADR-0030](/base/decisions/ADR-0030-projection-tools.md)): each `projection.yaml`, the dependency rule and drift by nature (`PROJ_*` codes, `PROJ_DRIFT` a warning); runs a rendered projection's `render` only with `--run-render`; `--record-hashes` writes a composed projection's hashes in place | `--json`, `--strict`, exit code |
+| okf_projection.py | Knowledge projections ([ADR-0022](/base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md), [ADR-0031](/base/decisions/ADR-0031-projection-tools-transient-exception.md)): each `projection.yaml`, the dependency rule and drift by nature (`PROJ_*` codes, `PROJ_DRIFT` a warning); runs a rendered projection's `render` only with `--run-render`; `--record-hashes` writes a composed projection's hashes in place | `--json`, `--strict`, exit code |
 | okf_common.py | Frontmatter parsing with PyYAML, Doc model, version detection | library |
 
 Used by every skill that writes or checks a bundle, the fragment skills included: `okf-fragment` and `okf-distill` run `okf_index.py` and `okf_lint.py` (and `okf_migrate.py --file` in a 0.1 bundle), `okf-review` runs `okf_index.py`, `okf_lint.py` and `okf_audit.py`; see the [plugin](/base/systems/plugin-okf-builder.md).

@@ -3,7 +3,7 @@
 # requires-python = ">=3.9"
 # dependencies = ["pyyaml"]
 # ///
-"""okf_projection.py — Check a bundle's knowledge projections (ADR-0022, ADR-0030): each projection.yaml, the
+"""okf_projection.py — Check a bundle's knowledge projections (ADR-0022, ADR-0031): each projection.yaml, the
 dependency rule and drift by nature.
 
 Usage:
@@ -216,7 +216,7 @@ def _kill_group(proc: subprocess.Popen) -> None:
 
 
 def run_render(bundle: Path, slug: str, command: str, lifecycle: str | None = None) -> list[dict]:
-    """Run a rendered projection's render into an empty directory and compare what it writes (ADR-0030 decision 2).
+    """Run a rendered projection's render into an empty directory and compare what it writes (ADR-0031 decision 2).
     A transient projection is never committed, so its files are not checked against git."""
     pdir = bundle / PROJECTIONS_DIR / slug
     findings: list[dict] = []
