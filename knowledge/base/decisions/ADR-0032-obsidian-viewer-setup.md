@@ -25,14 +25,14 @@ The follow-up bead called the setup an "Obsidian projection" extending ADR-0007[
 
 The prototype base also predates the layers: it lists every Markdown file but `index.md` and `log.md`, so fragments, `project.md` and the Conflict Log appear among the concepts.
 
-The repository's owner, human:jisequilla, decided what the setup is, how its views are scoped and what this repository commits, in answer to structured questions on 2026-11-06.
+The repository's owner, human:jisequilla, decided what the setup is, how its views are scoped, what this repository commits, that the script writes the `.obsidian/.gitignore` and that the views name the built-in fields, in answer to structured questions on 2026-11-06.
 
 # Decision
 
 1. **A viewer setup, not a projection.** A bundle opens in Obsidian with its root as the vault, so bundle-absolute links resolve. The two files that make it readable there are workspace configuration for one tool (ADR-0028 decision 1), neither a knowledge projection (ADR-0022 decision 6) nor a platform package ([ADR-0007](/base/decisions/ADR-0007-single-source-and-projections.md)). No OKF tool reads them: `okf_lint` skips dot directories and reads only Markdown files, so neither file needs a lint change.
 2. **A script writes them.** `okf_obsidian.py`, in `okf-standard/scripts/` with the other scripts, takes a bundle root and writes:
    - `.obsidian/app.json` with `useMarkdownLinks: true`, `newLinkFormat: "relative"` and `alwaysUpdateLinks: true`;
-   - `.obsidian/.gitignore`, which ignores everything in `.obsidian/` but `app.json` and itself, so a bundle in git keeps the setting and not each reader's window state, plugins or graph;
+   - `.obsidian/.gitignore`, which ignores everything in `.obsidian/` but `app.json` and itself, so a bundle in git keeps the setting and not each reader's window state, graph, theme, Sync setting or plugin code (which ADR-0028 decision 4 keeps out of a bundle);
    - `knowledge.base` at the bundle root, with the views of decision 3.
 
    As `okf_init.py` does, it never overwrites an existing file unless given `--force`, reports what it wrote and what it left, and is idempotent. It carries a `--test` that `make test` runs. The `okf-init` skill offers it after creating a bundle and on request for an existing one; `make obsidian` runs it on this repository's `knowledge/`. It ships wherever `okf_init.py` ships.
@@ -46,7 +46,9 @@ The repository's owner, human:jisequilla, decided what the setup is, how its vie
    | Going stale | `base/` | `stale_after` set | name, type, `stale_after`, days to stale |
    | Fragments | `fragments/` | none | grouped by `distillation_status`; name, `occurred_at`, `origin`, `participants` |
 
-   "Written by", "written at" and "days to stale" are the prototype's formulas over `generated.by`, `generated.at` and `stale_after`.
+   "Written by", "written at" and "days to stale" are the prototype's formulas over `generated.by`, `generated.at` and `stale_after`. The views name the built-in Domain Profile's fields; a bundle whose Domain Profile renames one through an alias sees that column empty, until a follow-up makes the script write the aliases in force.
+
+   The base relies on Obsidian's Bases core plugin being on in a fresh vault, since `core-plugins.json` is not committed. A fresh clone opened in Obsidian checks it before the build is accepted; if Bases is off by default, the script's setup gains a `core-plugins.json` in a new decision.
 4. **Links may become relative on rename.** With decision 2's settings, Obsidian rewrites the links to a renamed file in relative form. The standard recommends bundle-absolute links and allows relative ones (§3.3)[^standard], so a rename in Obsidian leaves valid links in the allowed form, not the recommended one. That is accepted: the alternative is links that break.
 5. **This repository commits the setup.** `knowledge/knowledge.base`, `knowledge/.obsidian/app.json` and `knowledge/.obsidian/.gitignore` are committed, so anyone who clones the repository and opens `knowledge/` in Obsidian gets the views. The lines of `.git/info/exclude` that hid the prototype are removed.
 
@@ -59,14 +61,16 @@ The repository's owner, human:jisequilla, decided what the setup is, how its vie
 | A platform package (`make obsidian` writing to `dist/`) | Nothing in the bundle | A reader must copy two files into the bundle by hand; the setup packages no skills | It is not what a platform package is |
 | Keep the prototype's views over every Markdown file | Already tested | Fragments, `project.md` and the Conflict Log mix with the concepts in every view | The layers are what a reader navigates by |
 | Views over `base/` only | Four tested views, one filter added | Pending fragments, the layer a person distills from, stay invisible | A fifth view costs one block |
+| Commit a neutral `core-plugins.json` with Bases on | Bases on for every reader | One more file per bundle, overriding each reader's plugin choice | Not needed if Bases is on by default; checked on a fresh clone |
+| Views that read the aliases in force | Columns filled in an aliased bundle | The script reads the Domain Profile through `okf_lint --profiles` | No bundle aliases these fields today; a follow-up |
 | Keep the setup local in this repository | Nothing per-tool committed | A clone gets no views; the generator is never dogfooded where it is built | The owner chose to commit it |
 | Absolute link format in Obsidian | Keeps the recommended form | Renames broke links in the 2026-10-31 test | Valid links matter more than the recommended form |
 
 # Consequences
 
 - Positive: any bundle becomes browsable in Obsidian with one command, its decisions, drafts, stale concepts and pending fragments as tables, and links that survive renames; this repository's clone opens that way as it is.
-- Negative / accepted debt: one more script in every package that carries `okf_init.py`; renames made in Obsidian turn bundle-absolute links relative; the views name fields of the built-in Domain Profile (`decision_status`, `distillation_status`, `stale_after`), so a bundle whose Domain Profile renames them through aliases sees empty columns; Obsidian is not open source, so readers without it still need the web viewer of okf-1lj.
-- Follow-up actions: build the script, its test, the `okf-init` step, `make obsidian` and the packaging; commit this repository's setup; the [OKF scripts](/base/systems/scripts-okf.md) and the [okf-builder plugin](/base/systems/plugin-okf-builder.md) list the script.
+- Negative / accepted debt: one more script in every package that carries `okf_init.py`; renames made in Obsidian turn bundle-absolute links relative; the views name fields of the built-in Domain Profile (`decision_status`, `distillation_status`, `stale_after`), so a bundle whose Domain Profile renames them through aliases sees empty columns until the follow-up; Obsidian is not open source, so readers without it still need the web viewer of okf-1lj.
+- Follow-up actions: make the script write the aliases in force into the views (a P4 follow-up); build the script, its test, the `okf-init` step, `make obsidian` and the packaging; commit this repository's setup; the [OKF scripts](/base/systems/scripts-okf.md) and the [okf-builder plugin](/base/systems/plugin-okf-builder.md) list the script.
 
 # Related
 
