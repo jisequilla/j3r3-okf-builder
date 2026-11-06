@@ -63,9 +63,9 @@ knowledge/
 │   │   └── attesters/
 │   └── questions/           # type: Open Question — what the team does not know yet, with an owner (kebab-slug.md).
 │       └── index.md
-└── projections/             # Derivation layer, not OKF (ADR-0019): one directory per projection.
+└── projections/             # Derivation layer, not OKF (ADR-0022): one directory per projection (§2.1).
     └── <slug>/
-        ├── projection.yaml  # Manifest: lifecycle, nature, intent, refs with their content hashes.
+        ├── projection.yaml  # Manifest: lifecycle, nature, intent, refs; only a composed projection records their hashes.
         ├── content.md
         ├── render/
         └── deliverables/
@@ -80,7 +80,7 @@ knowledge/
 - `index.md` and `log.md` are **reserved names** at any level: they are never used for a concept.
 - A project can add its own directories under `base/` (e.g. `base/integrations/`, `base/security/`). They are documented in `base/index.md`.
 - `base/` may be organised **by type**, as `okf-init` creates it, or **by domain** (`base/clients/`, `base/payments/`). The usual directory of each type (§4) is a default, not a rule. A bundle that wants to say what each directory holds declares it in the `families` of its Domain Profile, `base/profile.md` (§4.1); `base/index.md` lists `base/profile.md` with the directories.
-- `projections/` is not OKF content: `okf-lint`, `okf-index` and `okf-ask` skip it, and no OKF tool treats a projection as a concept. A projection is a derivation with its own manifest and its own tools (ADR-0019), not knowledge. After a distillation, `okf-distill` reads only the `refs` of each `projection.yaml` to list the projections whose refs changed for refresh.
+- `projections/` is not OKF content: `okf-lint`, `okf-index` and `okf-ask` skip it, and no OKF tool treats a projection as a concept. A projection is a derivation with its own manifest and its own tools (ADR-0022, ADR-0031; §2.1), not knowledge. After a distillation, `okf-distill` reads only the `refs` of each `projection.yaml` to list the projections whose refs changed for refresh.
 - **`.okfignore`** at the bundle root lists the paths that are not part of the bundle, one gitignore-style glob per line: a line that starts with `#` is a comment, `!` re-includes what an earlier line excluded, a trailing `/` matches directories only, a `/` at the start or inside a pattern anchors it at the root (otherwise it matches a name at any depth), and `**` crosses directories; the last matching line wins, and a path under an excluded directory cannot be re-included. `okf-lint` does not read what it matches: it is no concept, is not counted, need not be listed in an `index.md`, and appears in `--json` under `ignored` and in one notice. It never excludes the root's reserved files (`index.md`, `log.md`, `project.md`, `conflict-log.md`, ADR-0018), the `index.md` of any directory or `base/profile.md`, nor `base/` while it holds `base/profile.md`: such a match is read as usual and reported as one notice, `cannot ignore <path>: reserved`. The file itself is not a concept. Hidden directories and `projections/` are skipped without it.
 - **A nested bundle** is a subdirectory other than `fragments/`, `base/` and `projections/` whose `index.md` declares its own `okf_version` (in its frontmatter, which an `index.md` below the root otherwise never has, §5.1). It is another bundle, not part of this one: `okf-lint` skips it as a whole with one notice naming its path, the parent `index.md` need not list it, a link into it is an ordinary link, and `okf-lint <that directory>` lints it on its own.
 - **What a fragment's content becomes** (ADR-0021), the routing `okf-distill` applies:
@@ -93,6 +93,49 @@ knowledge/
   | An action item (someone must do something) | The team's tracker; the base never copies it, and a concept may link the tracker item |
   | Logistics, tone, commercial terms | Nothing: they stay in the fragment's record |
 - **Writing in `base/`**: a concept states the current state in the present tense, with its sources; dated history goes to `log.md` and to the fragments, not into the prose. A concept with several topics, or longer than about 300 lines, is split.
+
+### 2.1 Projections
+
+A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.yaml`, its manifest; `content.md`, its content (for a recomputable projection, the procedure); `render/<renderer>.md`, one input per renderer, when it is rendered; and `deliverables/`, the rendered files, latest version only. It is not OKF: no OKF tool treats it as a concept (`okf-distill` reads only its `refs`), and its own tools are `okf_projection.py` and the `okf-projection` skill (ADR-0031).
+
+**`projection.yaml`** (ADR-0022 decision 2):
+
+| Key | Required | Meaning |
+|---|---|---|
+| `lifecycle` | Yes | `canonical` (here to stay; refreshed when its refs change), `deliverable` (versioned and shared outside), `transient` (one-shot; not committed) |
+| `nature` | Yes | `rendered`, `composed` or `recomputable` (below) |
+| `intent` | Yes | Audience, scope, tone and what to leave out; it guides every refresh |
+| `refs` | Rendered and composed: yes | The base concepts and projections it derives from, as bundle paths: `/base/...`, or `/projections/<slug>` optionally with a file inside it; a composed projection records each as a one-line `{ path: ..., sha256: ... }` |
+| `render` | Rendered: yes | The command that produces it from its refs, deterministically |
+| `frozen` | No | `true` when the projection is archived: it keeps its last state and is no longer checked for drift |
+| `versions` | Deliverable | One entry per delivered version: `version`, `date`, `commit`, and to whom it was sent |
+
+**Dependency rule** (ADR-0022 decision 3): a projection references the base and projections at least as stable as itself: `canonical` → base and `canonical`; `deliverable` → base, `canonical` and `deliverable`; `transient` → anything. A ref to a file inside a projection takes that projection's lifecycle. Removing a transient projection can break nothing else.
+
+**Drift by nature** (ADR-0022 decision 4). The check lists what drifted and never regenerates it; a refresh proposes the change and a person approves it. A frozen projection is not checked.
+
+| Nature | What it is | How drift is checked |
+|---|---|---|
+| `rendered` | A deterministic function of its refs | Only with `--run-render`: `render` runs through the shell from the bundle root with `OKF_PROJECTION_OUT` naming an empty temporary directory, for at most 120 s, after which it and every process it started are killed; each file it writes there is compared with the file of the same relative path in the projection's directory, and a file that differs, is absent there or, in a git work tree, is not tracked there (except in a `transient` projection, which is never committed) is drift. Nothing is recorded |
+| `composed` | Prose a person or a model selected and wrote from its refs | A ref whose current SHA-256 (of the file's bytes; for a projection directory, of its `content.md`) differs from the recorded `sha256` |
+| `recomputable` | `content.md` is a procedure over an external source; the render holds the dated values | Listed for a person to recompute by hand: rerun the procedure and propose the difference |
+
+**`okf_projection.py`** (ADR-0031): `uv run <skills>/okf-standard/scripts/okf_projection.py [bundle] [--json] [--strict] [--run-render] [--record-hashes SLUG]`. Without a bundle it finds `knowledge/` upwards from the current directory. It reads every `projections/<slug>/projection.yaml` (hidden entries and plain files such as `.gitkeep` are ignored) and reports:
+
+| Code | Level | When |
+|---|---|---|
+| `PROJ_NO_MANIFEST` | error | A directory in `projections/` without `projection.yaml` |
+| `PROJ_BAD_YAML` | error | `projection.yaml` is not valid YAML, or not a mapping |
+| `PROJ_MISSING_KEY` | error | A required key is missing (it is named), or a composed ref has no `sha256` (`refs[i].sha256`) |
+| `PROJ_BAD_VALUE` | error | `lifecycle`, `nature` or `frozen` outside its values; a ref that is not a bundle path under `/base/` or `/projections/`; a `sha256` that is not 64 lowercase hex characters; a `versions` entry without `version` or `date` |
+| `PROJ_REF_MISSING` | error | A ref whose path does not exist (a projection ref names an existing projection directory) |
+| `PROJ_DEPENDENCY` | error | A ref that breaks the dependency rule |
+| `PROJ_DRIFT` | warning | A composed ref or a rendered file that drifted, named |
+| `PROJ_RENDER_FAILED` | error | A `render` that exits non-zero or times out, with the last lines of its output, secrets masked as `okf-lint` masks a validator's output |
+
+Without `--run-render` nothing is executed: each rendered projection is listed under `not_checked`, with one notice, `render not run (use --run-render)`. An agent passes the flag only when a person asks, as for `--run-validators`. Recomputable projections are listed under `to_recompute`, frozen ones under `frozen`; both have their manifest checked. A manifest with errors is not checked for drift. `--json` gives `{ projections: [{slug, lifecycle, nature, frozen}], findings: [{code, level, slug, message}], not_checked, to_recompute, frozen, notices }`. The exit is 1 on any error, and on any warning with `--strict`; 2 when no bundle is found; else 0: drift asks for a refresh, not a fix. Rendering for real runs the same `render` with `OKF_PROJECTION_OUT` naming the projection's directory.
+
+**`--record-hashes SLUG`**, after a person approves the refresh of a composed projection, writes each ref's current `sha256` into its `projection.yaml` in place: every other byte of the file stays as it was. It exits 2 and changes nothing, naming the reason, when the slug is not a projection, the projection is not composed or is frozen, its manifest has errors other than a `sha256` value, or a ref is not a one-line `{ path: ..., sha256: ... }` flow map.
 
 ---
 
