@@ -53,7 +53,7 @@ CONCEPT_TEMPLATES = sorted(p.name for p in TEMPLATES.glob("*.md")
 WRITE_SCRIPTS = ["okf_index.py", "okf_lint.py", "okf_profile.py", "okf_migrate.py", "okf_common.py"]
 NEEDS = {
     "okf-standard": {"scripts": [], "templates": False},
-    "okf-init":     {"scripts": ["okf_init.py", "okf_common.py", "okf_index.py", "okf_migrate.py", "okf_lint.py", "okf_profile.py"], "templates": ["project.md", "log.md"]},
+    "okf-init":     {"scripts": ["okf_init.py", "okf_common.py", "okf_index.py", "okf_migrate.py", "okf_lint.py", "okf_profile.py", "okf_obsidian.py"], "templates": ["project.md", "log.md"]},
     "okf-capture":  {"scripts": WRITE_SCRIPTS, "templates": CONCEPT_TEMPLATES},
     "okf-fragment": {"scripts": WRITE_SCRIPTS, "templates": ["fragment.md"]},
     "okf-distill":  {"scripts": WRITE_SCRIPTS, "templates": CONCEPT_TEMPLATES + ["conflict-log.md"]},
