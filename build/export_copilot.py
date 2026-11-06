@@ -69,6 +69,7 @@ Skills available in `{skills_dir}/` (Agent Skills standard, also valid for Claud
 | okf-index | Regenerate `index.md` |
 | okf-ask | Answer questions citing concepts and confidence |
 | okf-migrate | Migrate between OKF 0.1 and 0.2 |
+| okf-projection | Create, check, refresh and render the projections in `projections/`; nothing is applied before the person approves |
 
 Agent: `@okf` (`.github/agents/okf.agent.md`). CI validation: `okf_lint.py knowledge --strict`.
 """
