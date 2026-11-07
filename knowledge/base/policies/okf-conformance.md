@@ -1,16 +1,19 @@
 ---
 type: Policy
-title: Conformance with profile knowledge/2.0
-description: Every bundle that this project produces or touches must pass okf_lint --strict in its declared version.
+title: Conformance with profile knowledge/3.0
+description: Every bundle this project produces or touches passes okf_lint --strict in its declared OKF version and profile, its Domain Profile included.
 tags: [policy, conformance]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-07T03:56:41Z }
 sources:
   - id: standard
     resource: /base/references/okf-standard.md
-    title: OKF standard, profile knowledge/2.0
+    title: OKF standard, profile knowledge/3.0
+  - id: adr-0025
+    resource: /base/decisions/ADR-0025-verification-recorded-by-question.md
+    title: "ADR-0025: generated is required, and an agent writes a person's verification only from that person's recorded answer to a question naming each concept and version"
 ---
 
 # Scope
@@ -19,14 +22,18 @@ sources:
 
 # Rule
 
-- `index.md` with `okf_version`, `log.md` and `project.md` (`type: Project`) MUST exist.[^standard]
+- `index.md` with `okf_version` and `okf_profile`, `log.md` and `project.md` (`type: Project`) MUST exist.[^standard]
+- In a knowledge/3.0 bundle, concepts live in `base/` or `fragments/`; `projections/` is not OKF and `okf_projection.py` checks it.[^standard]
 - Every concept MUST carry `generated: { by, at }` (in 0.1 bundles, `timestamp`).
-- An agent MUST NOT write `verified` with a `human:` actor.
+- Every concept MUST meet the Domain Profile in force for its type and directory.[^standard]
+- `verified` with a `human:` actor is written only by that person, or by an agent from that person's recorded answer.[^adr-0025]
 - 0.1 and 0.2 forms MUST NOT be mixed in a bundle.
+- No credential is committed in a bundle.
 - Every concept SHOULD have a `description`, and every runbook, metric and policy SHOULD have a `stale_after`.
 
 # Verification / controls
 
-`make lint` in CI; `okf-capture` always finishes with lint.
+`make lint` (`okf_lint --strict` on `knowledge/` and `examples/knowledge`) in CI and after every change; `okf-capture` always finishes with lint.
 
-[^standard]: OKF standard, profile knowledge/2.0
+[^standard]: OKF standard, profile knowledge/3.0: §2, §4.1 and §7.
+[^adr-0025]: ADR-0025, decision 4.
