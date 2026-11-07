@@ -7,7 +7,7 @@ tags: [policy, agents]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T04:06:24Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-07T03:56:41Z }
 ---
 
 # Rule
@@ -18,6 +18,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T04:06:24Z }
 4. Finish with `make test` (code) and `make lint` (knowledge).
 5. Do not use vendor variables in skills; use the `<skills>/` convention.
 6. Add `verified: human:` only from that person's recorded answer to a question naming each concept and its version, kept as a fragment ([ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md)).
+7. Google's specs in `references/` are verbatim copies (Apache-2.0): they are never edited; they are updated from upstream with [Update the OKF spec from Google's upstream](/base/runbooks/update-upstream-spec.md), and the update is recorded in `log.md`.
 
 # Related
 
