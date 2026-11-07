@@ -1,6 +1,8 @@
 # Bundle history
 
 ## 2026-11-07
+* **Creation**: [ADR-0033](/base/decisions/ADR-0033-verification-recorded-by-question-or-review-page.md): ADR-0025 restated with a second channel for a person's recorded answer, a review page private to the person (such as a Claude artifact shared with nobody) that shows each concept's text and version and stores the person's choice per concept, the agent applying the stored answers only when the person asks and never one about an earlier version; decided by human:jisequilla in answer to structured questions while scoping okf-12m and okf-1lj; supersedes ADR-0025.
+* **Deprecation**: [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md), superseded by ADR-0033.
 * **Update**: [Conformance with profile knowledge/3.0](/base/policies/okf-conformance.md) states the rules for profile knowledge/3.0: `okf_profile` in the root index, concepts in `base/` or `fragments/` with `projections/` checked by `okf_projection.py`, the Domain Profile in force, no committed credential, and `verified` written by the person or from their recorded answer ([ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md)); [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md) gains rule 7, Google's specs kept verbatim, as `AGENTS.md` states it; approved by human:jisequilla in answer to structured questions (okf-12m).
 
 ## 2026-11-06

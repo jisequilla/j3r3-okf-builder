@@ -3,10 +3,11 @@ type: Architecture Decision
 title: "ADR-0025: generated is required, and an agent writes a person's verification only from that person's recorded answer to a question naming each concept and version"
 description: Every concept carries generated and starts as a draft; verified with a human actor is written by the person, or by an agent after that person answers a structured question naming each concept and its version, kept verbatim as a fragment and linked from the log.
 tags: [adr, trust]
-status: draft
+status: deprecated
 adr_id: ADR-0025
-decision_status: accepted
+decision_status: superseded
 supersedes: /base/decisions/ADR-0005-required-generated-human-verified.md
+superseded_by: /base/decisions/ADR-0033-verification-recorded-by-question-or-review-page.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:58:18Z }
 sources:
   - { id: adr-0005, resource: /base/decisions/ADR-0005-required-generated-human-verified.md }
