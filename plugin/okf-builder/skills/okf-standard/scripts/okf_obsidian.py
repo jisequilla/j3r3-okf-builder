@@ -16,18 +16,34 @@ Usage:
     reader's window state, graph, theme or plugins;
   - knowledge.base: five Bases views, four over base/ (Decisions, Awaiting human review, By type, Going stale) and
     one over fragments/ (Fragments), with index.md and log.md left out.
+- The views read the bundle's Domain Profile in force (knowledge/3.0: the built-in one, the profiles it extends and
+  base/profile.md). A view column or filter on a field the profile gives local names to (field aliases, value aliases
+  whose `to` sets it) reads the formula okf_<field>: the declared field, else each local name in sorted order, each
+  value alias written as a test (`==`, strict, unlike lint's string match); a value alias whose `from` holds the field
+  itself is tested before it, as lint replaces it. Decisions also takes the type aliases of Architecture Decision,
+  the local types that extend it and their aliases; By type and the type columns read okf_type, which maps each
+  type alias to its declared type. generated.by and generated.at are nested keys and are read as written, not
+  through aliases. A bundle whose profile has none of these gets KNOWLEDGE_BASE byte for byte.
+- A Domain Profile that cannot be read (any PROFILE_* finding), or a bundle that is not knowledge/3.0, gets the views
+  with the built-in names and one line on stderr saying so.
 - Never overwrites an existing file unless given --force; prints `created <path>`, `rewritten <path>` (with --force)
-  or `skipped (exists) <path>` for each file. The content is fixed text, so a run is deterministic and idempotent.
+  or `skipped (exists) <path>` for each file. The content depends only on the Domain Profile, written with sorted
+  names and no timestamps, so a run is deterministic and, on the same profile, idempotent; rerun with --force after
+  changing an alias or a local type.
 - Exit: 2, writing nothing, when the bundle has no index.md or a path the setup needs is taken by something else
   (`.obsidian` as a file, `knowledge.base` as a directory); else 0.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+from okf_common import PROFILE_30, declared_profile  # noqa: E402
+from okf_profile import Resolved, _subtypes, is_a, load_profile  # noqa: E402
 
 APP_JSON = """{
   "useMarkdownLinks": true,
@@ -127,6 +143,124 @@ FILES = {
     "knowledge.base": KNOWLEDGE_BASE,
 }
 
+ADR = "Architecture Decision"
+# The built-in fields the views name, in the order their formulas are written
+VIEW_FIELDS = ("decision_status", "description", "distillation_status", "occurred_at", "origin", "participants",
+               "stale_after", "status", "title", "type")
+
+
+def _js(s: str) -> str:
+    """A string literal of a Bases expression, also a YAML double-quoted scalar."""
+    return json.dumps(s, ensure_ascii=False)
+
+
+def _lit(v) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return json.dumps(v)
+    return _js(str(v))
+
+
+def _note(key: str) -> str:
+    return f"note[{_js(key)}]"
+
+
+def _chain(steps: list[tuple[str, str]], last: str = '""') -> str:
+    """if(c1, v1, if(c2, v2, ... last))."""
+    out = last
+    for cond, val in reversed(steps):
+        out = f"if({cond}, {val}, {out})"
+    return out
+
+
+def _test(frm: dict) -> str:
+    return " && ".join(f"{_note(k)} == {_lit(v)}" for k, v in frm.items())
+
+
+def view_names(r: Resolved | None) -> tuple[dict, dict, str, list[str]]:
+    """What the views read for the Domain Profile r: (formulas okf_* → expression, built-in field → the name a view
+    reads, the expression the Decisions filter compares, the type names that filter accepts)."""
+    formulas: dict = {}
+    if r is None:
+        return formulas, {f: f for f in VIEW_FIELDS}, "type", [ADR]
+    for f in VIEW_FIELDS:
+        local = sorted(n for n, a in r.aliases["fields"].items() if a["to"] == f)
+        values = [va for va in r.aliases["values"] if f in va["to"]]
+        if not local and not values:
+            continue
+        own = [(_test(va["from"]), _lit(va["to"][f])) for va in values if f in va["from"]]
+        rest = [(_test(va["from"]), _lit(va["to"][f])) for va in values if f not in va["from"]]
+        formulas[f"okf_{f}"] = _chain(own + [(x, x) for x in (f, *map(_note, local))] + rest)
+    as_written = formulas.get("okf_type", "type")
+    type_aliases = sorted(r.aliases["types"].items())
+    if type_aliases:
+        formulas["okf_type"] = _chain([(f"{as_written} == {_js(n)}", _js(a["to"])) for n, a in type_aliases],
+                                      last=as_written)
+    reads = {f: f"formula.okf_{f}" if f"okf_{f}" in formulas else f for f in VIEW_FIELDS}
+    others = set(_subtypes(r, ADR)) | {n for n, a in r.aliases["types"].items() if is_a(r, a["to"], ADR)}
+    return formulas, reads, reads["type"] if as_written != "type" else "type", [ADR, *sorted(others)]
+
+
+def render_base(r: Resolved | None) -> str:
+    """knowledge.base for the Domain Profile r; with no aliases and no local type extending Architecture Decision
+    (or r None), KNOWLEDGE_BASE."""
+    formulas, n, typed, adr_names = view_names(r)
+    if len(adr_names) == 1:
+        adr_filter = [f'        - {typed} == "{ADR}"']
+    else:
+        adr_filter = ["        - or:", *(f"            - {_js(f'{typed} == {_js(t)}')}" for t in adr_names)]
+    stale = n["stale_after"]
+    lines = [
+        "filters:", "  and:", '    - file.ext == "md"', '    - file.basename != "index"', '    - file.basename != "log"',
+        "formulas:", "  author: generated.by", "  written: generated.at",
+        f'  stale_in_days: if({stale}, (date({stale}) - today()).days.round(0), "")',
+        *(f"  {k}: {_js(v)}" for k, v in sorted(formulas.items())),
+        "properties:",
+        "  formula.author:", "    displayName: Written by",
+        "  formula.written:", "    displayName: Written at",
+        "  formula.stale_in_days:", "    displayName: Days to stale",
+        *(x for k in sorted(formulas) for x in (f"  formula.{k}:", f"    displayName: {k[4:]}")),
+        "views:",
+        "  - type: table", "    name: Decisions", "    filters:", "      and:", '        - file.inFolder("base")',
+        *adr_filter,
+        "    groupBy:", f"      property: {n['decision_status']}", "      direction: ASC",
+        "    order:", "      - file.name", f"      - {n['title']}", f"      - {n['decision_status']}",
+        f"      - {n['status']}", "      - formula.written",
+        "  - type: table", "    name: Awaiting human review", "    filters:", "      and:",
+        '        - file.inFolder("base")', f'        - {n["status"]} == "draft"',
+        "    order:", "      - file.name", f"      - {n['type']}", "      - formula.author", "      - formula.written",
+        "  - type: table", "    name: By type", "    filters:", "      and:", '        - file.inFolder("base")',
+        "    groupBy:", f"      property: {n['type']}", "      direction: ASC",
+        "    order:", "      - file.name", f"      - {n['description']}", f"      - {n['status']}",
+        "  - type: table", "    name: Going stale", "    filters:", "      and:", '        - file.inFolder("base")',
+        f"        - {stale}",
+        "    order:", "      - file.name", f"      - {n['type']}", f"      - {stale}", "      - formula.stale_in_days",
+        "  - type: table", "    name: Fragments", "    filters:", "      and:", '        - file.inFolder("fragments")',
+        "    groupBy:", f"      property: {n['distillation_status']}", "      direction: ASC",
+        "    order:", "      - file.name", f"      - {n['occurred_at']}", f"      - {n['origin']}",
+        f"      - {n['participants']}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def bundle_profile(root: Path) -> tuple[Resolved | None, str | None]:
+    """The Domain Profile the views read, or None with the stderr line that says why the built-in names are used."""
+    declared = declared_profile(root)
+    if declared != PROFILE_30:
+        return None, (f"okf_obsidian: the views name the built-in Domain Profile's fields: profile "
+                      f"{declared or '(none declared)'} reads no Domain Profile")
+    try:
+        r = load_profile(root)
+    except Exception as e:  # noqa: BLE001
+        return None, f"okf_obsidian: the views name the built-in Domain Profile's fields: the profile cannot be read: {e}"
+    if r.findings:
+        f = r.findings[0]
+        more = f" (and {len(r.findings) - 1} more)" if len(r.findings) > 1 else ""
+        return None, (f"okf_obsidian: the views name the built-in Domain Profile's fields: the Domain Profile cannot "
+                      f"be read: {f['code']} {f['path']}: {f['message']}{more}; see okf_lint.py --profiles")
+    return r, None
+
 
 def write(path: Path, content: str, force: bool) -> str:
     existed = path.exists()
@@ -164,7 +298,11 @@ def main(argv: list[str] | None = None) -> int:
         for msg in taken:
             sys.stderr.write(f"okf_obsidian: {msg}; nothing written\n")
         return 2
-    for rel, content in FILES.items():
+    prof, why = bundle_profile(root)
+    if why:
+        sys.stderr.write(why + "\n")
+    files = {**FILES, "knowledge.base": render_base(prof)}
+    for rel, content in files.items():
         print(write(root / rel, content, args.force))
     return 0
 
@@ -174,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
 # --------------------------------------------------------------------------
 def _bundle(tmp_path: Path) -> Path:
     b = tmp_path / "knowledge"
-    b.mkdir()
+    b.mkdir(parents=True)
     (b / "index.md").write_text('---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\n---\n\n# K\n', encoding="utf-8")
     return b
 
@@ -279,6 +417,147 @@ def test_base_has_the_five_views_by_layer(tmp_path):
         assert v["filters"] == {"and": filters}, name
         assert (v.get("groupBy") or {}).get("property") == group, name
         assert v["order"] == order, name
+
+
+_GEN = "generated: { by: test/agent, at: 2026-11-06T00:00:00Z }\n"
+
+
+def _with_profile(tmp_path: Path, keys: str) -> Path:
+    b = _bundle(tmp_path)
+    (b / "base").mkdir()
+    (b / "base/profile.md").write_text("---\ntype: Domain Profile\ntitle: P\ndescription: The taxonomy.\nstatus: draft\n"
+                                       + keys.rstrip("\n") + "\n" + _GEN + "---\n\n# What this bundle holds\n\nText.\n",
+                                       encoding="utf-8")
+    return b
+
+
+def _base_of(b: Path, capsys=None) -> tuple[dict, str]:
+    import yaml
+
+    assert main([str(b), "--force"]) == 0
+    if capsys is not None:
+        assert capsys.readouterr().err == ""
+    raw = (b / "knowledge.base").read_text(encoding="utf-8")
+    return yaml.safe_load(raw), raw
+
+
+def _views(base: dict) -> dict:
+    return {v["name"]: v for v in base["views"]}
+
+
+def test_a_bundle_without_aliases_gets_knowledge_base_byte_for_byte(tmp_path, capsys):
+    no_profile = _bundle(tmp_path / "a")
+    # a local type that extends a type other than Architecture Decision, and a field of its own: nothing the views read
+    plain = _with_profile(tmp_path / "b", "types:\n  Client Meeting:\n    extends: Knowledge Fragment\n    fields:\n"
+                                          "      client: { type: string }\n")
+    for b in (no_profile, plain):
+        assert _base_of(b, capsys)[1] == KNOWLEDGE_BASE, b
+    this_repo = Path(__file__).resolve().parents[5] / "knowledge"
+    if (this_repo / "base/profile.md").is_file():  # this repository's own bundle, when the script runs from it
+        r, why = bundle_profile(this_repo)
+        assert why is None and render_base(r) == KNOWLEDGE_BASE
+
+
+def test_a_field_alias_is_read_through_a_formula(tmp_path, capsys):
+    b = _with_profile(tmp_path, 'aliases:\n  fields: { "estado de decisión": decision_status }\n')
+    base, _ = _base_of(b, capsys)
+    assert base["formulas"]["okf_decision_status"] == (
+        'if(decision_status, decision_status, if(note["estado de decisión"], note["estado de decisión"], ""))')
+    assert base["properties"]["formula.okf_decision_status"] == {"displayName": "decision_status"}
+    d = _views(base)["Decisions"]
+    assert d["groupBy"]["property"] == "formula.okf_decision_status"
+    assert d["order"] == ["file.name", "title", "formula.okf_decision_status", "status", "formula.written"]
+    # several local names for one field are chained in sorted order
+    b2 = _with_profile(tmp_path / "two", "aliases:\n  fields: { zona: origin, area: origin }\n")
+    base2, _ = _base_of(b2, capsys)
+    assert base2["formulas"]["okf_origin"] == (
+        'if(origin, origin, if(note["area"], note["area"], if(note["zona"], note["zona"], "")))')
+    assert _views(base2)["Fragments"]["order"] == ["file.name", "occurred_at", "formula.okf_origin", "participants"]
+
+
+def test_value_aliases_map_to_the_declared_values(tmp_path, capsys):
+    b = _with_profile(tmp_path, "aliases:\n  values:\n"
+                                "    - { from: { ingerido: true }, to: { distillation_status: distilled } }\n"
+                                "    - { from: { ingerido: false }, to: { distillation_status: pending } }\n"
+                                "    - { from: { fase: 3, origen: chat }, to: { distillation_status: pending } }\n")
+    base, _ = _base_of(b, capsys)
+    assert base["formulas"]["okf_distillation_status"] == (
+        'if(distillation_status, distillation_status, if(note["ingerido"] == true, "distilled", '
+        'if(note["ingerido"] == false, "pending", if(note["fase"] == 3 && note["origen"] == "chat", "pending", ""))))')
+    assert _views(base)["Fragments"]["groupBy"]["property"] == "formula.okf_distillation_status"
+    # a value alias whose from holds the field itself replaces it (resolve_aliases), so it is tested first
+    b2 = _with_profile(tmp_path / "own", "aliases:\n  values:\n"
+                                         "    - { from: { decision_status: aceptado }, to: { decision_status: accepted } }\n")
+    base2, _ = _base_of(b2, capsys)
+    assert base2["formulas"]["okf_decision_status"] == (
+        'if(note["decision_status"] == "aceptado", "accepted", if(decision_status, decision_status, ""))')
+
+
+def test_type_aliases_and_local_subtypes_join_decisions_and_by_type(tmp_path, capsys):
+    b = _with_profile(tmp_path, "types:\n  Product ADR:\n    extends: Architecture Decision\n"
+                                "aliases:\n  types: { Decisión: Architecture Decision, ADR de producto: Product ADR, "
+                                "Glosario: Glossary }\n")
+    base, _ = _base_of(b, capsys)
+    v = _views(base)
+    assert v["Decisions"]["filters"] == {"and": ['file.inFolder("base")', {"or": [
+        'type == "Architecture Decision"', 'type == "ADR de producto"', 'type == "Decisión"',
+        'type == "Product ADR"']}]}
+    assert base["formulas"]["okf_type"] == (
+        'if(type == "ADR de producto", "Product ADR", if(type == "Decisión", "Architecture Decision", '
+        'if(type == "Glosario", "Glossary", type)))')
+    assert v["By type"]["groupBy"]["property"] == "formula.okf_type"
+    assert v["Awaiting human review"]["order"][1] == v["Going stale"]["order"][1] == "formula.okf_type"
+    # a local subtype alone joins Decisions but needs no mapping
+    b2 = _with_profile(tmp_path / "sub", "types:\n  Product ADR:\n    extends: Architecture Decision\n")
+    base2, _ = _base_of(b2, capsys)
+    assert _views(base2)["Decisions"]["filters"]["and"][1] == {
+        "or": ['type == "Architecture Decision"', 'type == "Product ADR"']}
+    assert "okf_type" not in base2["formulas"] and _views(base2)["By type"]["groupBy"]["property"] == "type"
+
+
+def test_aliases_of_status_and_stale_after_feed_filters_and_formulas(tmp_path, capsys):
+    b = _with_profile(tmp_path, "aliases:\n  fields: { estado: status, caduca: stale_after, tipo: type }\n")
+    base, _ = _base_of(b, capsys)
+    v = _views(base)
+    assert v["Awaiting human review"]["filters"]["and"][1] == 'formula.okf_status == "draft"'
+    assert v["Going stale"]["filters"]["and"][1] == "formula.okf_stale_after"
+    assert base["formulas"]["stale_in_days"] == (
+        'if(formula.okf_stale_after, (date(formula.okf_stale_after) - today()).days.round(0), "")')
+    # a field alias of type: Decisions compares the coalesced type
+    assert v["Decisions"]["filters"]["and"][1] == 'formula.okf_type == "Architecture Decision"'
+
+
+def test_names_with_quotes_colons_and_hashes_stay_valid_yaml(tmp_path, capsys):
+    names = ['di "x"', "a: b", "c #d", "back\\slash"]
+    fields = ", ".join(f"{json.dumps(n)}: decision_status" for n in names)
+    b = _with_profile(tmp_path, f"types:\n  Product ADR:\n    extends: Architecture Decision\n"
+                                f"aliases:\n  fields: {{ {fields} }}\n  types: {{ \"tipo: #1 \\\"q\\\"\": Product ADR }}\n")
+    base, _ = _base_of(b, capsys)
+    formula = base["formulas"]["okf_decision_status"]
+    for n in names:
+        assert f"note[{json.dumps(n, ensure_ascii=False)}]" in formula, n
+    assert f'type == {json.dumps("tipo: #1 " + chr(34) + "q" + chr(34))}' in _views(base)["Decisions"]["filters"]["and"][1]["or"]
+
+
+def test_an_unreadable_profile_gets_the_built_in_names_and_one_line(tmp_path, capsys):
+    b = _bundle(tmp_path)
+    (b / "base").mkdir()
+    (b / "base/profile.md").write_text("---\ntype: Domain Profile\naliases: [not, a, map]\n---\n\nText.\n", encoding="utf-8")
+    assert main([str(b)]) == 0
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 1 and "PROFILE_INVALID" in err[0] and "built-in" in err[0]
+    assert (b / "knowledge.base").read_text(encoding="utf-8") == KNOWLEDGE_BASE
+    # a knowledge/2.0 bundle reads no Domain Profile, even with aliases
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "index.md").write_text('---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n# K\n', encoding="utf-8")
+    (old / "base").mkdir()
+    (old / "base/profile.md").write_text("---\ntype: Domain Profile\naliases: { fields: { estado: status } }\n---\n",
+                                         encoding="utf-8")
+    assert main([str(old)]) == 0
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 1 and "knowledge/2.0" in err[0]
+    assert (old / "knowledge.base").read_text(encoding="utf-8") == KNOWLEDGE_BASE
 
 
 def test_app_json_keeps_links_relative_and_updated(tmp_path):

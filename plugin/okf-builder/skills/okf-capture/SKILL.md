@@ -50,6 +50,7 @@ Only when the person asks for it (a new local type, family, rule, alias or mappe
 1. **Propose the exact change** to `base/profile.md`: the keys added, each with its reason, and the layer each one builds on (`--profiles --json` shows what is inherited). Composition only adds: never redefine, remove or lower an inherited item (that is `PROFILE_REDEFINED`); an inherited enum gains a value only through `by_type.<Type>.values.<field>`. **Apply nothing until the person approves.**
 2. **Write it**: with no `base/profile.md`, create it from `<skills>/okf-standard/templates/domain-profile.md` (with a **Creation** log entry and `base/index.md` regenerated). Otherwise edit it in place: the new keys in the frontmatter, their justification in the body, a new `generated.at`, and an **Update** log entry naming each change; git keeps the history. Do not add `verified`.
 3. **Validate**: `okf_lint.py <bundle>` reports no `PROFILE_INVALID`, `PROFILE_DUPLICATE_ID`, `PROFILE_REDEFINED`, `PROFILE_UNREADABLE` or `PROFILE_MISPLACED`, and `--profiles <dir>` shows the change in force. A concept the change now breaks is listed for the person; it is not edited without their approval.
+4. **Refresh the Obsidian views**: when the change adds or removes an alias or a local type and the bundle has a `knowledge.base`, rerun the Obsidian viewer setup of the `okf-init` skill (its step 7) with `--force`, since its views read the aliases and local types in force when it was written; nothing else checks that they are current.
 
 ## Batch capture
 

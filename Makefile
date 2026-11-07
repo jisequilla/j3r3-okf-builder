@@ -93,8 +93,8 @@ test:
 	diff -r /tmp/okf-fx/examples/knowledge examples/fixtures/knowledge-2.0
 	@echo "[8b] each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways (ADR-0028 decision 5)"
 	python3 -c "import re,pathlib; ws=sorted(pathlib.Path('.claude/workflows').glob('*.js')); assert ws, 'no workflow in .claude/workflows'; cs=[(str(p.relative_to('knowledge')), m.group(1)) for p in sorted(pathlib.Path('knowledge').rglob('*.md')) for m in [re.search(r'^resource: (/\.claude/workflows/\S+)\s*$$', p.read_text(encoding='utf-8'), re.M)] if m]; bad=[r + ': named by ' + c + ', missing' for c, r in cs if not pathlib.Path(r[1:]).is_file()]; bad+=[str(w) + ': no concept names it in resource' for w in ws if not [c for c, r in cs if r == '/' + str(w)]]; bad+=[str(w) + ': does not name knowledge/' + c for w in ws for c, r in cs if r == '/' + str(w) and 'knowledge/' + c not in w.read_text(encoding='utf-8')]; assert not bad, '; '.join(bad); print(len(ws), 'workflows linked both ways with', len(cs), 'concepts')"
-	@echo "[8c] this repo's committed Obsidian setup equals okf_obsidian.py's output (ADR-0032 decision 5)"
-	rm -rf /tmp/okf-obs && mkdir -p /tmp/okf-obs && cp knowledge/index.md /tmp/okf-obs/ && uv run -q $(S)/okf_obsidian.py /tmp/okf-obs >/dev/null
+	@echo "[8c] this repo's committed Obsidian setup equals okf_obsidian.py's output for the bundle with its Domain Profile (ADR-0032 decision 5)"
+	rm -rf /tmp/okf-obs && cp -R knowledge /tmp/okf-obs && rm -rf /tmp/okf-obs/.obsidian /tmp/okf-obs/knowledge.base && uv run -q $(S)/okf_obsidian.py /tmp/okf-obs >/dev/null
 	for f in .obsidian/app.json .obsidian/.gitignore knowledge.base; do cmp knowledge/$$f /tmp/okf-obs/$$f || { echo "knowledge/$$f differs from okf_obsidian.py's output: run make obsidian with --force"; exit 1; }; done
 	$(MAKE) -s dogfood
 	@echo "OK"
