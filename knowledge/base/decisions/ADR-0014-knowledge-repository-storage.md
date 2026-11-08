@@ -3,10 +3,11 @@ type: Architecture Decision
 title: "ADR-0014: A knowledge repository has one source, Git or SharePoint; other tools read it"
 description: A team's knowledge bundle has exactly one editable copy, a Git repository by default or a SharePoint library for teams without Git; Microsoft 365, Google Drive and Obsidian read it, and the bundle starts as one monorepo with a stated rule for splitting by domain.
 tags: [adr, storage, projections]
-status: draft
+status: stable
 adr_id: ADR-0014
 decision_status: accepted
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T12:20:00Z }
+verified: { by: human:jisequilla, at: 2026-11-07T09:57:04Z }
 sources:
   - { id: spec-git, resource: /base/references/okf-spec-google.md, title: "OKF v0.2 §3: a git repository is the recommended distribution" }
   - { id: cs-quotas, resource: "https://learn.microsoft.com/en-us/microsoft-copilot-studio/requirements-quotas", title: "Copilot Studio quotas and limits (SharePoint knowledge file types)" }

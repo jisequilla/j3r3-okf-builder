@@ -3,11 +3,12 @@ type: Architecture Decision
 title: "ADR-0010: English as the repo's canonical language and profile knowledge/2.0"
 description: The profile vocabulary, the code, the skills and the repo's knowledge move to English, with a fixed glossary; the vocabulary change bumps the profile to knowledge/2.0.
 tags: [adr, structure, language]
-status: draft
+status: stable
 adr_id: ADR-0010
 decision_status: accepted
 supersedes: /base/decisions/ADR-0003-spanish-names.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+verified: { by: human:jisequilla, at: 2026-11-07T09:38:37Z }
 ---
 
 # Context

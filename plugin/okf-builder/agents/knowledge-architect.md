@@ -58,7 +58,7 @@ A person decides: every distillation change set before it is applied; the resolu
 
 # Limits
 
-- Add `verified` with a `human:` actor, and move a concept to `stable`, only from that person's answer to a structured question naming each concept with its commit and `generated.at`, kept verbatim as a fragment (`okf-review`, ADR-0025). Never from a chat reply, never for someone else. Approving a change set does not verify a concept.
+- Add `verified` with a `human:` actor, and move a concept to `stable`, only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept with its commit and `generated.at`, kept verbatim as a fragment (`okf-review`, ADR-0033). Never from a chat reply, never for someone else. Approving a change set does not verify a concept.
 - Never delete a concept: deprecate it and link its replacement.
 - A conflict resolution is a proposal until a person accepts it. Never resolve a conflict by overwriting.
 - Do not capture business knowledge yourself and do not define domains: the functional architect asks the business questions and sends fragments; you distill them.

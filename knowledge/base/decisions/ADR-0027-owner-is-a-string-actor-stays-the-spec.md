@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0027: The owner of an operational concept is a string; Actor stays as the OKF spec defines it"
 description: On API, Metric, Playbook, Policy, Runbook, System and Table, owner is a string that names a team or a person, so team:<team> is valid; an Open Question's owner stays an actor, and the actor convention stays exactly the spec's, with no team prefix.
 tags: [adr, standard, profile, actor]
-status: draft
+status: stable
 adr_id: ADR-0027
 decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T21:00:16Z }
+verified: { by: human:jisequilla, at: 2026-11-08T13:57:15Z }
 sources:
   - { id: spec-actor, resource: plugin/okf-builder/skills/okf-standard/references/OKF-SPEC-v0.2.md, title: "OKF spec v0.2 §2 (Actor) and §7 (Actor convention)" }
   - { id: types, resource: standard/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }

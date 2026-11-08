@@ -3,11 +3,12 @@ type: Architecture Decision
 title: "ADR-0011: Scripts run with uv and declare PyYAML inline (PEP 723)"
 description: The okf-standard scripts declare PyYAML in PEP 723 inline metadata and run with uv run, the reduced YAML parser is removed, and each script carries its own tests.
 tags: [adr, tooling]
-status: draft
+status: stable
 adr_id: ADR-0011
 decision_status: accepted
 supersedes: /base/decisions/ADR-0006-dependency-free-scripts.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T03:15:21Z }
+verified: { by: human:jisequilla, at: 2026-11-07T09:52:21Z }
 sources:
   - { id: m365-note, resource: tools/export_m365.py }
   - { id: common, resource: plugin/okf-builder/skills/okf-standard/scripts/okf_common.py }

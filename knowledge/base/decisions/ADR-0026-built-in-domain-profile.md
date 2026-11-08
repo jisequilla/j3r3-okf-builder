@@ -3,11 +3,12 @@ type: Architecture Decision
 title: "ADR-0026: The standard's own types are a built-in Domain Profile, the first layer under each bundle's profile, with a level per requirement and typed actors and timestamps"
 description: A bundle's base/profile.md declares its taxonomy as in ADR-0023, on top of a built-in Domain Profile shipped with okf-standard that declares the standard's types; requirements carry a level (error or warn), field types add actor, datetime and date_or_datetime, checks across concepts stay in code, and lint reads references locally, runs validators only on request, resolves aliases and warns on undeclared keys only in bundles with a profile.
 tags: [adr, standard, profile, taxonomy]
-status: draft
+status: stable
 adr_id: ADR-0026
 decision_status: accepted
 supersedes: /base/decisions/ADR-0023-domain-profile-per-bundle.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T12:34:31Z }
+verified: { by: human:jisequilla, at: 2026-11-08T13:54:06Z }
 sources:
   - { id: adr-0023, resource: /base/decisions/ADR-0023-domain-profile-per-bundle.md }
   - { id: tool, resource: /fragments/2026-11-02-migration-tool-okf-review.md, title: "Fragment: what a long-running OKF implementation teaches" }

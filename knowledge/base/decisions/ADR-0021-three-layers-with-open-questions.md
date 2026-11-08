@@ -3,11 +3,12 @@ type: Architecture Decision
 title: "ADR-0021: A bundle has three layers in profile knowledge/3.0; open questions are concepts in base/ and action items live in the team's tracker"
 description: The bundle separates what was said (fragments/), what is known (base/, holding the typed directories) and what is derived for a reader (projections/), in profile knowledge/3.0; an open question is an Open Question concept in base/ with an owner, and an action item lives in the team's tracker, never copied into the base.
 tags: [adr, standard, profile, layers]
-status: draft
+status: stable
 adr_id: ADR-0021
 decision_status: accepted
 supersedes: /base/decisions/ADR-0018-three-layers-fragments-base-projections.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T09:40:00Z }
+verified: { by: human:jisequilla, at: 2026-11-07T11:58:57Z }
 sources:
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }
   - { id: tool, resource: /fragments/2026-11-02-migration-tool-okf-review.md, title: "Fragment: what a long-running OKF implementation teaches" }

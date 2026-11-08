@@ -3,11 +3,12 @@ type: Architecture Decision
 title: "ADR-0022: Knowledge projections are declared in a projection.yaml, and their drift is checked according to their nature"
 description: A projection is a directory in knowledge/projections/ with a projection.yaml (lifecycle, nature, intent, refs, versions), its content and its rendered deliverables; it is not OKF; a rendered projection is checked by regenerating it and comparing, a composed one by the content hashes of its refs, and a recomputable one by running its procedure again; nothing regenerates by itself.
 tags: [adr, standard, projections]
-status: draft
+status: stable
 adr_id: ADR-0022
 decision_status: accepted
 supersedes: /base/decisions/ADR-0019-knowledge-projections.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T09:45:00Z }
+verified: { by: human:jisequilla, at: 2026-11-08T13:44:59Z }
 sources:
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }
   - { id: tool, resource: /fragments/2026-11-02-migration-tool-okf-review.md, title: "Fragment: what a long-running OKF implementation teaches" }

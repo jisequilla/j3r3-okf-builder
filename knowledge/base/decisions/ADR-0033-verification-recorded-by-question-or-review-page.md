@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0033: An agent writes a person's verification only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept and version"
 description: Every concept carries generated and starts as a draft; verified with a human actor is written by the person, or by an agent from that person's recorded answer, given in the agent platform's question tool or on a review page private to the person that stores each answer with the concept's version, kept verbatim as a fragment and linked from the log.
 tags: [adr, trust]
-status: draft
+status: stable
 adr_id: ADR-0033
 decision_status: accepted
 supersedes: /base/decisions/ADR-0025-verification-recorded-by-question.md
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-07T04:01:01Z }
+verified: { by: human:jisequilla, at: 2026-11-08T14:03:11Z }
 sources:
   - { id: adr-0025, resource: /base/decisions/ADR-0025-verification-recorded-by-question.md }
   - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }

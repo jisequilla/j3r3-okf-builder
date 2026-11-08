@@ -4,13 +4,14 @@ title: Knowledge architect
 description: How okf-builder serves the KDD knowledge architect role, which the KDD bundle defines; this concept fixes the skills its agent carries, what it hands to a person and its fragment contract with the functional architect.
 tags: [role, knowledge-architect, agents, kdd]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T00:30:03Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T14:09:50Z }
 sources:
   - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.3, human-verified" }
   - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, ten skills" }
   - { id: kdd-agent-v2, resource: "https://github.com/jisequilla/kdd-knowledge/blob/e4afa95/knowledge/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, five distillation kinds" }
   - { id: kdd-af, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/roles/arquitecto-funcional-ti.md", title: "KDD bundle: functional architect role profile" }
   - { id: adr-0025, resource: /base/decisions/ADR-0025-verification-recorded-by-question.md }
+  - { id: adr-0033, resource: /base/decisions/ADR-0033-verification-recorded-by-question-or-review-page.md }
   - { id: adr-0017, resource: /base/decisions/ADR-0017-agent-skills-per-platform.md }
   - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }
   - { id: adr-0031, resource: /base/decisions/ADR-0031-projection-tools-transient-exception.md }
@@ -51,7 +52,7 @@ In the M365 agent package none of its 8 skills reads `okf-standard`'s references
 | Folders, file names, links, indexes and log entries | Each distillation change set, before it is applied[^adr-0024] |
 | Classifying each item of a fragment (addition, confirmation, update, refutation, conflict)[^adr-0024] | The resolution of every conflict in the [conflict log](/conflict-log.md) |
 | When `okf-lint` must run, and fixing what it reports | Domains and bounded contexts, restructurings and deprecations[^kdd-role] |
-| | Moving a concept to human-verified: it writes `verified: human:` only from that person's recorded answer to a question naming each concept and its version[^adr-0025] |
+| | Moving a concept to human-verified: it writes `verified: human:` only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept and its version[^adr-0033] |
 
 Approving a change set does not verify a concept. Verification is a separate act by a person[^adr-0024].
 
@@ -86,7 +87,7 @@ The two agents live in separate repositories. As long as both keep to the fragme
 [^kdd-agent]: KDD bundle, knowledge architect agent definition, with the ten skills.
 [^kdd-agent-v2]: KDD bundle, knowledge architect agent definition with the five distillation kinds.
 [^kdd-af]: KDD bundle, functional architect role profile.
-[^adr-0025]: ADR-0025, decisions 3 and 4.
+[^adr-0033]: ADR-0033, decisions 3 and 4.
 [^adr-0017]: ADR-0017, decisions 3 and 5.
 [^adr-0024]: ADR-0024, decisions 6, 7 and 10.
 [^adr-0031]: ADR-0031, decision 4.

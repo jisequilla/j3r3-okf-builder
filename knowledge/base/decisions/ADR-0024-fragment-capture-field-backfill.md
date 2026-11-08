@@ -3,11 +3,12 @@ type: Architecture Decision
 title: "ADR-0024: A fragment's record is immutable, and a missing capture field may be backfilled once from the record itself"
 description: Fragments keep the KDD format, one Conflict Log per bundle and five kinds of distillation item; after capture the record never changes, but a missing occurred_at, origin or participants may be filled once, with a value read from the record or from an original its sources cite, approved by a person and logged.
 tags: [adr, standard, capture]
-status: draft
+status: stable
 adr_id: ADR-0024
 decision_status: accepted
 supersedes: /base/decisions/ADR-0016-refutation-as-a-distillation-kind.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:01:24Z }
+verified: { by: human:jisequilla, at: 2026-11-08T13:48:10Z }
 sources:
   - { id: adr-0016, resource: /base/decisions/ADR-0016-refutation-as-a-distillation-kind.md }
   - { id: adr-0005, resource: /base/decisions/ADR-0005-required-generated-human-verified.md }

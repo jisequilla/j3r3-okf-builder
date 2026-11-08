@@ -3,11 +3,12 @@ type: Architecture Decision
 title: "ADR-0017: The Claude agent preloads every skill it needs; the Microsoft 365 agent takes a configured subset"
 description: The knowledge-architect agent is still written once as a Claude plugin agent and generated into a Microsoft 365 Copilot declarative agent, but only M365's caps bind M365; the Claude agent lists every skill the role uses, and tools/m365-agent.json picks the at most 8 skills the M365 agent carries.
 tags: [adr, projections, agents]
-status: draft
+status: stable
 adr_id: ADR-0017
 decision_status: accepted
 supersedes: /base/decisions/ADR-0013-agent-projections.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-01T20:35:00Z }
+verified: { by: human:jisequilla, at: 2026-11-07T10:19:54Z }
 sources:
   - { id: claude-agents, resource: "https://code.claude.com/docs/en/sub-agents", title: "Claude Code subagents" }
   - { id: claude-plugins, resource: "https://code.claude.com/docs/en/plugins-reference", title: "Claude Code plugins reference" }

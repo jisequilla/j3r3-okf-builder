@@ -7,6 +7,7 @@ status: stable
 adr_id: ADR-0004
 decision_status: accepted
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+verified: { by: human:jisequilla, at: 2026-11-07T09:01:32Z }
 ---
 
 # Context
