@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0032: A bundle opens as an Obsidian vault through a viewer setup that a script writes, not a projection"
 description: okf_obsidian.py writes .obsidian/app.json, with Markdown links kept relative and updated on rename, and knowledge.base, with five Bases views over base/ and fragments/, at a bundle's root without overwriting; it is workspace configuration for one tool, neither a knowledge projection nor a platform package; okf-init offers it, make obsidian runs it here, and this repository commits both files.
 tags: [adr, obsidian, viewer, workspace]
-status: draft
+status: stable
 adr_id: ADR-0032
 decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T17:45:19Z }
+verified: { by: human:jisequilla, at: 2026-11-08T14:02:56Z }
 sources:
   - { id: okf-1b5, resource: "bead okf-1b5", title: "OKF inside Obsidian: bundle as a vault (closed 2026-10-31)" }
   - { id: okf-ov8, resource: "bead okf-ov8", title: "Obsidian projection: vault config and Bases views for a bundle" }

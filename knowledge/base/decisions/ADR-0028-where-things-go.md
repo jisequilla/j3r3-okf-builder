@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0028: Where things go: four homes, workspace tooling as a projection of knowledge, and a Doctrine for how we build"
 description: The repo's files belong to one of four homes (product, product build, knowledge, workspace); the product is the only source of the standard and the templates, and their root copies are generated; the knowledge bundle carries no executable code except a Domain Profile's validators; workspace tooling such as an agent workflow is a projection of a knowledge concept and names it; how the repo builds with agents becomes a Doctrine, a local type refined as practice teaches.
 tags: [adr, repo, agents, doctrine, layout]
-status: draft
+status: stable
 adr_id: ADR-0028
 decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T22:26:19Z }
+verified: { by: human:jisequilla, at: 2026-11-08T14:00:32Z }
 sources:
   - { id: adr-0007, resource: /base/decisions/ADR-0007-single-source-and-projections.md }
   - { id: adr-0009, resource: /base/decisions/ADR-0009-build-in-layers-and-tickets.md }

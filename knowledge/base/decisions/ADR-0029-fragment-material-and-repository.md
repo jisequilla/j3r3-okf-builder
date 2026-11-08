@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0029: A fragment records its frozen material by SHA-256 and may freeze a repository at a commit, through a map field type"
 description: A Knowledge Fragment may list the files its record was taken from, each with its SHA-256, and the repository it was taken from at a full commit; the standard gains a one-level map field type to declare both, lint hashes material found in the bundle and reports a changed file as an error, and okf-fragment adds the meeting discipline.
 tags: [adr, standard, profile, fragments]
-status: draft
+status: stable
 adr_id: ADR-0029
 decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T18:33:13Z }
+verified: { by: human:jisequilla, at: 2026-11-08T14:01:05Z }
 sources:
   - { id: review, resource: /fragments/2026-11-02-migration-tool-okf-review.md, title: "Fragment: what a long-running OKF implementation teaches" }
   - { id: adr-0024, resource: /base/decisions/ADR-0024-fragment-capture-field-backfill.md }

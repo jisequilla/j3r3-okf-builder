@@ -3,10 +3,11 @@ type: Architecture Decision
 title: "ADR-0009: Build multi-stage changes in layers and delegated tickets"
 description: Changes that touch several layers of the repo are split into verifiable tickets that agents build in isolated worktrees, and the main session only judges, verifies and merges.
 tags: [adr, process, agents]
-status: draft
+status: stable
 adr_id: ADR-0009
 decision_status: accepted
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-30T23:20:46Z }
+verified: { by: human:jisequilla, at: 2026-11-07T09:15:30Z }
 ---
 
 # Context

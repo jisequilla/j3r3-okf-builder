@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0031: The projection tools are a script and a skill, run a render only on request, never ask a transient projection to be committed, and list recomputable projections for a person"
 description: okf_projection.py checks projection.yaml, the dependency rule and drift by nature, and the okf-projection skill creates, refreshes and renders projections; okf_lint stays OKF-only; a rendered projection's render command runs only on an explicit flag, and what it writes is compared file by file, a transient projection's files never required to be committed; a recomputable projection is listed for a person to recompute; the skill ships in the M365 packages but not in the M365 agent.
 tags: [adr, standard, projections, skills]
-status: draft
+status: stable
 adr_id: ADR-0031
 decision_status: accepted
 supersedes: /base/decisions/ADR-0030-projection-tools.md
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T00:17:51Z }
+verified: { by: human:jisequilla, at: 2026-11-08T14:02:25Z }
 sources:
   - { id: adr-0022, resource: /base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md }
   - { id: adr-0026, resource: /base/decisions/ADR-0026-built-in-domain-profile.md }
