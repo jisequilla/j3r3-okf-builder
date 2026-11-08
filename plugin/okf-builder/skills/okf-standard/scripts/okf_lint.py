@@ -973,7 +973,7 @@ def check_audit(docs: list[Doc], bundle: Path, prof: Resolved | None, rep: Repor
 
 
 # SECRET_IN_BUNDLE: lint's own detector of a credential committed in a bundle file. It shares nothing with
-# _SECRET_RES/mask_secrets, which mask a validator's output; gitleaks is the thorough scanner (make secrets).
+# _SECRET_RES/mask_secrets, which mask a validator's output; gitleaks is the thorough scanner (just secrets).
 _LEAK_PATTERNS = (
     ("a JSON Web Token", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
     ("a GitHub token", re.compile(r"\b(?:ghp|gho|ghs)_[A-Za-z0-9]{36}\b")),

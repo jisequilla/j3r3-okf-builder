@@ -18,23 +18,23 @@ Los skills viven una vez en `plugin/okf-builder/skills/`; cada plataforma recibe
   ```
 
   En local, sin publicar: `claude --plugin-dir ./plugin/okf-builder`.
-- **GitHub Copilot**: `.agents/skills` funciona al clonar. Para otros repos, `make copilot` genera `dist/copilot/` (`.github/skills` + agente `@okf`); copia `dist/copilot/.` en la raíz del repo destino.
+- **GitHub Copilot**: `.agents/skills` funciona al clonar. Para otros repos, `just copilot` genera `dist/copilot/` (`.github/skills` + agente `@okf`); copia `dist/copilot/.` en la raíz del repo destino.
 - **Gemini CLI**: igual que Copilot, mediante `.agents/skills` al clonar.
-- **Claude Cowork**: `make plugin` genera `okf-builder.plugin`; cárgalo en Cowork.
-- **Microsoft 365 Copilot**: `make m365` genera `dist/m365/okf-builder-m365.zip` (plugin de Cowork) y `dist/m365/skills/*.zip` (un zip por skill para Copilot Studio / Agent Builder).
+- **Claude Cowork**: `just plugin` genera `okf-builder.plugin`; cárgalo en Cowork.
+- **Microsoft 365 Copilot**: `just m365` genera `dist/m365/okf-builder-m365.zip` (plugin de Cowork) y `dist/m365/skills/*.zip` (un zip por skill para Copilot Studio / Agent Builder).
 
-`make all` regenera las copias de la raíz y genera todo tras pasar `make test`. En Windows sin `core.symlinks`, usa `make copilot` y copia.
+`just all` regenera las copias de la raíz y genera todo tras pasar `just test`. En Windows sin `core.symlinks`, usa `just copilot` y copia.
 
 ## Contenido
 
 Cada fichero pertenece a uno de cuatro hogares ([ADR-0028](knowledge/base/decisions/ADR-0028-where-things-go.md)):
 
 - **Producto**: `plugin/okf-builder/` (la única fuente: skills, scripts, plantillas, el estándar y el agente `knowledge-architect`), `standard/`, `templates/` y `.claude-plugin/marketplace.json`.
-- **Construcción del producto**: `Makefile`, `build/` (exportadores de Copilot y M365, y la configuración del agente de M365), `tests/` y `examples/`.
+- **Construcción del producto**: `justfile`, `build/` (exportadores de Copilot y M365, y la configuración del agente de M365), `tests/` y `examples/`.
 - **Conocimiento**: `knowledge/`, el bundle OKF del propio proyecto.
 - **Espacio de trabajo**: `.claude/`, `.agents/`, `.beads/` y los ficheros de contexto (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`).
 
-El plugin es la única fuente del estándar y las plantillas: `standard/` y `templates/` en la raíz son copias generadas por `make copies`, y `make test` falla si están desfasadas. Para cambiarlas, edita `plugin/okf-builder/skills/okf-standard/` y ejecuta `make copies`.
+El plugin es la única fuente del estándar y las plantillas: `standard/` y `templates/` en la raíz son copias generadas por `just copies`, y `just test` falla si están desfasadas. Para cambiarlas, edita `plugin/okf-builder/skills/okf-standard/` y ejecuta `just copies`.
 
 ## Uso
 
@@ -51,7 +51,7 @@ okf-migrate     → migra 0.1 ↔ 0.2 (siempre con --dry-run primero)
 okf-projection  → crea, comprueba, refresca y renderiza las proyecciones de projections/; aplica solo lo que apruebas
 ```
 
-`okf-lint` informa de una credencial guardada en un fichero del bundle como `SECRET_IN_BUNDLE`, una comprobación rápida. Para pre-commit y CI usa [gitleaks](https://github.com/gitleaks/gitleaks), el escáner a fondo: `make secrets` ejecuta `gitleaks dir` sobre los bundles de este repo.
+`okf-lint` informa de una credencial guardada en un fichero del bundle como `SECRET_IN_BUNDLE`, una comprobación rápida. Para pre-commit y CI usa [gitleaks](https://github.com/gitleaks/gitleaks), el escáner a fondo: `just secrets` ejecuta `gitleaks dir` sobre los bundles de este repo.
 
 ## Idioma
 

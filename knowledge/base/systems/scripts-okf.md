@@ -7,7 +7,7 @@ tags: [system, scripts, python]
 status: draft
 owner: human:jisequilla
 runtime: uv
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T22:00:00Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
 ---
 
 # Responsibility
@@ -21,7 +21,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T22:00:00Z }
 | okf_migrate.py | 0.1 ↔ 0.2, `--dry-run`, `--out`, `--keep-extensions`, `--file` | files + entry in log.md |
 | okf_audit.py | Repository history for `okf-review`'s audit mode: concepts deleted or renamed since a reference point (read-only) | `--since`, `--json` |
 | okf_projection.py | Knowledge projections ([ADR-0022](/base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md), [ADR-0031](/base/decisions/ADR-0031-projection-tools-transient-exception.md)): each `projection.yaml`, the dependency rule and drift by nature (`PROJ_*` codes, `PROJ_DRIFT` a warning); runs a rendered projection's `render` only with `--run-render`; `--record-hashes` writes a composed projection's hashes in place | `--json`, `--strict`, exit code |
-| okf_obsidian.py | The Obsidian viewer setup of a bundle ([ADR-0032](/base/decisions/ADR-0032-obsidian-viewer-setup.md)), workspace configuration and not a knowledge projection: `.obsidian/app.json` (Markdown links relative, updated on rename), `.obsidian/.gitignore` and `knowledge.base` with five Bases views over `base/` and `fragments/`, which read the bundle's Domain Profile: each field with local names (field or value aliases) through a formula `okf_<field>`, Decisions also over the type aliases and local subtypes of Architecture Decision, By type through `okf_type`, which maps type aliases to their declared types (with no aliases, the fixed views byte for byte; with an unreadable profile or outside knowledge/3.0, the built-in names and one stderr line); never overwrites without `--force`; `make obsidian` runs it on this repository's `knowledge/` | `created` / `rewritten` / `skipped (exists)` per file, exit 2 without `index.md` or when a path it needs is taken |
+| okf_obsidian.py | The Obsidian viewer setup of a bundle ([ADR-0032](/base/decisions/ADR-0032-obsidian-viewer-setup.md)), workspace configuration and not a knowledge projection: `.obsidian/app.json` (Markdown links relative, updated on rename), `.obsidian/.gitignore` and `knowledge.base` with five Bases views over `base/` and `fragments/`, which read the bundle's Domain Profile: each field with local names (field or value aliases) through a formula `okf_<field>`, Decisions also over the type aliases and local subtypes of Architecture Decision, By type through `okf_type`, which maps type aliases to their declared types (with no aliases, the fixed views byte for byte; with an unreadable profile or outside knowledge/3.0, the built-in names and one stderr line); never overwrites without `--force`; `just obsidian` runs it on this repository's `knowledge/` | `created` / `rewritten` / `skipped (exists)` per file, exit 2 without `index.md` or when a path it needs is taken |
 | okf_common.py | Frontmatter parsing with PyYAML, Doc model, version detection | library |
 
 Used by every skill that writes or checks a bundle, the fragment skills included: `okf-fragment` and `okf-distill` run `okf_index.py` and `okf_lint.py` (and `okf_migrate.py --file` in a 0.1 bundle), `okf-review` runs `okf_index.py`, `okf_lint.py` and `okf_audit.py`, `okf-init` offers `okf_obsidian.py`; see the [plugin](/base/systems/plugin-okf-builder.md).
@@ -39,5 +39,5 @@ Without uv, `python3` works if PyYAML is installed; with neither, the scripts ex
 
 # Operation
 
-* Tests: each script carries its own, run with `--test`; `make test` runs them and then the cross-script runs (init 0.1/0.2, Google fixtures v0.1 and v0.2, migration round-trip).
+* Tests: each script carries its own, run with `--test`; `just test` runs them and then the cross-script checks, each a named step of `build/checks.py` (init 0.1/0.2, Google fixtures v0.1 and v0.2, migration round-trip, the exported packages, the dogfood state).
 * Decisions: [ADR-0011](/base/decisions/ADR-0011-uv-pep723-scripts.md) (supersedes ADR-0006), [ADR-0004](/base/decisions/ADR-0004-dual-support-v01-v02.md).

@@ -9,4 +9,4 @@ generated: { by: human:test, at: 2026-10-30T00:00:00Z }
 
 # Purpose
 
-Broken on purpose: step [7] of `make test` expects lint to fail on this bundle.
+Broken on purpose: `okf_lint.py --test` expects lint to fail on this bundle.

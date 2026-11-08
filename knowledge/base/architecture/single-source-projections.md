@@ -4,7 +4,7 @@ title: Single source and per-platform packages
 description: How a single set of skills and scripts reaches Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI and Microsoft 365 Copilot.
 tags: [architecture, containers]
 status: draft
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:14:30Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
 ---
 
 # View
@@ -15,9 +15,9 @@ flowchart LR
   SRC -->|symlink .claude/skills| CC[Claude Code]
   SRC -->|symlink .agents/skills| GH[GitHub Copilot]
   SRC -->|symlink .agents/skills| GM[Gemini CLI]
-  SRC -->|make plugin → .plugin| CW[Claude Cowork]
-  SRC -->|make m365 → zip manifest v1.28| M365[Microsoft 365 Copilot]
-  SRC -->|make copilot → .github/skills| OTR[Other repos]
+  SRC -->|just plugin → .plugin| CW[Claude Cowork]
+  SRC -->|just m365 → zip manifest v1.28| M365[Microsoft 365 Copilot]
+  SRC -->|just copilot → .github/skills| OTR[Other repos]
   K[(project knowledge/)] --- CC & GH & GM & CW
   K -->|GitHub connector or SharePoint source| M365
 ```
@@ -33,7 +33,7 @@ flowchart LR
 
 # Principles and constraints
 
-- A change is made only in the source; platform packages are regenerated (`make all`).
+- A change is made only in the source; platform packages are regenerated (`just all`).
 - Skills use the `<skills>/` convention; no vendor variable.
 - M365: each skill is self-contained, with ≤20 companion files and no hidden files.
 
