@@ -7,7 +7,7 @@ status: stable
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:36:30Z }
-verified: [{ by: human:jisequilla, at: 2026-11-07T08:43:17Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }]
+verified: [{ by: human:jisequilla, at: 2026-11-07T08:43:17Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }, { by: human:jisequilla, at: 2026-11-08T21:39:09Z }]
 sources:
   - id: standard
     resource: /base/references/okf-standard.md
