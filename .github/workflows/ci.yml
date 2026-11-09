@@ -18,6 +18,9 @@ jobs:
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
       - run: just test
+      - name: A change to marketplace.json raises its version
+        if: github.event_name == 'pull_request'
+        run: python3 build/check_marketplace_version.py "origin/${{ github.base_ref }}"
       - run: just lint
 
   pr-title:

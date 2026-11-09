@@ -3,29 +3,16 @@
   "include-component-in-tag": false,
   "bump-minor-pre-major": true,
   "packages": {
-    ".": {
+    "plugin/okf-builder": {
       "release-type": "simple",
       "package-name": "okf-builder",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {
           "type": "json",
-          "path": "plugin/okf-builder/.claude-plugin/plugin.json",
+          "path": ".claude-plugin/plugin.json",
           "jsonpath": "$.version"
-        },
-        {
-          "type": "json",
-          "path": ".claude-plugin/marketplace.json",
-          "jsonpath": "$.plugins[0].version"
         }
-      ],
-      "exclude-paths": [
-        "knowledge",
-        "examples",
-        "tests",
-        ".github",
-        ".claude",
-        ".beads"
       ]
     }
   }
