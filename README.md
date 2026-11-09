@@ -33,7 +33,7 @@ Every file belongs to one of four homes ([ADR-0028](knowledge/base/decisions/ADR
 | Product | `standard/OKF-COMPATIBILITY.md` | OKF v0.1 ↔ v0.2 differences, field matrix, mapping rules and versioning policy. Generated copy of `okf-standard/references/OKF-COMPATIBILITY.md`. |
 | Product | `templates/` | Concept templates (`{{placeholders}}`): ADR, runbook, playbook, system, API, table, metric, computation, term, policy, view, reference, project, fragment, conflict log. Generated copy of `okf-standard/templates/`. |
 | Product | `.claude-plugin/marketplace.json` | This repo acts as a plugin marketplace. |
-| Product build | `justfile`, `build/` | Builds the packages and the root copies (`just copies`), and checks everything (`just test`, each check a named step of `build/checks.py`, and `just lint`). |
+| Product build | `justfile`, `build/`, `.github/workflows/`, `release-please-config.json` | Builds the packages and the root copies (`just copies`), and checks everything (`just test`, each check a named step of `build/checks.py`, and `just lint`); CI runs the checks on every pull request, and release-please proposes each release from the squash-merged pull request titles ([ADR-0036](knowledge/base/decisions/ADR-0036-release-please.md)). |
 | Product build | `build/` | Platform package exporters (Copilot, M365) and the M365 agent's configuration. |
 | Product build | `tests/`, `examples/` | Test fixtures, the Google fixtures and a conformant example bundle (`examples/knowledge/`). |
 | Knowledge | `knowledge/` | The project's own knowledge (a conformant OKF bundle with the ADRs behind every decision). |

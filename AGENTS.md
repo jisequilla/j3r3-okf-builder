@@ -17,6 +17,7 @@ This repository defines the **OKF standard (knowledge/3.0 profile)** and the `ok
 4. Add `verified: human:` to a concept only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept and its version, kept as a fragment (ADR-0033, `okf-review`).
 5. Skills must not depend on vendor variables (`${CLAUDE_PLUGIN_ROOT}` appears only in the paths note); use the `<skills>/...` convention.
 6. Google's specs in `references/` are verbatim copies (Apache-2.0): they are not edited; they are updated from upstream and the update is recorded in `log.md`.
+7. A pull request's title follows Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`, `chore:`; `!` for a breaking change), then a sentence saying what changed; pull requests are squash-merged, so the title is the commit release-please reads (ADR-0036).
 
 ## Quick map
 

@@ -30,7 +30,7 @@ Los skills viven una vez en `plugin/okf-builder/skills/`; cada plataforma recibe
 Cada fichero pertenece a uno de cuatro hogares ([ADR-0028](knowledge/base/decisions/ADR-0028-where-things-go.md)):
 
 - **Producto**: `plugin/okf-builder/` (la única fuente: skills, scripts, plantillas, el estándar y el agente `knowledge-architect`), `standard/`, `templates/` y `.claude-plugin/marketplace.json`.
-- **Construcción del producto**: `justfile`, `build/` (exportadores de Copilot y M365, y la configuración del agente de M365), `tests/` y `examples/`.
+- **Construcción del producto**: `justfile`, `.github/workflows/` (CI y releases con release-please, [ADR-0036](knowledge/base/decisions/ADR-0036-release-please.md)), `build/` (exportadores de Copilot y M365, y la configuración del agente de M365), `tests/` y `examples/`.
 - **Conocimiento**: `knowledge/`, el bundle OKF del propio proyecto.
 - **Espacio de trabajo**: `.claude/`, `.agents/`, `.beads/` y los ficheros de contexto (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`).
 
