@@ -6,8 +6,8 @@ tags: [policy, conformance]
 status: stable
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T14:09:50Z }
-verified: [{ by: human:jisequilla, at: 2026-11-07T08:43:17Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }]
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:36:30Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T08:43:17Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }, { by: human:jisequilla, at: 2026-11-08T21:39:09Z }]
 sources:
   - id: standard
     resource: /base/references/okf-standard.md
@@ -34,7 +34,7 @@ sources:
 
 # Verification / controls
 
-`make lint` (`okf_lint --strict` on `knowledge/` and `examples/knowledge`) in CI and after every change; `okf-capture` always finishes with lint.
+`just lint` (`okf_lint --strict` on `knowledge/` and `examples/knowledge`) after every change; `okf-capture` always finishes with lint.
 
 [^standard]: OKF standard, profile knowledge/3.0: §2, §4.1 and §7.
 [^adr-0033]: ADR-0033, decision 4.

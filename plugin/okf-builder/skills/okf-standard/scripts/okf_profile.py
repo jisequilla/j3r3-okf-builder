@@ -1073,7 +1073,7 @@ def format_in_force(info: dict) -> str:
 
 
 # --------------------------------------------------------------------------
-# The built-in profile against the standard's §4 table (make test [7])
+# The built-in profile against the standard's §4 table (build/checks.py builtin-profile)
 # --------------------------------------------------------------------------
 def _section_4_rows(standard_text: str) -> list[list[str]]:
     m = re.search(r"^## 4\. .*?$(.*?)^### 4\.1 ", standard_text, re.M | re.S)

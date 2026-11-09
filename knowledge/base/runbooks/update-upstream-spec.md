@@ -7,7 +7,7 @@ tags: [runbook, spec, compatibility]
 status: draft
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T22:32:52Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
 ---
 
 # Trigger
@@ -19,7 +19,7 @@ A new version of `okf/SPEC.md` upstream (check quarterly, or when this runbook's
 1. Download `SPEC.md` and compare it with `okf-standard/references/OKF-SPEC-v<current>.md`.
 2. Classify the changes: additive (new optional fields) vs breaking (renames, reserved names).
 3. Update `references/` (verbatim copy + license), `OKF-COMPATIBILITY.md` (matrix) and, where applicable, `SUPPORTED_VERSIONS`, `V02_KEYS`/detection and `okf_migrate.py`.
-4. Add an upstream fixture of the new version in `examples/fixtures/` and a case in `make test`.
+4. Add an upstream fixture of the new version in `examples/fixtures/` and a case in the `google-fixtures` step of `build/checks.py`.
 5. A new ADR if the version policy changes ([ADR-0004](/base/decisions/ADR-0004-dual-support-v01-v02.md)).
 6. Follow [Publish a version](/base/runbooks/release-version.md).
 
