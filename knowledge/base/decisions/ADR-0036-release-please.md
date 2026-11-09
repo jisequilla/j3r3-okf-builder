@@ -1,14 +1,14 @@
 ---
 type: Architecture Decision
 title: "ADR-0036: Releases are proposed by release-please from squash-merged pull requests with Conventional Commit titles, and a workflow attaches the platform packages"
-description: Pull requests are squash-merged and their titles follow Conventional Commits, so each change reaches main as one commit release-please reads; release-please keeps a release pull request open that bumps the version in plugin.json and marketplace.json and writes CHANGELOG.md; merging it tags and publishes the release, and a GitHub Actions workflow builds the platform packages with just all and attaches them; a CI workflow runs just test and just lint on every pull request and checks its title; knowledge/log.md keeps the knowledge history and records each release in one line.
+description: One version covers every package okf-builder ships; a change is releasable by what users receive, and breaking when a bundle that passed lint fails it; pull requests are squash-merged and their titles follow Conventional Commits, so each change reaches main as one commit release-please reads; release-please keeps a release pull request open that bumps the version in plugin.json and marketplace.json and writes CHANGELOG.md; merging it tags and publishes the release, and a GitHub Actions workflow builds the platform packages with just all and attaches them; a CI workflow runs just test and just lint on every pull request and checks its title; knowledge/log.md keeps the knowledge history and records each release in one line.
 tags: [adr, release, build, ci]
 status: draft
 adr_id: ADR-0036
 decision_status: accepted
 supersedes:
 superseded_by:
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T00:24:32Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T00:34:52Z }
 sources:
   - { id: adr-0007, resource: /base/decisions/ADR-0007-single-source-and-projections.md }
   - { id: adr-0034, resource: /base/decisions/ADR-0034-organization-package.md }
@@ -26,12 +26,16 @@ The owner, human:jisequilla, proposed release-please on 2026-11-07 and decided i
 
 # Decision
 
-1. **Pull requests are squash-merged, and their titles follow Conventional Commits.** The title becomes the one commit on main: a type (`feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`, `chore`), an optional scope, `!` for a breaking change, then the prose sentence this repository writes. Commits on a branch need no convention. A CI check rejects a pull request whose title does not follow it.
-2. **release-please proposes each release.** On every push to main it keeps a release pull request open, which bumps `version` in `plugin/okf-builder/.claude-plugin/plugin.json` and in `.claude-plugin/marketplace.json` and adds the version's section to `CHANGELOG.md`, from the titles of the pull requests merged since the last tag. Before 1.0, `feat` bumps the minor version, `fix` the patch, and a breaking change the minor version. A commit footer `Release-As: <version>` sets the version when the titles would not.
-3. **Merging the release pull request publishes the release.** release-please tags `v<version>` and creates the GitHub release with that section as its notes; a workflow then checks out the tag, runs `just all` (ADR-0035)[^adr-0035] and attaches `okf-builder.plugin`, `dist/okf-copilot-pack.zip`, `dist/m365/okf-builder-m365.zip` and `dist/m365/okf-knowledge-architect-m365.zip`. Merging it is the owner's act, like any release.
-4. **CI runs the checks on every pull request.** A workflow runs `just test` and `just lint` on each pull request and each push to main.
-5. **`CHANGELOG.md` holds the release notes; `knowledge/log.md` holds the knowledge history.** The changelog says what changed for users, version by version. The log keeps recording each change to the bundle, and records each release in one line that names the version.
-6. **Actions are pinned to a commit.** Each workflow names every third-party action by its full commit SHA, with the release tag as a comment.
+1. **One version, `v<version>`, covers everything okf-builder ships**: the Claude Code plugin of this marketplace, the Cowork `.plugin`, the Copilot pack, the Microsoft 365 packages, and the installable scripts package and organization package of ADR-0034 once they exist, all built from the tagged commit. The OKF version and the profile a bundle declares (`okf_version`, `okf_profile`) are versioned apart, by ADR; a person's bundle never changes with okf-builder's version.
+2. **A change is releasable by what users receive.** A change to what a package ships (`plugin/`: skills, scripts, templates, the standard, profiles, the agent; `build/`, which shapes the packages) is `feat` (something new) or `fix` (something corrected), even when it is only text. A change to files that do not ship is `docs` (README, `knowledge/`, the context files), `test`, `build` (the justfile, `build/checks.py`), `ci` or `chore`, and never releases on its own. release-please opens a release only for `feat`, `fix`, `perf`, `revert` or a breaking change; the other types wait for one and are left out of the changelog.
+3. **A breaking change is one that makes a bundle that passed lint fail it**: a new lint error, a field or type removed or renamed, a changed built-in Domain Profile, or a script option removed. It is marked with `!` and a `BREAKING CHANGE:` footer saying what a bundle must change. A new warning is not breaking.
+4. **Commits touching only files that do not ship never release.** release-please ignores a commit whose every file is under `knowledge/`, `examples/`, `tests/`, `.github/`, `.claude/` or `.beads/`, whatever its title. Root files such as the READMEs cannot be excluded this way; their title decides.
+5. **Pull requests are squash-merged, and their titles follow Conventional Commits.** The title becomes the one commit on main: a type (`feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`, `chore`), an optional scope, `!` for a breaking change, then the prose sentence this repository writes. Commits on a branch need no convention. A CI check rejects a pull request whose title does not follow it.
+6. **release-please proposes each release.** On every push to main it keeps a release pull request open, which bumps `version` in `plugin/okf-builder/.claude-plugin/plugin.json` and in `.claude-plugin/marketplace.json` and adds the version's section to `CHANGELOG.md`, from the titles of the pull requests merged since the last tag. Before 1.0, `feat` and a breaking change bump the minor version and `fix` the patch, as 0.8, 0.9 and 0.10 were released; a breaking change shows in the changelog's breaking changes section, not in the number. A commit footer `Release-As: <version>` sets the version when the titles would not.
+7. **Merging the release pull request publishes the release.** release-please tags `v<version>` and creates the GitHub release with that section as its notes; a workflow then checks out the tag, runs `just all` (ADR-0035)[^adr-0035] and attaches `okf-builder.plugin`, `dist/okf-copilot-pack.zip`, `dist/m365/okf-builder-m365.zip` and `dist/m365/okf-knowledge-architect-m365.zip`. Merging it is the owner's act, like any release.
+8. **CI runs the checks on every pull request.** A workflow runs `just test` and `just lint` on each pull request and each push to main.
+9. **`CHANGELOG.md` holds the release notes; `knowledge/log.md` holds the knowledge history.** The changelog says what changed for users, version by version. The log keeps recording each change to the bundle, and records each release in one line that names the version.
+10. **Actions are pinned to a commit.** Each workflow names every third-party action by its full commit SHA, with the release tag as a comment.
 
 # Alternatives considered
 
@@ -55,5 +59,5 @@ The owner, human:jisequilla, proposed release-please on 2026-11-07 and decided i
 * [Publish a plugin version](/base/runbooks/release-version.md)
 
 [^runbook]: Publish a plugin version, Steps, as it stood before this decision.
-[^adr-0034]: ADR-0034, decision 3.
+[^adr-0034]: ADR-0034, decisions 1 and 3.
 [^adr-0035]: ADR-0035, decision 1.
