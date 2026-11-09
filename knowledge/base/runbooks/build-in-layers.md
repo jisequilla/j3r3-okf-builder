@@ -3,10 +3,11 @@ type: Runbook
 title: Build a change in layers
 description: Procedure for taking a multi-stage change of the repo from decision to merge through delegated tickets, fresh-context review and verification on main.
 tags: [runbook, process, agents]
-status: draft
+status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:56:18Z }
 ---
 
 # Trigger

@@ -3,8 +3,9 @@ type: Term
 title: Platform package
 description: Copy of or link to the source skills, adapted to a platform (symlink, .plugin, M365 zip, Copilot pack).
 tags: [domain, glossary, okf]
-status: draft
+status: stable
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:55:47Z }
 sources:
   - { id: adr-0022, resource: /base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md }
 ---

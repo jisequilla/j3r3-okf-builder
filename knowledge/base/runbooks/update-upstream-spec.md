@@ -4,10 +4,11 @@ title: Update the OKF spec from Google's upstream
 description: What to do when GoogleCloudPlatform/knowledge-catalog publishes changes to okf/SPEC.md.
 resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
 tags: [runbook, spec, compatibility]
-status: draft
+status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:56:01Z }
 ---
 
 # Trigger

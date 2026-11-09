@@ -4,8 +4,9 @@ title: Open Knowledge Format (Google spec)
 description: Upstream specification v0.1 and v0.2, copied verbatim (Apache-2.0) into the okf-standard skill.
 resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
 tags: [reference, spec, upstream]
-status: draft
+status: stable
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T11:15:08Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:56:37Z }
 sources:
   - id: spec
     resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a0/okf/SPEC.md

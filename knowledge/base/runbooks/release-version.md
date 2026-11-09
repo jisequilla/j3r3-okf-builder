@@ -3,10 +3,11 @@ type: Runbook
 title: Publish a plugin version
 description: Steps to release a new version of okf-builder on every platform.
 tags: [runbook, release]
-status: draft
+status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T01:15:20Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:56:05Z }
 ---
 
 # Trigger

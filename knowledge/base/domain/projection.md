@@ -3,8 +3,9 @@ type: Term
 title: Projection
 description: Something derived from a bundle's base for a reader, kept in knowledge/projections/ with a projection.yaml; not an OKF concept.
 tags: [domain, glossary, okf, projections]
-status: draft
+status: stable
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T22:32:52Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:55:51Z }
 sources:
   - { id: adr-0022, resource: /base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md }
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }
