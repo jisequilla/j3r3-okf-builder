@@ -4,10 +4,11 @@ title: okf-builder plugin
 description: Package of 11 Agent Skills (okf-standard, init, capture, fragment, distill, review, lint, index, ask, migrate, projection) and the knowledge-architect agent, which apply profile knowledge/3.0.
 resource: /plugin/okf-builder
 tags: [system, plugin, skills]
-status: draft
+status: stable
 owner: human:jisequilla
 runtime: agent-skills
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:56:48Z }
 ---
 
 # Responsibility

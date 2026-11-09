@@ -3,10 +3,11 @@ type: Runbook
 title: Export and deliver platform packages
 description: How to generate and deliver the Cowork plugin, the M365 package and the pack for other repos.
 tags: [runbook, release, m365, copilot]
-status: draft
+status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:56:14Z }
 ---
 
 # Steps

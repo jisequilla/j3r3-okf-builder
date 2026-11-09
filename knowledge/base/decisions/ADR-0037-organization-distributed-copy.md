@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0037: An organization receives a copy of okf-builder that it owns and versions, pulls later releases when it chooses, and runs lint from the installed plugin"
 description: The organization package, generated from a tagged release of okf-builder, delivers the skills with their scripts as plain files, the organization's Domain Profile and a pre-commit hook; once delivered the copy is the organization's, which may take it in its own direction and versions it by its own release process while recording the okf-builder version it was taken from; a later okf-builder release reaches it only when the organization pulls it, by a pull request in its own repository; its repositories run lint from the plugin each person installs, with no pinned version; the installable scripts package is deferred; other OKF dialects still converge as Domain Profiles and validators. Supersedes ADR-0034.
 tags: [adr, distribution, packaging]
-status: draft
+status: stable
 adr_id: ADR-0037
 decision_status: accepted
 supersedes: /base/decisions/ADR-0034-organization-package.md
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T05:26:38Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:55:08Z }
 sources:
   - { id: fragment, resource: /fragments/2026-11-09-organization-distributed-copy.md }
   - { id: adr-0034, resource: /base/decisions/ADR-0034-organization-package.md }

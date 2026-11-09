@@ -4,10 +4,11 @@ title: Platform package exporters
 description: build/export_copilot.py and build/export_m365.py generate the platform packages of the skills for other repos and for Microsoft 365 Copilot.
 resource: /build
 tags: [system, exporters, m365, copilot]
-status: draft
+status: stable
 owner: human:jisequilla
 runtime: python3
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+verified: { by: human:jisequilla, at: 2026-11-09T10:56:45Z }
 ---
 
 # Responsibility
