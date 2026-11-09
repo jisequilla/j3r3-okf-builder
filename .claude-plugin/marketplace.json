@@ -1,5 +1,6 @@
 {
   "name": "j3r3-okf-builder",
+  "version": "1.0.0",
   "owner": {
     "name": "Jeremías de Isequilla"
   },
@@ -11,7 +12,6 @@
       "name": "okf-builder",
       "source": "./plugin/okf-builder",
       "description": "Manages a project's knowledge as an OKF v0.2 bundle in knowledge/.",
-      "version": "0.10.0",
       "category": "productivity"
     }
   ]
