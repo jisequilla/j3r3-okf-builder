@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0034: An organization receives okf-builder as its own package, copied in by a reviewed pull request per release, and each of its repositories pins the version that checks it"
 description: A new generated platform package, the organization package, writes okf-builder's skills, its scripts as an installable package and the organization's Domain Profile into a bundle of the organization's own marketplace through a reviewed pull request per release; each repository of the organization records the version in its root index and runs lint at that version from that marketplace, never from a copy; other OKF dialects the organization runs converge on this standard as Domain Profiles and validators.
 tags: [adr, distribution, packaging]
-status: draft
+status: stable
 adr_id: ADR-0034
 decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-07T10:09:05Z }
+verified: { by: human:jisequilla, at: 2026-11-09T01:08:05Z }
 sources:
   - { id: adr-0007, resource: /base/decisions/ADR-0007-single-source-and-projections.md }
   - { id: adr-0011, resource: /base/decisions/ADR-0011-uv-pep723-scripts.md }

@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0036: Releases are proposed by release-please from squash-merged pull requests with Conventional Commit titles, and a workflow attaches the platform packages"
 description: The plugin's version rises only when the plugin changes, and the marketplace manifest keeps its own version, raised by hand when the manifest changes; one plugin version covers every package okf-builder ships; a change is breaking when a bundle that passed lint fails it; pull requests are squash-merged and their titles follow Conventional Commits, so each change reaches main as one commit release-please reads; release-please keeps a release pull request open that bumps the version in plugin.json and marketplace.json and writes CHANGELOG.md; merging it tags and publishes the release, and a GitHub Actions workflow builds the platform packages with just all and attaches them; a CI workflow runs just test and just lint on every pull request and checks its title; knowledge/log.md keeps the knowledge history and records each release in one line.
 tags: [adr, release, build, ci]
-status: draft
+status: stable
 adr_id: ADR-0036
 decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T01:15:20Z }
+verified: { by: human:jisequilla, at: 2026-11-09T01:19:06Z }
 sources:
   - { id: adr-0007, resource: /base/decisions/ADR-0007-single-source-and-projections.md }
   - { id: adr-0034, resource: /base/decisions/ADR-0034-organization-package.md }

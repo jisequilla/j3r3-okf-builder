@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0035: The product build runs with just, and its checks are named steps of a build script"
 description: A justfile replaces the Makefile as the product build's runner; every check of just test is a named step of build/checks.py, a PEP 723 script that runs the scripts as a person would and writes to one temporary directory per run; the root copies are written by build/copies.py; earlier ADRs keep naming make as the history of the decisions they record.
 tags: [adr, build, repo]
-status: draft
+status: stable
 adr_id: ADR-0035
 decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:33:29Z }
+verified: { by: human:jisequilla, at: 2026-11-09T01:03:27Z }
 sources:
   - { id: adr-0011, resource: /base/decisions/ADR-0011-uv-pep723-scripts.md }
   - { id: adr-0028, resource: /base/decisions/ADR-0028-where-things-go.md }
