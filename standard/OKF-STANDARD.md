@@ -9,7 +9,7 @@ This document defines the `knowledge/3.0` profile: how a project's knowledge is 
 
 ## 1. Principles
 
-1. **One repo, one bundle.** `knowledge/` is the root of the bundle. Its path is each concept's identity.
+1. **One repo, one domain bundle.** `knowledge/` is the root of the repo's bundle, and the operational bundles it holds are bundles of their own inside it (§2.2). A concept's path within its bundle is its identity.
 2. **Only markdown + YAML frontmatter.** No SDK, no runtime. `cat` is enough to read it; `git` to distribute it.
 3. **`type` is the only required field.** Everything else is recommended, never a reason for rejection.
 4. **Progressive disclosure.** Every directory of the bundle has an `index.md`; an agent starts at the root and goes down only where it needs to. `projections/` is not OKF content and needs no `index.md`.
@@ -27,6 +27,9 @@ knowledge/
 ├── log.md                   # Chronological history of the bundle (most recent first).
 ├── project.md               # type: Project — project overview: purpose, scope, team, key links.
 ├── conflict-log.md          # type: Conflict Log — the bundle's conflict register; created with the first conflict.
+├── requests/                # Optional: the instances of an operational kind the Domain Profile declares (§2.2), one bundle each.
+│   ├── index.md
+│   └── <id>/                # An operational bundle: index.md, log.md, project.md, fragments/, base/, projections/.
 ├── fragments/               # Record layer. type: Knowledge Fragment — records of events (YYYY-MM-DD-slug.md), distilled into base/.
 │   └── index.md
 ├── base/                    # Knowledge layer: organised by type (the usual directories below) or by domain.
@@ -74,7 +77,7 @@ knowledge/
 **Rules:**
 
 - All subdirectories are **optional** except `index.md`, `log.md` and `project.md` at the root. `okf-init` creates `fragments/`, `base/` and every typed directory empty (only with their `index.md`) so navigation is predictable across projects, and `projections/` empty (without an `index.md`, since it is not OKF); the ones that don't apply are removed.
-- The root holds only what is about the bundle as a whole: `index.md`, `log.md`, `project.md`, `conflict-log.md` and the three layer directories `fragments/`, `base/` and `projections/`.
+- The root holds only what is about the bundle as a whole: `index.md`, `log.md`, `project.md`, `conflict-log.md`, the three layer directories `fragments/`, `base/` and `projections/`, and the directory of each operational kind the bundle may hold (§2.2).
 - The profile's directory names are in English (ADR-0010); the `base/references/` subdirectory keeps the spec's `references/` name to interoperate with OKF consumers.
 - File names: `kebab-case`, ASCII, no spaces. ADRs: `ADR-NNNN-short-title.md`.
 - `index.md` and `log.md` are **reserved names** at any level: they are never used for a concept.
@@ -82,7 +85,7 @@ knowledge/
 - `base/` may be organised **by type**, as `okf-init` creates it, or **by domain** (`base/clients/`, `base/payments/`). The usual directory of each type (§4) is a default, not a rule. A bundle that wants to say what each directory holds declares it in the `families` of its Domain Profile, `base/profile.md` (§4.1); `base/index.md` lists `base/profile.md` with the directories.
 - `projections/` is not OKF content: `okf-lint`, `okf-index` and `okf-ask` skip it, and no OKF tool treats a projection as a concept. A projection is a derivation with its own manifest and its own tools (ADR-0022, ADR-0031; §2.1), not knowledge. After a distillation, `okf-distill` reads only the `refs` of each `projection.yaml` to list the projections whose refs changed for refresh.
 - **`.okfignore`** at the bundle root lists the paths that are not part of the bundle, one gitignore-style glob per line: a line that starts with `#` is a comment, `!` re-includes what an earlier line excluded, a trailing `/` matches directories only, a `/` at the start or inside a pattern anchors it at the root (otherwise it matches a name at any depth), and `**` crosses directories; the last matching line wins, and a path under an excluded directory cannot be re-included. `okf-lint` does not read what it matches: it is no concept, is not counted, need not be listed in an `index.md`, and appears in `--json` under `ignored` and in one notice. It never excludes the root's reserved files (`index.md`, `log.md`, `project.md`, `conflict-log.md`, ADR-0018), the `index.md` of any directory or `base/profile.md`, nor `base/` while it holds `base/profile.md`: such a match is read as usual and reported as one notice, `cannot ignore <path>: reserved`. The file itself is not a concept. Hidden directories and `projections/` are skipped without it.
-- **A nested bundle** is a subdirectory other than `fragments/`, `base/` and `projections/` whose `index.md` declares its own `okf_version` (in its frontmatter, which an `index.md` below the root otherwise never has, §5.1). It is another bundle, not part of this one: `okf-lint` skips it as a whole with one notice naming its path, the parent `index.md` need not list it, a link into it is an ordinary link, and `okf-lint <that directory>` lints it on its own.
+- **A nested bundle** is a subdirectory other than `fragments/`, `base/` and `projections/` whose `index.md` declares its own `okf_version` (in its frontmatter, which an `index.md` below the root otherwise never has, §5.1). It is another bundle, not part of this one. An instance of an operational kind, in the directory its kind declares, is checked with the bundle that holds it (§2.2); any other nested bundle `okf-lint` skips as a whole with one notice naming its path, the parent `index.md` need not list it, a link into it is an ordinary link, and `okf-lint <that directory>` lints it on its own.
 - **What a fragment's content becomes** (ADR-0021), the routing `okf-distill` applies:
 
   | In the fragment | Goes to |
@@ -136,6 +139,78 @@ A **projection** is a directory `projections/<slug>/` (ADR-0022): `projection.ya
 Without `--run-render` nothing is executed: each rendered projection is listed under `not_checked`, with one notice, `render not run (use --run-render)`. An agent passes the flag only when a person asks, as for `--run-validators`. Recomputable projections are listed under `to_recompute`, frozen ones under `frozen`; both have their manifest checked. A manifest with errors is not checked for drift. `--json` gives `{ projections: [{slug, lifecycle, nature, frozen}], findings: [{code, level, slug, message}], not_checked, to_recompute, frozen, notices }`. The exit is 1 on any error, and on any warning with `--strict`; 2 when no bundle is found; else 0: drift asks for a refresh, not a fix. Rendering for real runs the same `render` with `OKF_PROJECTION_OUT` naming the projection's directory.
 
 **`--record-hashes SLUG`**, after a person approves the refresh of a composed projection, writes each ref's current `sha256` into its `projection.yaml` in place: every other byte of the file stays as it was. It exits 2 and changes nothing, naming the reason, when the slug is not a projection, the projection is not composed or is frozen, its manifest has errors other than a `sha256` value, or a ref is not a one-line `{ path: ..., sha256: ... }` flow map.
+
+### 2.2 Domain and operational bundles
+
+A bundle is a **domain bundle** or an **operational bundle** (ADR-0038). A domain bundle holds knowledge that never closes: a domain, a system, a team, a doctrine. An operational bundle holds one unit of work, which opens, runs and closes: a request, an incident, a release and what it ships, an engagement. Which kinds of work exist is the organization's to name: the standard ships only the abstract kind `Operational Bundle`, and each bundle's Domain Profile declares its own kinds under `kinds` (§4.1). A bundle is open-ended or bounded by its kind, never by a key of its own.
+
+**The definition lives in the domain bundle's `base/`; the instances live next to its layers.** The kind `Request` is declared in `base/profile.md`. How that work is done (its process, how a request closes, its terms and doctrine) is knowledge of the domain bundle: concepts in a directory of `base/` per kind, such as `base/requests/`, which `families` may declare. Each request is a bundle of its own in the directory its kind declares, never inside `base/`:
+
+```
+knowledge/                      domain bundle
+├── index.md  log.md  project.md  fragments/  base/  projections/
+├── base/
+│   ├── profile.md              kinds: Request, Incident, Release
+│   └── requests/               how requests are worked
+├── requests/
+│   ├── index.md                each instance with its state
+│   └── req-0042/               kind: Request, state: open, parent: ../..
+│       ├── index.md  log.md  project.md  conflict-log.md
+│       └── fragments/  base/  projections/
+└── releases/
+    └── rel-2026-11/            kind: Release
+        └── requests/
+            └── req-0051/       a request the release ships; parent: ../..
+```
+
+An instance has the same layout at every depth: its `project.md` describes the unit of work, its `fragments/` record what happened in it, its `base/` holds what it knows, and it has its own `log.md` and, once it has a conflict, its own Conflict Log. An instance holds instances of the kinds its own kind `holds`, in their directories inside it. The directory of each kind has an `index.md` that lists its instances and their states.
+
+**Root index of an operational bundle.** Every bundle's root `index.md` declares `okf_version` and `okf_profile` (§5.1). An operational bundle's also declares:
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | Yes | A kind in force for it (below), by its id or an alias. A bundle without `kind` is a domain bundle; `kind: Domain Bundle` says so explicitly |
+| `state` | Yes | `open`, `closed`, or a state its kind adds between them; `closed` is the only terminal state |
+| `parent` | Yes, while it is in a tree | The bundle that holds it, as a path relative to the instance's directory (`../..`): the bundle it distills into. That bundle's kind (or, for a domain bundle, its Domain Profile) must allow this kind: a domain bundle holds every kind it declares, an operational bundle the kinds its kind `holds`. An extracted instance has none |
+| `closed_at` | When `state: closed` | ISO 8601 with an explicit offset: when it closed |
+| `depends_on` | No | Other bundles it refers to, each `{ bundle, repo?, ref? }`: `bundle` a path (relative to the instance's directory, or within `repo`), `repo` a repository name or URL, `ref` a tag, branch or commit. Declarative: lint checks its shape and shows it, and no tool resolves it |
+
+A domain bundle declares no `state`, `parent` or `closed_at`.
+
+```yaml
+---
+okf_version: "0.2"
+okf_profile: "knowledge/3.0"
+kind: Request
+state: open
+parent: ../..
+depends_on:
+  - { bundle: ../../incidents/inc-0412 }
+  - { repo: payments-service, bundle: knowledge, ref: v2.3.0 }
+---
+```
+
+**The Domain Profile in force for an instance** is the built-in profile, then the profile chain of the domain bundle at the top of its tree (every layer its `base/profile.md` `extends`, then that file), then the instance's own `base/profile.md` if it has one. An instance may add concept types, families and rules for its own concepts; it never declares `kinds`, which only a domain bundle does (`PROFILE_INVALID`).
+
+**Closing.** A unit of work closes in three steps, each approved by a person:
+
+1. **Distil its whole `base/` one level up.** `okf-distill` reads every concept of the instance's `base/` against the parent bundle and proposes one outcome for each: **promote** (lasting knowledge, added to the parent's `base/` or updating a concept there, citing the instance concept it came from), **conflict** (it contradicts the parent; opened in the parent's Conflict Log) or **stays** (it is about this unit of work only, and remains in the instance). The approved change set is kept as the instance's closing fragment. One level at a time: a request a release ships distills into the release, and the release into the domain bundle when it closes.
+2. **Leave no loose ends.** Each open conflict of the instance's Conflict Log and each open question of its `base/questions/` is resolved, or carried up into the parent as an open conflict or an open question that links back to it.
+3. **Close it.** `state: closed` and `closed_at`, with a **Closing** entry in the instance's `log.md` and an **Update** entry in the parent's.
+
+A closed instance is **frozen**: it stays where it is, lint still checks it, and nothing in it is edited; `okf-review` lists any concept in it whose `generated.at` is later than `closed_at`, and lint does not read git for it. Or it is **extracted**: moved to its own repository, without `parent`, its `base/profile.md` pinning the definition of its kind with `extends: <path>@<commit>`.
+
+**What lint checks** (rule 16 of §7). Linting a bundle also checks every instance in the directories of the kinds it may hold, at any depth, each as a bundle of its own: its findings name the instance's path, and the summary counts them apart. `--no-nested` skips the instances, with one notice per kind directory. Linting an instance's directory alone reads its parents for the Domain Profile in force.
+
+| Code | Level | Breach |
+|---|---|---|
+| `KIND_UNKNOWN` | error | `kind` names no kind in force, or a bundle with `kind` has no `okf_version` |
+| `KIND_NOT_HELD` | error | The parent does not allow this kind, or an instance is in a directory other than its kind's |
+| `BAD_PARENT` | error | An instance in a tree without `parent`, or a `parent` that is not the bundle holding it; a domain bundle with `parent` |
+| `BAD_STATE` | error | A missing `state` on an operational bundle, a value its kind does not allow, or a `state` on a domain bundle |
+| `BAD_CLOSED_AT` | error | `state: closed` without `closed_at`, a `closed_at` that is not ISO 8601 with an offset, or a `closed_at` on an open bundle |
+| `CLOSED_LOOSE_END` | error | A closed instance whose Conflict Log has an open conflict, or that has an open question |
+| `BAD_DEPENDS_ON` | warning | A `depends_on` that is not a list of maps, each with a text `bundle` and only `repo` and `ref` beside it |
 
 ---
 
@@ -234,7 +309,7 @@ Types are not registered centrally; consumers must tolerate unknown types. A bun
 
 **Two meanings of "profile".** In this document *the profile*, alone, is `knowledge/3.0`: the layout, the `okf_profile` key, the "profile outdated" notice, `okf-lint --no-profile`, and the `PROFILE_*` codes that are not in the table of codes below (`PROFILE_NO_GENERATED`, `PROFILE_OUTSIDE_LAYER` and the like). A **Domain Profile** is the taxonomy a bundle's concepts are checked against (ADR-0026). *The Domain Profile in force* for a concept is what every layer declares for its type and its directory, and the codes in the table below are about it.
 
-**The built-in Domain Profile.** The types of the table above are a built-in Domain Profile, shipped with the `okf-standard` skill at `<skills>/okf-standard/profiles/knowledge-3.0.md` and versioned with the plugin. It is a `Domain Profile` concept: its frontmatter is the data and its body justifies each type and field from this standard. It declares each type of §4 with its fields, levels and usual directory; `Domain Profile` is declared by name only, because its keys nest maps inside maps, deeper than the one-level `map` field type describes, and lint checks them itself against this section (`PROFILE_INVALID`). Each requirement may carry the `code` lint reports, so the per-field checks of a Knowledge Fragment and an Open Question keep their codes and levels: `FRAGMENT_NO_FIELD` and `QUESTION_NO_FIELD` (warnings), `BAD_DISTILLATION_STATUS` and `BAD_QUESTION_STATUS` (errors), `BAD_ACTOR`, `BAD_ISO`, `BAD_MATERIAL` and `BAD_REPOSITORY` (warnings) for the fields it declares; the actor and timestamp checks of `generated`, `verified`, `stale_after`, `timestamp` and `sources[].last_modified` stay with the spec-level checks. It declares no `families`: the usual directory of a type is a default, not a rule. It is the first layer of every bundle's Domain Profile, and a bundle without `base/profile.md` is checked against it alone. Its content changes only with this standard.
+**The built-in Domain Profile.** The types of the table above are a built-in Domain Profile, shipped with the `okf-standard` skill at `<skills>/okf-standard/profiles/knowledge-3.0.md` and versioned with the plugin. It is a `Domain Profile` concept: its frontmatter is the data and its body justifies each type and field from this standard. It declares each type of §4 with its fields, levels and usual directory; `Domain Profile` is declared by name only, because its keys nest maps inside maps, deeper than the one-level `map` field type describes, and lint checks them itself against this section (`PROFILE_INVALID`). Each requirement may carry the `code` lint reports, so the per-field checks of a Knowledge Fragment and an Open Question keep their codes and levels: `FRAGMENT_NO_FIELD` and `QUESTION_NO_FIELD` (warnings), `BAD_DISTILLATION_STATUS` and `BAD_QUESTION_STATUS` (errors), `BAD_ACTOR`, `BAD_ISO`, `BAD_MATERIAL` and `BAD_REPOSITORY` (warnings) for the fields it declares; the actor and timestamp checks of `generated`, `verified`, `stale_after`, `timestamp` and `sources[].last_modified` stay with the spec-level checks. It declares no `families`: the usual directory of a type is a default, not a rule. It also declares the abstract kind `Operational Bundle`, the one every bundle's kinds extend (§2.2). It is the first layer of every bundle's Domain Profile, and a bundle without `base/profile.md` is checked against it alone. Its content changes only with this standard.
 
 **Where a Domain Profile applies.** A bundle's own Domain Profile is read only in a `knowledge/3.0` bundle and only at `base/profile.md`. A `profile.md` in a `knowledge/2.0` bundle is ignored with a notice to migrate, and the built-in one still applies. A shared profile that `base/profile.md` reaches through `extends` by bundle paths (`/base/shared/profile.md`, directly or through another profile reached that way) is read from the working tree as a layer and is not misplaced. In a `knowledge/3.0` bundle, any other concept of type `Domain Profile` is `PROFILE_MISPLACED`; in a `knowledge/2.0` bundle it is ignored like `profile.md`. `okf-lint --no-profile` validates the OKF spec only: it turns off the `knowledge/3.0` profile and every Domain Profile with it, the built-in one included, so neither the Knowledge Fragment and Open Question checks nor any code of the table below is reported, and `base/profile.md` is read as an ordinary concept.
 
@@ -245,6 +320,7 @@ Types are not registered centrally; consumers must tolerate unknown types. A bun
 | `extends` | list of references | Shared profiles this one builds on, merged in order: a bundle path (`/base/shared/profile.md`), or a repository path pinned to a commit (`profiles/acme.md@3f2a9c1`), read with `git show <commit>:<path>` from the repository that holds the bundle. Never copied. A URL is not read: it is `PROFILE_UNREADABLE`, naming the missing support |
 | `types` | map: type id → definition | Each local type: `extends` (a type of the built-in profile or of an extended profile), `description`, `fields` |
 | `fields` | map: field id → definition, per type | `type`: `string`, `integer`, `boolean`, `date` (`YYYY-MM-DD`), `datetime` (ISO 8601 with an explicit offset), `date_or_datetime` (either), `actor` (the actor convention, §3.1), `list` (with `of`, the field type of each item), `enum` (with `values`), `path` (a bundle path, starting with `/`), `map` (with `keys`; a `list` with `of: map` takes `keys` too). `keys`: map key → definition, each key of a scalar type (any type but `list` and `map`: one level deep) with `values` for an enum, `required` (`true` or `false`) and `note`, and no `level` or `code` of its own: a value that is not a map, a missing required key and a key of another type are breaches of the field, at its level and under its code (`PROFILE_FIELD_TYPE` without one), and a key the declaration does not name is not reported; an empty map counts as missing, so on an optional field it is not reported, and an empty item of a `list` of `map` is one breach naming the item. `required`: `true`, or `{ level, code }` when a missing field has its own level or code. `level`: `error` (the default) or `warn`, the level of every breach of the field. `code`: optional, the code lint reports instead of the generic one. `note`: what the field holds |
+| `kinds` | map: kind id → definition | Domain bundles only. Each operational kind (§2.2): `extends` (`Operational Bundle` or a kind of an extended profile), `description` (what one unit of this work is), `directory` (where its instances live, relative to the bundle that holds them, ending in `/`: `requests/`; never a reserved file or a layer), `states` (states added between `open` and `closed`, in order), `holds` (the kinds an instance of it may hold). A kind inherits the `states` and `holds` of the kind it extends |
 | `families` | map: directory → schema | Per directory under `base/`, written as its bundle path with both slashes (`/base/clients/`): `types` (the types allowed there; absent ⇒ any type), and `required`, `fixed` and `forbidden` that apply only there. A family covers its directory and every subdirectory; where families nest, each one applies. `/base/` itself is not a family, so `base/profile.md` is in none. A directory no family covers allows any type |
 | `forbidden` | map: key → `{ reason, level }` | Keys that must not appear in any concept |
 | `fixed` | map: key → `{ value, level }` | Keys whose value is fixed: where the key is present it holds exactly that value. To require the key as well, list it in `required` |
@@ -265,6 +341,10 @@ types:
     fields:
       client: { type: string, level: warn, note: "The client's name as the contract writes it" }
       contract: { type: path, note: The concept of the contract the meeting is about }
+kinds:
+  Request: { extends: Operational Bundle, description: A change a client asks for, directory: requests/, states: [in-review] }
+  Incident: { extends: Operational Bundle, description: An outage and what it taught, directory: incidents/ }
+  Release: { extends: Operational Bundle, description: A release and what it ships, directory: releases/, holds: [Request, Incident] }
 families:
   /base/clients/:
     types: [Term, System, Architecture Decision, Open Question]
@@ -291,13 +371,13 @@ aliases:
 **Composition.** The rules of ADR-0026, decision 4:
 
 - an extension only adds: a type, field, enum value or rule defined higher up is never redefined or removed, and a level is never lowered;
-- the same id (type, field, family or rule) from two sources is a structural error, not an override;
+- the same id (type, kind, field, family or rule) from two sources is a structural error, not an override;
 - layers merge from general to specific: the built-in profile, then each extended profile in order, then the bundle's own declarations, then `families`, then `by_type`. A layer's `families` and `by_type` come after the declarations of every layer and before the next layer's `families`, so a `by_type` entry is narrower than the families of its own and earlier layers, and a family is narrower than the `by_type` of earlier layers. A `by_type` key may be a type alias; the entries one layer writes for one type, under its name and its aliases, are one entry and agree;
 - a reference that cannot be read is an error. Lint reads references locally, never over the network: a bundle path from the bundle, `<path>@<commit>` from the bundle's own repository. A URL is not read; it is an error that names the missing support.
 
-A lower layer may add a type, a field to a type it declares, a rule, a family or a requirement: make an optional field required, raise `warn` to `error`, forbid or fix a key. It may also add values to an enum it inherits, and only through `by_type`: `by_type: { Knowledge Fragment: { values: { distillation_status: [archived] } } }` adds `archived` for that type and the local types that extend it. It never changes a field's type, never removes or renames a value, never makes a required field optional and never lowers a level. A bundle adds a field to a standard or inherited type only through a local type that `extends` it (`Client Meeting` above), never by declaring that type again. A value a bundle adds is new to the skills: they read it from `--profiles`, and one they cannot act on is raised to a person.
+A lower layer may add a type, a kind, a field to a type it declares, a rule, a family or a requirement: make an optional field required, raise `warn` to `error`, forbid or fix a key. It may also add values to an enum it inherits, and only through `by_type`: `by_type: { Knowledge Fragment: { values: { distillation_status: [archived] } } }` adds `archived` for that type and the local types that extend it. It never changes a field's type, never removes or renames a value, never makes a required field optional and never lowers a level. A bundle adds a field to a standard or inherited type only through a local type that `extends` it (`Client Meeting` above), never by declaring that type again. A value a bundle adds is new to the skills: they read it from `--profiles`, and one they cannot act on is raised to a person.
 
-The two structural errors differ by where the second declaration comes from. **`PROFILE_DUPLICATE_ID`**: the same id declared in `types`, `families`, `rules` or `aliases` by two sources, whatever the layers and even when both definitions are equal: two extended profiles that declare the same type, a bundle that declares `Knowledge Fragment` again in its own `types`, a rule name or a family directory declared twice, an alias named like a declared id. **`PROFILE_REDEFINED`**: a change to something a higher layer declares, made through the keys meant for adding: a local type whose `fields` declares again a field of the type it extends; a `by_type` or family entry that lowers a level, makes a required field optional, changes a field's type or a map field's `keys`, or removes an enum value. A map field composes strictly: no lower layer changes its `keys`.
+The two structural errors differ by where the second declaration comes from. **`PROFILE_DUPLICATE_ID`**: the same id declared in `types`, `kinds`, `families`, `rules` or `aliases` by two sources, whatever the layers and even when both definitions are equal: two extended profiles that declare the same type, a bundle that declares `Knowledge Fragment` again in its own `types`, a rule name or a family directory declared twice, an alias named like a declared id. **`PROFILE_REDEFINED`**: a change to something a higher layer declares, made through the keys meant for adding: a local type whose `fields` declares again a field of the type it extends; a `by_type` or family entry that lowers a level, makes a required field optional, changes a field's type or a map field's `keys`, or removes an enum value. A map field composes strictly: no lower layer changes its `keys`.
 
 What is in force for a local type includes everything in force for the type it extends, its `by_type` entry included, and a family that allows a type allows the local types that extend it.
 
@@ -312,7 +392,7 @@ What is in force for a local type includes everything in force for the type it e
 | Code | Level | Breach |
 |---|---|---|
 | `PROFILE_INVALID` | error | The Domain Profile does not follow the schema of this section |
-| `PROFILE_DUPLICATE_ID` | error | A type, field, family, rule or alias id declared by two sources |
+| `PROFILE_DUPLICATE_ID` | error | A type, kind, field, family, rule or alias id declared by two sources |
 | `PROFILE_REDEFINED` | error | An extension changes or removes something defined higher up, or lowers a level |
 | `PROFILE_UNREADABLE` | error | A reference in `extends` that cannot be read locally, a URL included |
 | `PROFILE_MISPLACED` | error | A concept of type `Domain Profile` anywhere other than `base/profile.md` and the profiles it reaches through `extends` by bundle paths |
@@ -334,9 +414,9 @@ What is in force for a local type includes everything in force for the type it e
 
 ### 5.1 `index.md`
 
-- One per directory. No frontmatter, **except** the root one, which carries `okf_version: "0.2"` and, in this profile, `okf_profile: "knowledge/3.0"`.
+- One per directory. No frontmatter, **except** the root one, which carries `okf_version: "0.2"` and, in this profile, `okf_profile: "knowledge/3.0"`; the root `index.md` of an operational bundle also carries `kind`, `state`, `parent`, `closed_at` and `depends_on` (§2.2). The root of each bundle is its own root: an instance's `index.md` is a root `index.md`.
 - Body: sections with a `#` heading and a list of links `* [Title](path) - description`. The description is copied from the concept's `description`.
-- The root `index.md` lists the root concepts and the three layers as subdirectories; `base/index.md` lists the typed directories and, when the bundle has one, `base/profile.md`. `okf-index` regenerates it; hand-written sections starting with `# Notes` (or `# Notas`) are kept.
+- The root `index.md` lists the root concepts, the three layers and each kind's directory as subdirectories; a kind's directory lists its instances, each with its state; `base/index.md` lists the typed directories and, when the bundle has one, `base/profile.md`. `okf-index` regenerates it; hand-written sections starting with `# Notes` (or `# Notas`) are kept.
 
 ```markdown
 ---
@@ -357,7 +437,7 @@ okf_profile: "knowledge/3.0"
 ### 5.2 `log.md`
 
 - At least at the root. A flat list grouped by ISO date `YYYY-MM-DD`, **most recent first**.
-- Each entry starts with a bold word: `**Creation**`, `**Update**`, `**Verification**`, `**Deprecation**`, `**Initialization**`, `**Migration**` (an OKF version or profile migration), `**Conflict**` (opening or resolving a conflict of the Conflict Log).
+- Each entry starts with a bold word: `**Creation**`, `**Update**`, `**Verification**`, `**Deprecation**`, `**Initialization**`, `**Migration**` (an OKF version or profile migration), `**Conflict**` (opening or resolving a conflict of the Conflict Log), `**Closing**` (an operational bundle closes, §2.2).
 
 ```markdown
 # Bundle history
@@ -388,6 +468,9 @@ okf_profile: "knowledge/3.0"
 | Declare or change the profile | `okf-capture` writes `base/profile.md` with the `domain-profile.md` template, and `okf-distill` proposes a change to it as an item of a change set; either applies a change only after a person approves it. It is a concept like any other, edited in place. Friction with the Domain Profile (a concept lint rejects, a value an enum lacks) is raised to a person, never resolved by relaxing an enum, a level or a rule to silence lint | `type: Domain Profile`, `status: draft`, `generated`, `sources`; a person may verify it; a change edits `base/profile.md` in place, with a new `generated.at` and an **Update** entry in `log.md`, and git keeps the earlier versions; a bundle that drops its profile sets `status: deprecated`, and lint then applies the built-in profile alone; a **Creation** entry when it is first written |
 | A new type emerges | A concept first fits an existing type; if one almost fits, a new type is proposed to a person; if none fits, the bundle declares a local one in `base/profile.md`, justified in its body. When a second bundle wants a local type, it is promoted to a shared profile by a pull request to that profile's repository, and the bundles `extends` it | The new type in `types`, with `extends`, `description` and `fields`; `generated.at` updated; an **Update** entry in `log.md` |
 | Audit the bundle | The audit mode of `okf-review`, optionally since a reference point the person names (a commit, a tag, or a date read as the last commit before it): `okf-lint`'s findings and metrics grouped by what a person must do; `okf_audit.py`'s git facts (read-only git), the concepts deleted or renamed since then (lint's exclusions applied; a rename not yet added to git found by identical content) that nothing records: a deletion needs a deprecation at the reference point or a **Deprecation** entry, or one saying it was deprecated, removed or superseded, added since to the root `log.md` or its directory's, and a rename an entry added since naming both paths; the audit's own entries never count (`DELETED_UNRECORDED`, `RENAMED_UNRECORDED`), skipped with a notice without a reference point or outside git; and the findings that need judgment (unwritten terms and systems, missing sections, unfootnoted claims, `sources` no footnote cites, contradictions outside the Conflict Log, links to retired targets, parts of a free-text record no ledger row accounts for). A person decides each finding: fix now, open question, conflict, accept as is or tracker; nothing changes before that, and a finding inside an Architecture Decision is never fixed by editing its body, except a committed secret, removed and rotated since that does not change the decision | Only what the person decided to fix changes, under that event's rules; one **Update** entry in `log.md` names the audit and its reference point and lists the findings accepted as is, which a later audit at the same reference point leaves out |
+| Open a unit of work | `okf-init` creates an instance of a kind in the kind's directory of the bundle that holds it (§2.2) | Its root `index.md` with `kind`, `state: open`, `parent`; `log.md` with an **Initialization** entry, `project.md`, the three layers; an **Update** entry in the parent's `log.md` |
+| Close a unit of work | `okf-distill` distills the instance's whole `base/` into its parent (promote, conflict or stays), its open conflicts and questions are resolved or carried up, and a person approves each step (§2.2) | The closing fragment in the instance; `state: closed`, `closed_at`; a **Closing** entry in the instance's `log.md`, an **Update** entry in the parent's |
+| Extract a closed unit of work | It moves to its own repository | `parent` removed; its `base/profile.md` `extends` the definition of its kind at `<path>@<commit>`; an **Update** entry in both bundles' `log.md` |
 | Any of the above | Log | An entry in the `log.md` of the affected directory and/or the root |
 
 ---
@@ -402,7 +485,7 @@ A `knowledge/` bundle is **OKF v0.2 conformant** if:
 
 It is **conformant with this profile** if, in addition:
 
-4. `knowledge/index.md` (with `okf_version`), `knowledge/log.md` and `knowledge/project.md` (`type: Project`) exist.
+4. `knowledge/index.md` (with `okf_version`), `knowledge/log.md` and `knowledge/project.md` (`type: Project`) exist, and so do the same three files at the root of each operational bundle.
 5. Every concept carries `generated.by` following the actor convention.
 6. Timestamps are ISO 8601 with an explicit offset; the exceptions are a Knowledge Fragment's `occurred_at` and an Open Question's `review_on`, which also accept a date `YYYY-MM-DD`.
 7. `status`, if present, is `draft | stable | deprecated`.
@@ -410,12 +493,13 @@ It is **conformant with this profile** if, in addition:
 9. File names are ASCII kebab-case.
 10. A Knowledge Fragment's `distillation_status`, if present, is `pending | distilled | conflict`.
 11. At most one concept per bundle has `type: Conflict Log`.
-12. In a `knowledge/3.0` bundle, concepts live only in `base/` (at any depth) or `fragments/`; the root holds no concept other than `project.md` and `conflict-log.md`. `projections/` is not checked.
+12. In a `knowledge/3.0` bundle, concepts live only in `base/` (at any depth) or `fragments/`; the root holds no concept other than `project.md` and `conflict-log.md`, and no directory other than the layers and the directories of the kinds the bundle may hold. `projections/` is not checked.
 13. An Open Question's `question_status`, if present, is `open | answered | dropped`.
 14. In a `knowledge/3.0` bundle, the Domain Profile is well formed (§4.1): it follows the schema (`PROFILE_INVALID`), no id is declared by two sources (`PROFILE_DUPLICATE_ID`), no extension redefines or removes what a higher layer defines or lowers a level (`PROFILE_REDEFINED`), every reference in `extends` can be read locally (`PROFILE_UNREADABLE`), and `type: Domain Profile` appears only at `base/profile.md` and in the profiles it reaches through `extends` by bundle paths (`PROFILE_MISPLACED`).
 15. Every concept meets the Domain Profile in force for its type and its directory (§4.1), at each requirement's declared level: required fields (`PROFILE_REQUIRED`), enums (`PROFILE_ENUM`), forbidden keys (`PROFILE_FORBIDDEN`), fixed keys (`PROFILE_FIXED`), rules (`PROFILE_RULE`), a type every family that covers it allows (`PROFILE_TYPE_NOT_ALLOWED`) and values of each field's declared type (`PROFILE_FIELD_TYPE`). Rules 10 and 13 and the Knowledge Fragment and Open Question warnings below are requirements of the built-in Domain Profile, reported under their own codes; its requirements without a code apply only in a bundle that has a `base/profile.md`.
+16. Every operational bundle (§2.2) declares a `kind` in force (`KIND_UNKNOWN`) that its parent allows, in its kind's directory (`KIND_NOT_HELD`); its `parent` is the bundle that holds it (`BAD_PARENT`); its `state` is one its kind allows (`BAD_STATE`); `closed_at` is present exactly when it is closed (`BAD_CLOSED_AT`); a closed one holds no open conflict and no open question (`CLOSED_LOOSE_END`); and its `depends_on` has the declared shape (`BAD_DEPENDS_ON`, a warning). Each instance meets rules 1–15 as a bundle of its own.
 
-`okf-lint` separates **errors** (1–5, 7, 8, 10–14, and the breaches of 15 at level `error`) from **warnings** (6, 9, the breaches of 15 at level `warn`, broken links, expired `stale_after`, concepts without `description`, out-of-date `index.md`, Knowledge Fragments missing `occurred_at`, `origin`, `participants` or `distillation_status` (`FRAGMENT_NO_FIELD`), `participants` not following the actor convention (`BAD_ACTOR`), `occurred_at` that is neither a date nor an ISO 8601 datetime with an offset (`BAD_ISO`), a `material` entry that is not a `{ path, sha256 }` map with a text `path` and a 64-hex `sha256` (`BAD_MATERIAL`), a `repository` that is not a `{ url, commit }` map with a text `url` and a full 40-hex `commit`, either case (`BAD_REPOSITORY`; a value YAML reads as a number is not text), Open Questions missing `owner`, `question_status` or `asked_in` (`QUESTION_NO_FIELD`), an Open Question's `owner` not following the actor convention (`BAD_ACTOR`), `question_status: answered` without `answered_by`, `review_on` in the past while `question_status` is `open`, `review_on` that is neither a date nor an ISO 8601 datetime with an offset (`BAD_ISO`), and, in a bundle that has a `base/profile.md`, a key no layer declares (`PROFILE_UNKNOWN_KEY`)). A `distillation_status` outside rule 10 is `BAD_DISTILLATION_STATUS`, and a `question_status` outside rule 13 is `BAD_QUESTION_STATUS`. A validator that fails under `--run-validators` is an error (`PROFILE_VALIDATOR`). A root `okf_version` other than `0.1` or `0.2` is a warning (`UNSUPPORTED_OKF_VERSION`, naming the value and the version inferred instead), never reported as missing. A `profile.md` ignored in a `knowledge/2.0` bundle and a validator not run are notices, like the outdated-profile notice of §9: neither warnings nor errors, and they never fail `--strict`.
+`okf-lint` separates **errors** (1–5, 7, 8, 10–14, the breaches of 15 at level `error`, and 16 but `BAD_DEPENDS_ON`) from **warnings** (6, 9, the breaches of 15 at level `warn`, `BAD_DEPENDS_ON`, broken links, expired `stale_after`, concepts without `description`, out-of-date `index.md`, Knowledge Fragments missing `occurred_at`, `origin`, `participants` or `distillation_status` (`FRAGMENT_NO_FIELD`), `participants` not following the actor convention (`BAD_ACTOR`), `occurred_at` that is neither a date nor an ISO 8601 datetime with an offset (`BAD_ISO`), a `material` entry that is not a `{ path, sha256 }` map with a text `path` and a 64-hex `sha256` (`BAD_MATERIAL`), a `repository` that is not a `{ url, commit }` map with a text `url` and a full 40-hex `commit`, either case (`BAD_REPOSITORY`; a value YAML reads as a number is not text), Open Questions missing `owner`, `question_status` or `asked_in` (`QUESTION_NO_FIELD`), an Open Question's `owner` not following the actor convention (`BAD_ACTOR`), `question_status: answered` without `answered_by`, `review_on` in the past while `question_status` is `open`, `review_on` that is neither a date nor an ISO 8601 datetime with an offset (`BAD_ISO`), and, in a bundle that has a `base/profile.md`, a key no layer declares (`PROFILE_UNKNOWN_KEY`)). A `distillation_status` outside rule 10 is `BAD_DISTILLATION_STATUS`, and a `question_status` outside rule 13 is `BAD_QUESTION_STATUS`. A validator that fails under `--run-validators` is an error (`PROFILE_VALIDATOR`). A root `okf_version` other than `0.1` or `0.2` is a warning (`UNSUPPORTED_OKF_VERSION`, naming the value and the version inferred instead), never reported as missing. A `profile.md` ignored in a `knowledge/2.0` bundle and a validator not run are notices, like the outdated-profile notice of §9: neither warnings nor errors, and they never fail `--strict`.
 
 **What lint does not judge.** What `.okfignore` matches and a nested bundle (§2) are outside the bundle: no rule applies to them. A **non-OKF directory** is a directory other than the root and its layer directories that has no `index.md` and none of whose Markdown files has a frontmatter with a key of the spec (§3.1: `type`, `title`, `description`, `generated`, `verified`, `sources`, `status`, `tags`, `stale_after`, `resource`, `timestamp` and the other v0.2 keys): a file with no frontmatter, or with only keys such as a site generator's `layout:`. It is not OKF content: rules 1 and 2 do not apply to its files. Inside `fragments/` or `base/` it is one notice, `<directory>/ is not OKF: N Markdown files`. Outside them, in a `knowledge/3.0` bundle, rule 12 still applies, since the root keeps only what is about the bundle as a whole (ADR-0018 decision 3): it is one `PROFILE_OUTSIDE_LAYER` error naming the directory and its number of files, in place of one per file; with `--no-profile`, `knowledge/2.0` or a foreign profile it is the notice. A directory that mixes OKF concepts and plain files is checked file by file, and a plain file in it still breaks rule 1. A file whose frontmatter cannot be parsed counts as OKF, so it keeps its error.
 
@@ -424,7 +508,7 @@ It is **conformant with this profile** if, in addition:
 | Rule layer | What it checks | Rules |
 |---|---|---|
 | `spec` | The OKF spec v0.1/v0.2: everything `okf-lint --no-profile` still checks | 1–3, 6 (but `occurred_at` and `review_on`), 7, 8, the form of `generated` and `verified` (`BAD_GENERATED`, `BAD_VERIFIED`, `BAD_ACTOR`), `index.md`/`log.md`, links, `stale_after`, `description`/`title`, versions (`LEGACY_*`, `V02_FIELD_IN_V01`, `MIXED_VERSIONS`, `VERSION_MISMATCH`, `UNSUPPORTED_OKF_VERSION`), `SECRET_IN_BUNDLE` |
-| `okf-profile` | The OKF profile itself, `knowledge/3.0` or `knowledge/2.0` | 4, 5 (that `generated` is there: `PROFILE_NO_GENERATED`, `PROFILE_NO_TIMESTAMP` in 0.1), 9, 11, 12, the root `okf_version` (`NO_OKF_VERSION`, `PROFILE_OKF_VERSION`), the audit checks (`FRAGMENT_UNCITED`, `SECTION_EMPTY`, `VERIFIED_STALE`, `FRAGMENT_MATERIAL_CHANGED`, `FRAGMENT_NO_LEDGER`, `LEDGER_GAP`) |
+| `okf-profile` | The OKF profile itself, `knowledge/3.0` or `knowledge/2.0` | 4, 5 (that `generated` is there: `PROFILE_NO_GENERATED`, `PROFILE_NO_TIMESTAMP` in 0.1), 9, 11, 12, 16, the root `okf_version` (`NO_OKF_VERSION`, `PROFILE_OKF_VERSION`), the audit checks (`FRAGMENT_UNCITED`, `SECTION_EMPTY`, `VERIFIED_STALE`, `FRAGMENT_MATERIAL_CHANGED`, `FRAGMENT_NO_LEDGER`, `LEDGER_GAP`) |
 | `domain-profile` | The Domain Profile in force (§4.1), the built-in one included | 10, 13, 14, 15, the Knowledge Fragment and Open Question warnings, `PROFILE_VALIDATOR` |
 
 The summary gives the errors and warnings of each rule layer beside the totals (`spec 0/0 · okf-profile 0/1 · domain-profile 0/0`, errors/warnings), and `--json` gives them under `by_layer`. A root `okf_profile` other than `knowledge/2.0` and `knowledge/3.0` is a **foreign OKF profile**, one okf-builder does not ship: its `spec` checks are reported as usual, and the `okf-profile` and `domain-profile` checks (computed as for a `knowledge/2.0` bundle, the built-in Domain Profile without the bundle's own) are not warnings or errors but one notice naming the profile and how many findings were skipped; `--json` lists them under `skipped` with their codes, and they never fail `--strict`.
@@ -449,7 +533,7 @@ The summary gives the errors and warnings of each rule layer beside the totals (
 
 1. Read `knowledge/index.md` → identify the layers relevant to the question.
 2. Read `knowledge/base/index.md` → identify the typed directories relevant to the question.
-3. Read the directory's `index.md` → pick concepts by `description`; go to `fragments/` only when the question is about what was said and when.
+3. Read the directory's `index.md` → pick concepts by `description`; go to `fragments/` only when the question is about what was said and when. A question about one unit of work (a request, an incident) goes to its bundle, through its kind's directory, and a question about how such work is done stays in the domain bundle's `base/`.
 4. Open concepts; follow links only if the question requires it.
 5. When answering, cite the concept's path and its trust level (`verified`, `status`, `stale_after`).
 6. If the answer uncovers knowledge that is missing or wrong, propose a capture (`okf-capture`) instead of leaving it in the chat.
