@@ -3,8 +3,9 @@ type: Architecture View
 title: Single source and per-platform packages
 description: How a single set of skills and scripts reaches Claude Code, Claude Cowork, GitHub Copilot, Gemini CLI and Microsoft 365 Copilot.
 tags: [architecture, containers]
-status: draft
+status: stable
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+verified: { by: human:jisequilla, at: 2026-11-10T22:37:33Z }
 ---
 
 # View
