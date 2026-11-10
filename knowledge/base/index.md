@@ -2,7 +2,7 @@
 
 # Domain Profile
 
-* [Domain Profile of okf-builder](profile.md) - The taxonomy of this repository's own knowledge bundle, on top of the built-in Domain Profile; one local type, Doctrine, for how the repo works, with the evidence that taught each principle. _(draft)_
+* [Domain Profile of okf-builder](profile.md) - The taxonomy of this repository's own knowledge bundle, on top of the built-in Domain Profile; one local type, Doctrine, for how the repo works, with the evidence that taught each principle.
 
 # Subdirectories
 

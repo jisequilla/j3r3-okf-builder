@@ -3,7 +3,7 @@ type: Domain Profile
 title: Domain Profile of okf-builder
 description: The taxonomy of this repository's own knowledge bundle, on top of the built-in Domain Profile; one local type, Doctrine, for how the repo works, with the evidence that taught each principle.
 tags: [profile, taxonomy, doctrine]
-status: draft
+status: stable
 extends: []
 types:
   Doctrine:
@@ -12,6 +12,7 @@ types:
     fields:
       owner: { type: string, level: warn, note: Who answers for the doctrine (ADR-0027) }
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-05T04:06:24Z }
+verified: { by: human:jisequilla, at: 2026-11-10T22:38:51Z }
 sources:
   - { id: adr-0028, resource: /base/decisions/ADR-0028-where-things-go.md, title: "ADR-0028: Where things go" }
   - { id: session, resource: /fragments/2026-11-04-audit-build-session.md, title: "2026-11-04 · Building the knowledge audit and v0.9.0 with agent workflows" }

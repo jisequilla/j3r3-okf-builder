@@ -4,9 +4,10 @@ title: Building with agents
 description: The principles by which this repo builds changes with agent workflows, each with why it holds and the run that taught it.
 resource: /.claude/workflows/okf-layer-ticket.js
 tags: [doctrine, agents, workflow, process]
-status: draft
+status: stable
 owner: human:jisequilla
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T19:20:00Z }
+verified: { by: human:jisequilla, at: 2026-11-10T22:38:26Z }
 sources:
   - { id: adr-0009, resource: /base/decisions/ADR-0009-build-in-layers-and-tickets.md, title: "ADR-0009: Build multi-stage changes in layers and delegated tickets" }
   - { id: adr-0028, resource: /base/decisions/ADR-0028-where-things-go.md, title: "ADR-0028: Where things go" }
