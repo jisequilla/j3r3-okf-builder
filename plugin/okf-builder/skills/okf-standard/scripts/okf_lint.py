@@ -42,6 +42,15 @@ two rule layers find is one notice and is listed under "skipped". Lint does not
 read what .okfignore at the root matches ("ignored"), a nested bundle (a
 subdirectory whose index.md declares okf_version) or a non-OKF directory (no
 index.md, no Markdown file with a type or a title); each of the last two is a notice.
+
+A nested bundle in the directory of a kind the bundle holds (standard §2.2) is
+an operational bundle: lint checks it as a bundle of its own, against the
+Domain Profile of the domain bundle at the top of its tree, at any depth, its
+findings named by its path (--no-nested skips them). Rule 16 checks the kind,
+state, parent, closed_at and depends_on of each root index.md and a closed
+bundle's open questions and conflicts: KIND_UNKNOWN, KIND_NOT_HELD, BAD_PARENT,
+BAD_STATE, BAD_CLOSED_AT, CLOSED_LOOSE_END and BAD_DEPENDS_ON (a warning). An
+operational bundle linted on its own follows its parent up to the domain bundle.
 """
 from __future__ import annotations
 
@@ -49,6 +58,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import shlex
 import subprocess
@@ -87,15 +97,17 @@ from okf_common import (  # noqa: E402
     is_iso,
     is_iso_date_or_datetime,
     resolve_link,
+    root_frontmatter,
     table_cells,
     scan_body,
     scan_bundle,
     to_dt,
     walk_bundle,
 )
-from okf_profile import (BUILTIN, DOMAIN_PROFILE, IGNORED_20_NOTICE, OWN_REL, PROFILE_KEYS, SPEC_KEYS,  # noqa: E402
-                         Resolved, _lvl, alias_keys, ancestors, bundle_path, canonical_type, concept_force, families_at,
-                         format_in_force, ignored_in_20, in_force, is_a, load_profile, misplaced, resolve_aliases)
+from okf_profile import (BUILTIN, DOMAIN_BUNDLE, DOMAIN_PROFILE, IGNORED_20_NOTICE, OWN_REL, PROFILE_KEYS,  # noqa: E402
+                         SPEC_KEYS, Resolved, _lvl, alias_keys, ancestors, bundle_path, canonical_kind, canonical_type,
+                         concept_force, families_at, format_in_force, ignored_in_20, in_force, is_a, kind_in_force,
+                         load_profile, misplaced, operational_kinds, resolve_aliases)
 
 
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
@@ -111,7 +123,9 @@ OKF_PROFILE_CODES = frozenset({
     "PROFILE_PROJECT_TYPE", "PROFILE_NO_GENERATED", "PROFILE_NO_TIMESTAMP", "PROFILE_OUTSIDE_LAYER",
     "PROFILE_MANY_PROJECTS", "PROFILE_MANY_CONFLICT_LOGS",
     "FRAGMENT_UNCITED", "SECTION_EMPTY", "VERIFIED_STALE",  # the mechanical audit checks (check_audit)
-    "FRAGMENT_MATERIAL_CHANGED", "FRAGMENT_NO_LEDGER", "LEDGER_GAP"})
+    "FRAGMENT_MATERIAL_CHANGED", "FRAGMENT_NO_LEDGER", "LEDGER_GAP",
+    "KIND_UNKNOWN", "KIND_NOT_HELD", "BAD_PARENT", "BAD_STATE", "BAD_CLOSED_AT", "CLOSED_LOOSE_END",  # rule 16
+    "BAD_DEPENDS_ON"})
 SHIPPED_PROFILES = (PROFILE_20, PROFILE_30)
 
 
@@ -125,6 +139,7 @@ class Report:
         self.concepts = 0
         self.scope: str | None = None  # the rule layer of the checks running, when the call site fixes it
         self.metrics: dict = {}  # the --json metrics (audit_metrics)
+        self.instances: list[dict] = []  # the operational bundles linted with this one (standard §2.2), any depth
 
     def add(self, level: str, code: str, path: str, msg: str, source: str | None = None,
             layer: str | None = None, line: int | None = None) -> None:
@@ -622,9 +637,10 @@ def outside_layers(not_okf: list[tuple[str, int]]) -> list[tuple[str, int]]:
 
 
 def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None,
-                 not_okf: list[tuple[str, int]] = ()) -> None:
+                 not_okf: list[tuple[str, int]] = (), kind_dirs: tuple = ()) -> None:
     """knowledge/3.0: concepts live in base/ or fragments/; the root holds project.md and the Conflict Log.
-    not_okf: the non-OKF directories of the scan; each one outside the layers is one error for all its files."""
+    not_okf: the non-OKF directories of the scan; each one outside the layers is one error for all its files.
+    kind_dirs: the directories of the kinds the bundle holds (standard §2.2); each may hold only its index.md."""
     for rel, n in outside_layers(list(not_okf)):
         rep.error("PROFILE_OUTSIDE_LAYER", rel,
                   f"profile {PROFILE_30}: {rel} is not a layer and holds {n} Markdown file{'s' if n != 1 else ''} "
@@ -637,6 +653,8 @@ def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None,
                 continue
             rep.error("PROFILE_OUTSIDE_LAYER", d.rel,
                       f"profile {PROFILE_30}: a concept at the root must live in base/ or fragments/")
+        elif parts[0] + "/" in kind_dirs and len(parts) == 2 and parts[1] == "index.md":
+            continue
         elif parts[0] not in LAYER_DIRS:
             rep.error("PROFILE_OUTSIDE_LAYER", d.rel,
                       f"profile {PROFILE_30}: {parts[0]}/ is not a layer; move it under base/")
@@ -1132,11 +1150,13 @@ def foreign_profile_notice(name: str, unread: list[str]) -> str:
             "checks only, so the Domain Profile's checks (structural ones included) do not run")
 
 
-def profile_structure(bundle: Path, docs: list[Doc]) -> tuple[Resolved, list[dict], list[str]]:
-    """The Domain Profile in force, its structural findings (§7 rule 14) and its notices; lint and --profiles share it."""
+def profile_structure(bundle: Path, docs: list[Doc], domain: Resolved | None = None
+                      ) -> tuple[Resolved, list[dict], list[str]]:
+    """The Domain Profile in force, its structural findings (§7 rule 14) and its notices; lint and --profiles share it.
+    domain: for an operational bundle, the Domain Profile of the domain bundle at the top of its tree (§2.2)."""
     declared = declared_profile(bundle)
     if declared == PROFILE_30:
-        prof = load_profile(bundle, read_own=True)
+        prof = load_profile(bundle, read_own=True, domain=domain)
         return prof, prof.findings + misplaced(docs, prof), []
     if declared not in (None, PROFILE_20):  # a foreign profile: lint skips what it finds beyond the spec
         return load_profile(bundle, read_own=False), [], [foreign_profile_notice(declared, ignored_in_20(docs))]
@@ -1255,7 +1275,7 @@ def run_validators(bundle: Path, docs: list[Doc], prof: Resolved, rep: Report, r
                 f"validator {v['name']} failed ({why})" + (f": {out}" if out else ""), v["source"], DOMAIN)
 
 
-def scan_notices(scan, reported: list[tuple[str, int]] = ()) -> list[str]:
+def scan_notices(scan, reported: list[tuple[str, int]] = (), linted: set = frozenset()) -> list[str]:
     """One notice for what .okfignore excludes, one per reserved path it cannot exclude, one per nested bundle and
     one per non-OKF directory but those in reported (lint gives them an error instead); lint and --profiles both
     print them, so a check on a file the scan left out is never skipped in silence."""
@@ -1266,6 +1286,8 @@ def scan_notices(scan, reported: list[tuple[str, int]] = ()) -> list[str]:
     for rel in scan.reserved:
         out.append(f"cannot ignore {rel}: reserved" + (f", it holds {OWN_REL}" if rel.endswith("/") else ""))
     for rel in scan.nested:
+        if rel in linted:
+            continue
         out.append(f"nested bundle {rel} skipped: its index.md declares its own okf_version; lint it on its own")
     for rel, n in scan.not_okf:
         if (rel, n) in reported:
@@ -1274,11 +1296,231 @@ def scan_notices(scan, reported: list[tuple[str, int]] = ()) -> list[str]:
                    "index.md, skipped")
     return out
 
+# --------------------------------------------------------------------------
+# Domain and operational bundles (standard §2.2, §7 rule 16; ADR-0038)
+# --------------------------------------------------------------------------
+@dataclass
+class Tree:
+    """Where an operational bundle sits: the Domain Profile of the domain bundle at the top, the bundle that holds it,
+    the kinds that bundle allows and the kind whose directory it is in (None when it is linted on its own and its
+    directory names no kind)."""
+    domain: Resolved
+    parent: Path
+    allowed: list
+    expected: str | None
+
+
+MAX_DEPTH = 32  # how many parents lint follows up from a bundle linted on its own
+
+
+def _a(word: str) -> str:
+    return ("an " if word[:1].lower() in "aeiou" else "a ") + word
+
+
+def kind_of(fm: dict, prof: Resolved | None) -> str | None:
+    """None for a domain bundle (no kind, or kind: Domain Bundle); else the declared kind id, or the raw value when no
+    kind in force matches it."""
+    raw = fm.get("kind")
+    if raw is None or raw == DOMAIN_BUNDLE:
+        return None
+    return canonical_kind(prof, raw) or str(raw)
+
+
+def held_kinds(fm: dict, prof: Resolved) -> list:
+    """The kinds a bundle may hold: every operational kind of a domain bundle, the kinds its kind holds otherwise."""
+    k = kind_of(fm, prof)
+    if k is None:
+        return operational_kinds(prof)
+    if k not in prof.kinds:
+        return []
+    out, ops = [], operational_kinds(prof)
+    for h in kind_in_force(prof, k)["holds"]:
+        ch = canonical_kind(prof, h)
+        if ch in ops and ch not in out:  # an abstract or unknown kind is PROFILE_INVALID; an alias is the same kind
+            out.append(ch)
+    return out
+
+
+def find_tree(bundle: Path, rep: Report) -> Tree | None:
+    """The tree of an operational bundle linted on its own, followed up through each `parent` to the domain bundle.
+    None for a domain bundle and for an extracted one (no parent); a broken chain is BAD_PARENT."""
+    fm = root_frontmatter(bundle)
+    if kind_of(fm, None) is None or fm.get("parent") is None:
+        return None
+    chain, cur = [], bundle
+    for _ in range(MAX_DEPTH):
+        cfm = root_frontmatter(cur)
+        if kind_of(cfm, None) is None:
+            break
+        par = cfm.get("parent")
+        if not isinstance(par, str) or not par.strip():
+            rep.error("BAD_PARENT", "index.md", f"{cur} has no parent, so the domain bundle of this tree cannot be found")
+            return None
+        nxt = (cur / par).resolve()
+        if not (nxt / "index.md").is_file() or root_frontmatter(nxt).get("okf_version") is None:
+            rep.error("BAD_PARENT", "index.md", f"parent {par} of {cur.name} is not a bundle (no index.md declaring "
+                      "okf_version)")
+            return None
+        chain.append(nxt)
+        cur = nxt
+    else:
+        rep.error("BAD_PARENT", "index.md", f"no domain bundle within {MAX_DEPTH} parents")
+        return None
+    domain = load_profile(cur, read_own=declared_profile(cur) == PROFILE_30)
+    parent = chain[0]
+    allowed = held_kinds(root_frontmatter(parent), domain)
+    expected = next((k for k in allowed if bundle.parent.resolve() == (parent / kind_in_force(domain, k)["directory"])
+                     .resolve()), None)
+    return Tree(domain, parent, allowed, expected)
+
+
+def _open_conflicts(doc: Doc) -> int:
+    """Rows of a Conflict Log's table whose State is open or proposed."""
+    n, col = 0, None
+    for line in doc.body.splitlines():
+        if not line.lstrip().startswith("|"):
+            col = None if not line.strip() else col
+            continue
+        cells = [c.strip().strip("`*").lower() for c in line.strip().strip("|").split("|")]
+        if col is None:
+            col = cells.index("state") if "state" in cells else -1
+            continue
+        if col < 0 or TABLE_SEP_RE.match(line.strip()) or col >= len(cells):
+            continue
+        n += cells[col] in ("open", "proposed")
+    return n
+
+
+def check_bundle_kind(bundle: Path, fm: dict, prof: Resolved, tree: Tree | None, docs: list[Doc],
+                      rep: Report) -> None:
+    """Rule 16: the kind, state, parent, closed_at and depends_on of the root index.md, and a closed bundle's loose ends."""
+    rep.scope = OKF_PROFILE
+    kind = kind_of(fm, prof)
+    if kind is None:
+        for key, code in (("state", "BAD_STATE"), ("parent", "BAD_PARENT"), ("closed_at", "BAD_CLOSED_AT")):
+            if key in fm:
+                rep.error(code, "index.md", f"a domain bundle declares no {key}; only an operational bundle has one "
+                          "(standard §2.2)")
+        if tree is not None:
+            rep.error("KIND_UNKNOWN", "index.md", f"a bundle in the directory of kind {tree.expected} declares no kind")
+    else:
+        if kind not in operational_kinds(prof):
+            known = ", ".join(operational_kinds(prof)) or "none"
+            hint = ("; a bundle without parent is extracted and pins its kind's definition with extends in its "
+                    "base/profile.md" if tree is None and "parent" not in fm else "")
+            rep.error("KIND_UNKNOWN", "index.md", f"kind '{fm.get('kind')}' is no operational kind in force "
+                      f"(kinds with a directory: {known}){hint}")
+        elif tree is not None and kind != tree.expected:
+            where = (f"the directory of kind {tree.expected}" if tree.expected
+                     else f"{bundle.parent.name}/, which no kind its parent holds names")
+            rep.error("KIND_NOT_HELD", "index.md", f"{_a(kind)} lives in {where}; move it to "
+                      f"{kind_in_force(prof, kind)['directory']} of a bundle that holds {kind}")
+        if tree is not None and kind in prof.kinds and kind not in tree.allowed:
+            rep.error("KIND_NOT_HELD", "index.md", f"its parent does not hold {kind} (it holds: "
+                      f"{', '.join(tree.allowed) or 'nothing'})")
+        par = fm.get("parent")
+        if tree is not None:
+            if not isinstance(par, str) or not par.strip():
+                rep.error("BAD_PARENT", "index.md", f"an instance in a tree declares parent: the bundle that holds it "
+                          f"({os.path.relpath(tree.parent, bundle)})")
+            elif (bundle / par).resolve() != tree.parent.resolve():
+                rep.error("BAD_PARENT", "index.md", f"parent {par} is not the bundle that holds it "
+                          f"({os.path.relpath(tree.parent, bundle)})")
+        state = fm.get("state")
+        states = kind_in_force(prof, kind)["states"] if kind in prof.kinds else ["open", "closed"]
+        if state is None:
+            rep.error("BAD_STATE", "index.md", f"an operational bundle declares state ({' | '.join(states)})")
+        elif state not in states:
+            rep.error("BAD_STATE", "index.md", f"state '{state}' is not one of {kind}'s: {' | '.join(states)}")
+        closed_at = fm.get("closed_at")
+        if state == "closed":
+            if closed_at is None:
+                rep.error("BAD_CLOSED_AT", "index.md", "a closed bundle declares closed_at, ISO 8601 with an offset")
+            elif not is_iso(closed_at):
+                rep.error("BAD_CLOSED_AT", "index.md", f"closed_at '{closed_at}' is not ISO 8601 with an offset")
+            questions = [d.rel for d in docs if canonical_type(prof, (d.frontmatter or {}).get("type")) == "Open Question"
+                         and (d.frontmatter or {}).get("question_status") == "open"]
+            for q in questions:
+                rep.error("CLOSED_LOOSE_END", q, "a closed bundle holds an open question: answer or drop it, or carry it "
+                          "up into the parent with a link back (standard §2.2)")
+            for d in docs:
+                if canonical_type(prof, (d.frontmatter or {}).get("type")) == "Conflict Log":
+                    n = _open_conflicts(d)
+                    if n:
+                        rep.error("CLOSED_LOOSE_END", d.rel, f"a closed bundle holds {n} open or proposed conflict"
+                                  f"{'s' if n != 1 else ''}: resolve or dismiss each, or carry it up into the parent")
+        elif closed_at is not None:
+            rep.error("BAD_CLOSED_AT", "index.md", f"closed_at on a bundle whose state is {state}")
+    deps = fm.get("depends_on")
+    if deps is not None:
+        why = None
+        if not isinstance(deps, list):
+            why = "a list of { bundle, repo?, ref? }"
+        else:
+            for n, e in enumerate(deps):
+                if not isinstance(e, dict) or not isinstance(e.get("bundle"), str) or not e["bundle"].strip():
+                    why = f"depends_on[{n}] needs a text bundle"
+                elif set(e) - {"bundle", "repo", "ref"}:
+                    why = f"depends_on[{n}]: unknown key(s) {', '.join(sorted(set(e) - {'bundle', 'repo', 'ref'}))}"
+                elif any(k in e and not isinstance(e[k], str) for k in ("repo", "ref")):
+                    why = f"depends_on[{n}]: repo and ref are text"
+                if why:
+                    break
+        if why:
+            rep.warn("BAD_DEPENDS_ON", "index.md", why)
+    rep.scope = None
+
+
+def lint_instances(bundle: Path, fm: dict, prof: Resolved, tree: Tree | None, scan, rep: Report, profile: bool,
+                   version: str, validators: bool) -> set:
+    """Lints each instance in the directories of the kinds this bundle holds, as a bundle of its own, and merges its
+    findings with its path in front. Returns the nested bundles it linted (scan.nested form). A nested bundle that
+    declares a kind but sits outside those directories is KIND_NOT_HELD."""
+    domain = tree.domain if tree is not None else prof
+    allowed = held_kinds(fm, prof)
+    linted: set = set()
+    for k in allowed:
+        d = kind_in_force(domain, k)["directory"]
+        here = bundle / d
+        if not here.is_dir():
+            continue
+        for sub in sorted(p for p in here.iterdir() if p.is_dir() and not p.name.startswith(".")):
+            rel = f"{d}{sub.name}/"
+            if rel not in scan.nested:
+                continue
+            linted.add(rel)
+            child, _, _ = lint(sub, profile, version, validators, True, Tree(domain, bundle, allowed, k))
+            for i in child.items:
+                rep.items.append({**i, "path": rel + i["path"]})
+            rep.notices += [f"{rel}: {n}" for n in child.notices]
+            rep.ignored += [rel + x for x in child.ignored]
+            rep.skipped += [{**i, "path": rel + i["path"]} for i in child.skipped]
+            rep.concepts += child.concepts
+            cfm = root_frontmatter(sub)
+            rep.instances.append({"path": rel, "kind": kind_of(cfm, domain), "state": cfm.get("state"),
+                                  "concepts": child.concepts, "errors": len(child.errors), "warnings": len(child.warns)})
+            rep.instances += [{**i, "path": rel + i["path"]} for i in child.instances]
+    for rel in scan.nested:
+        if rel in linted:
+            continue
+        nfm = root_frontmatter(bundle / rel.rstrip("/"))
+        nk = kind_of(nfm, domain)
+        if nk is not None:
+            linted.add(rel)
+            rep.add("ERROR", "KIND_NOT_HELD", rel + "index.md", f"{_a(nk)} outside the directories of the kinds this "
+                    f"bundle holds ({', '.join(allowed) or 'none'}); it is not checked", layer=OKF_PROFILE)
+    return linted
+
 
 def lint(bundle: Path, profile: bool = True, version: str = "auto",
-         validators: bool = False) -> tuple[Report, str, str]:
-    """validators: run the Domain Profile's validator commands (--run-validators); otherwise each one is a notice."""
+         validators: bool = False, nested: bool = True, tree: Tree | None = None) -> tuple[Report, str, str]:
+    """validators: run the Domain Profile's validator commands (--run-validators); otherwise each one is a notice.
+    nested: also lint the operational bundles this one holds (standard §2.2); --no-nested gives a notice per kind
+    directory instead. tree: where this bundle sits when lint reached it from the bundle that holds it."""
     rep = Report()
+    top = tree is None
+    if profile and top:
+        tree = find_tree(bundle, rep)
     now = datetime.now(timezone.utc)
     scan = scan_bundle(bundle)
     docs = scan.docs
@@ -1288,14 +1530,30 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
     declared = declared_profile(bundle)
     foreign = declared not in (None, *SHIPPED_PROFILES)
     layered = profile and declared == PROFILE_30
-    rep.notices += scan_notices(scan, outside_layers(scan.not_okf) if layered else [])
     pname = declared or PROFILE_20
     prof = None  # --no-profile: no Domain Profile, the built-in one included
+    linted: set = set()
     if profile:
         rep.profile_outdated = pname == PROFILE_20
-        prof, findings, notices = profile_structure(bundle, docs)
+        prof, findings, notices = profile_structure(bundle, docs, tree.domain if tree is not None else None)
+        root_fm = root_frontmatter(bundle)
+        check_bundle_kind(bundle, root_fm, prof, tree, docs, rep)
+        if nested:
+            linted = lint_instances(bundle, root_fm, prof, tree, scan, rep, profile, version, validators)
+        else:
+            dom = tree.domain if tree is not None else prof
+            for k in held_kinds(root_fm, prof):
+                d = kind_in_force(dom, k)["directory"]
+                n = sum(1 for r in scan.nested if r.startswith(d) and r.count("/") == d.count("/") + 1)
+                if n:
+                    linted |= {r for r in scan.nested if r.startswith(d) and r.count("/") == d.count("/") + 1}
+                    rep.notices.append(f"{d}: {n} {k} instance{'s' if n != 1 else ''} not checked (--no-nested)")
+    rep.notices[:0] = scan_notices(scan, outside_layers(scan.not_okf) if layered else [], linted)
+    if profile:
         if layered:
-            check_layers(docs, rep, prof, scan.not_okf)
+            dom = tree.domain if tree is not None else prof
+            check_layers(docs, rep, prof, scan.not_okf,
+                         tuple(kind_in_force(dom, k)["directory"] for k in held_kinds(root_fm, prof)))
         for i in findings:
             rep.add(i["level"], i["code"], i["path"], i["message"], layer=DOMAIN)
         if not foreign:  # skip_profile_layers gives a foreign profile its one notice
@@ -1374,6 +1632,8 @@ def main(argv=None) -> int:
                          "file or directory inside the bundle; default /) and which source declared each item")
     ap.add_argument("--run-validators", action="store_true",
                     help="run the commands the Domain Profile's validator entries declare (never run without it)")
+    ap.add_argument("--no-nested", action="store_true",
+                    help="do not lint the operational bundles in the directories of the kinds this bundle holds")
     args = ap.parse_args(argv)
 
     bundle = Path(args.bundle).resolve() if args.bundle else find_bundle()
@@ -1393,14 +1653,14 @@ def main(argv=None) -> int:
         return 1 if findings else 0
 
     rep, version, origin = lint(bundle, profile=not args.no_profile, version=args.okf_version,
-                                validators=args.run_validators)
+                                validators=args.run_validators, nested=not args.no_nested)
     n_docs = rep.concepts
     by_layer = rep.by_layer()
     if args.json:
         print(json.dumps(redact_leaks({"bundle": str(bundle), "okf_version": version, "version_origin": origin, "concepts": n_docs, "errors": len(rep.errors),
                           "warnings": len(rep.warns), "by_layer": by_layer, "profile_outdated": rep.profile_outdated,
                           "notices": rep.notices, "findings": rep.items, "skipped": rep.skipped, "ignored": rep.ignored,
-                          "metrics": rep.metrics}),
+                          "metrics": rep.metrics, "instances": rep.instances}),
                          ensure_ascii=False, indent=2))
     else:
         for i in rep.items:
@@ -1411,7 +1671,9 @@ def main(argv=None) -> int:
             print(f"NOTICE {OUTDATED_NOTICE}")
         verdict = "CONFORMANT" if not rep.errors else "NOT CONFORMANT"
         layers = " · ".join(f"{x} {c['errors']}/{c['warnings']}" for x, c in by_layer.items())
-        print(f"\n{mask_leaks(str(bundle))}: OKF {version} ({origin}) · {n_docs} concepts · {len(rep.errors)} errors · "
+        inst = f" ({len(rep.instances)} operational bundle{'s' if len(rep.instances) != 1 else ''} included)" \
+            if rep.instances else ""
+        print(f"\n{mask_leaks(str(bundle))}: OKF {version} ({origin}) · {n_docs} concepts{inst} · {len(rep.errors)} errors · "
               f"{len(rep.warns)} warnings ({layers}) → {verdict}")
     if rep.errors or (args.strict and rep.warns):
         return 1
@@ -3006,13 +3268,21 @@ def test_every_okf_profile_code_names_the_okf_profile_layer(tmp_path):
     c = _audit_bundle(tmp_path / "c")
     d = _material_bundle(tmp_path / "d", changed=True)
     e = _distilled_bundle(tmp_path / "e")
+    question = ("---\ntype: Open Question\ntitle: Q\ndescription: Q.\nowner: human:x\nquestion_status: open\n"
+                "asked_in: /fragments/x.md\n" + _TGEN + "---\n\n# Question\n\nWhy?\n")
+    f = _domain(tmp_path / "f", {
+        "requests/unknown": "kind: Ticket\nstate: open\nparent: ../..\n",
+        "requests/bad-parent": "kind: Request\nstate: done\nparent: ..\ndepends_on: [x]\n",
+        "requests/loose": ("kind: Request\nstate: closed\nparent: ../..\n", {"base/questions/why.md": question}),
+        "incidents/misplaced": _OPEN})
     items = (lint(a)[0].items + lint(b, version="0.1")[0].items + lint(c)[0].items + lint(d)[0].items
-             + lint(e)[0].items)
+             + lint(e)[0].items + lint(f)[0].items)
     emitted = {"NAME_KEBAB", "NO_OKF_VERSION", "PROFILE_OKF_VERSION", "PROFILE_NO_INDEX", "PROFILE_NO_LOG",
                "PROFILE_NO_PROJECT", "PROFILE_PROJECT_TYPE", "PROFILE_NO_GENERATED", "PROFILE_NO_TIMESTAMP",
                "PROFILE_OUTSIDE_LAYER", "PROFILE_MANY_PROJECTS", "PROFILE_MANY_CONFLICT_LOGS",
                "FRAGMENT_UNCITED", "SECTION_EMPTY", "VERIFIED_STALE", "FRAGMENT_MATERIAL_CHANGED",
-               "FRAGMENT_NO_LEDGER", "LEDGER_GAP"}
+               "FRAGMENT_NO_LEDGER", "LEDGER_GAP", "KIND_UNKNOWN", "KIND_NOT_HELD", "BAD_PARENT", "BAD_STATE",
+               "BAD_CLOSED_AT", "CLOSED_LOOSE_END", "BAD_DEPENDS_ON"}
     assert emitted <= {i["code"] for i in items} and OKF_PROFILE_CODES == emitted
     assert {i["code"] for i in items if i["layer"] == "okf-profile"} == emitted
     assert all(i["layer"] == "okf-profile" for i in items if i["code"] in emitted)
@@ -4038,6 +4308,195 @@ def test_the_examples_material_is_hashed_and_one_changed_byte_is_an_error(tmp_pa
     rep = lint(k)[0]
     assert [(i["level"], i["code"], i["path"]) for i in rep.items if i["level"] == "ERROR"] == [
         ("ERROR", "FRAGMENT_MATERIAL_CHANGED", "fragments/2026-11-03-refund-topic-retention-chat.md")]
+
+
+# --- domain and operational bundles (standard §2.2, §7 rule 16; ADR-0038) ---
+_KINDS_PROFILE = ("kinds:\n"
+                  "  Request: { extends: Operational Bundle, description: A request, directory: requests/, "
+                  "states: [in-review] }\n"
+                  "  Incident: { extends: Operational Bundle, description: An incident, directory: incidents/ }\n"
+                  "  Release: { extends: Operational Bundle, description: A release, directory: releases/, "
+                  "holds: [Request] }\n")
+_TGEN = "generated: { by: okf-builder/test, at: 2026-11-10T12:00:00Z }\n"
+
+
+def _tree_bundle(root: Path, keys: str = "", kind_dirs: tuple = (), profile: str | None = None,
+                 extra: dict | None = None) -> Path:
+    """A clean knowledge/3.0 bundle at root; keys go into the root index.md frontmatter; each kind directory gets an
+    index.md listing the instances written into it later (_list_instances)."""
+    (root / "base").mkdir(parents=True, exist_ok=True)
+    (root / "fragments").mkdir(exist_ok=True)
+    subs = "".join(f"* [{d}]({d}/index.md) - {d}.\n" for d in ("base", "fragments", *kind_dirs))
+    (root / "index.md").write_text(f'---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\n{keys}---\n\n# Project\n\n'
+                                   f"* [P](project.md) - P.\n\n# Subdirectories\n\n{subs}", encoding="utf-8")
+    (root / "log.md").write_text("# Bundle history\n\n## 2026-11-10\n* **Initialization**: test.\n", encoding="utf-8")
+    (root / "project.md").write_text("---\ntype: Project\ntitle: P\ndescription: P.\n" + _TGEN + "---\n\n"
+                                     "# Purpose\n\nText.\n", encoding="utf-8")
+    (root / "fragments" / "index.md").write_text("# fragments\n\n_(empty)_\n", encoding="utf-8")
+    entries = []
+    if profile is not None:
+        (root / OWN_REL).write_text("---\ntype: Domain Profile\ntitle: DP\ndescription: DP.\nstatus: draft\n" + profile
+                                    + _TGEN + "---\n\n# What this bundle holds\n\nText.\n", encoding="utf-8")
+        entries.append("* [Profile](profile.md) - DP.\n")
+    for rel, text in (extra or {}).items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+        if rel.startswith("base/questions/"):
+            (root / "base/questions/index.md").write_text(f"# questions\n\n* [Q]({Path(rel).name}) - Q.\n",
+                                                          encoding="utf-8")
+            entries.append("* [questions](questions/index.md) - Q.\n")
+    (root / "base" / "index.md").write_text("# base\n\n" + ("".join(entries) or "_(empty)_\n"), encoding="utf-8")
+    for d in kind_dirs:
+        (root / d).mkdir(exist_ok=True)
+    return root
+
+
+def _list_instances(kind_dir: Path) -> None:
+    kids = sorted(p.name for p in kind_dir.iterdir() if p.is_dir())
+    (kind_dir / "index.md").write_text("# instances\n\n" + ("".join(f"* [{k}]({k}/index.md) - {k}.\n" for k in kids)
+                                                               or "_(empty)_\n"), encoding="utf-8")
+
+
+def _domain(tmp_path: Path, instances: dict) -> Path:
+    """A domain bundle with the three kinds and the given instances: {path under knowledge/: root index keys}."""
+    k = _tree_bundle(tmp_path / "knowledge", kind_dirs=("requests", "incidents", "releases"), profile=_KINDS_PROFILE)
+    for rel, spec in instances.items():
+        keys, extra = spec if isinstance(spec, tuple) else (spec, None)
+        kd = tuple(sorted({r.split("/")[2] for r in instances if r.startswith(rel + "/")}))
+        _tree_bundle(k / rel, keys, kind_dirs=kd, extra=extra)
+    for d in ("requests", "incidents", "releases"):
+        _list_instances(k / d)
+    for rel in instances:
+        if (k / rel).parent.parent != k:
+            _list_instances((k / rel).parent)
+    return k
+
+
+_OPEN = "kind: Request\nstate: open\nparent: ../..\n"
+
+
+def _rule16(rep: Report) -> list[tuple[str, str]]:
+    codes = {"KIND_UNKNOWN", "KIND_NOT_HELD", "BAD_PARENT", "BAD_STATE", "BAD_CLOSED_AT", "CLOSED_LOOSE_END",
+             "BAD_DEPENDS_ON", "PROFILE_INVALID", "PROFILE_OUTSIDE_LAYER"}
+    return sorted((i["code"], i["path"]) for i in rep.items if i["code"] in codes)
+
+
+def test_a_domain_bundle_lints_each_instance_as_a_bundle_of_its_own(tmp_path, capsys):
+    k = _domain(tmp_path, {"requests/req-1": _OPEN + "depends_on:\n  - { bundle: ../../incidents/inc-1 }\n"
+                                                     "  - { repo: payments, bundle: knowledge, ref: v2.3.0 }\n",
+                           "incidents/inc-1": "kind: Incident\nstate: closed\nparent: ../..\n"
+                                              "closed_at: 2026-11-10T09:00:00Z\n",
+                           "releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
+                           "releases/rel-1/requests/req-9": "kind: Request\nstate: in-review\nparent: ../..\n"})
+    rep = lint(k)[0]
+    assert not rep.errors and not rep.warns, rep.items
+    assert [(i["path"], i["kind"], i["state"]) for i in rep.instances] == [
+        ("requests/req-1/", "Request", "open"), ("incidents/inc-1/", "Incident", "closed"),
+        ("releases/rel-1/", "Release", "open"), ("releases/rel-1/requests/req-9/", "Request", "in-review")]
+    assert rep.concepts == 6 and not [n for n in rep.notices if "nested bundle" in n]
+    assert main([str(k), "--json"]) == 0
+    assert [i["path"] for i in json.loads(capsys.readouterr().out)["instances"]][-1] == "releases/rel-1/requests/req-9/"
+    assert main([str(k)]) == 0 and "(4 operational bundles included)" in capsys.readouterr().out
+
+
+def test_each_breach_of_rule_16_names_the_instance(tmp_path):
+    conflict = ("---\ntype: Conflict Log\ntitle: C\ndescription: C.\nstatus: draft\n" + _TGEN + "---\n\n"
+                "# How it is used\n\nText.\n\n# Conflicts\n\n| ID | Source | Description | Kind | Resolution | State | "
+                "Decided |\n|---|---|---|---|---|---|---|\n| C-1 | f | d | k | r | open | — |\n"
+                "| C-2 | f | d | k | r | resolved | human:x |\n")
+    question = ("---\ntype: Open Question\ntitle: Q\ndescription: Q.\nowner: human:x\nquestion_status: open\n"
+                "asked_in: /fragments/x.md\n" + _TGEN + "---\n\n# Question\n\nWhy?\n")
+    closed = "kind: Request\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n"
+    k = _domain(tmp_path, {
+        "requests/unknown": "kind: Ticket\nstate: open\nparent: ../..\n",
+        "requests/no-kind": "",
+        "requests/bad-parent": "kind: Request\nstate: open\nparent: ..\n",
+        "requests/bad-state": "kind: Request\nstate: done\nparent: ../..\n",
+        "requests/no-closed-at": "kind: Request\nstate: closed\nparent: ../..\n",
+        "requests/open-closed-at": _OPEN + "closed_at: 2026-11-10T09:00:00Z\n",
+        "requests/loose": (closed, {"conflict-log.md": conflict, "base/questions/why.md": question}),
+        "requests/bad-deps": _OPEN + "depends_on: [x]\n",
+        "incidents/misplaced": _OPEN,
+        "releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
+        "releases/rel-1/incidents/inc-9": "kind: Incident\nstate: open\nparent: ../..\n"})
+    (k / "requests/loose/index.md").write_text((k / "requests/loose/index.md").read_text(encoding="utf-8")
+                                               .replace("* [P](project.md) - P.\n", "* [P](project.md) - P.\n"
+                                                        "* [C](conflict-log.md) - C.\n"), encoding="utf-8")
+    rep = lint(k)[0]
+    assert _rule16(rep) == sorted([
+        ("KIND_UNKNOWN", "requests/unknown/index.md"),
+        ("KIND_UNKNOWN", "requests/no-kind/index.md"),
+        ("BAD_PARENT", "requests/bad-parent/index.md"),
+        ("BAD_STATE", "requests/bad-state/index.md"),
+        ("BAD_CLOSED_AT", "requests/no-closed-at/index.md"),
+        ("BAD_CLOSED_AT", "requests/open-closed-at/index.md"),
+        ("CLOSED_LOOSE_END", "requests/loose/conflict-log.md"),
+        ("CLOSED_LOOSE_END", "requests/loose/base/questions/why.md"),
+        ("BAD_DEPENDS_ON", "requests/bad-deps/index.md"),
+        ("KIND_NOT_HELD", "incidents/misplaced/index.md"),
+        ("KIND_NOT_HELD", "releases/rel-1/incidents/inc-9/index.md"),
+        ("PROFILE_OUTSIDE_LAYER", "releases/rel-1/incidents/index.md")]), rep.items
+    assert next(i for i in rep.items if i["code"] == "BAD_DEPENDS_ON")["level"] == "WARN"
+    assert {i["layer"] for i in rep.items if i["code"] in ("KIND_UNKNOWN", "BAD_STATE", "KIND_NOT_HELD")} == \
+        {OKF_PROFILE}
+    assert "1 open or proposed conflict" in next(i["message"] for i in rep.items if i["code"] == "CLOSED_LOOSE_END"
+                                                 and i["path"].endswith("conflict-log.md"))
+
+
+def test_a_domain_bundle_declares_no_state_parent_or_closed_at(tmp_path):
+    k = _tree_bundle(tmp_path / "knowledge", "kind: Domain Bundle\nstate: open\nparent: ..\n"
+                                             "closed_at: 2026-11-10T09:00:00Z\n")
+    assert _rule16(lint(k)[0]) == [("BAD_CLOSED_AT", "index.md"), ("BAD_PARENT", "index.md"),
+                                   ("BAD_STATE", "index.md")]
+
+
+def test_an_instance_may_not_declare_kinds_and_no_nested_skips_instances_with_a_notice(tmp_path):
+    k = _domain(tmp_path, {"requests/req-1": _OPEN, "requests/req-2": _OPEN})
+    _tree_bundle(k / "requests/req-1", _OPEN, profile="kinds:\n  X: { extends: Operational Bundle, directory: xs/ }\n")
+    assert _rule16(lint(k)[0]) == [("PROFILE_INVALID", "requests/req-1/base/profile.md")]
+    rep = lint(k, nested=False)[0]
+    assert not rep.items and not rep.instances
+    assert rep.notices == ["requests/: 2 Request instances not checked (--no-nested)"], rep.notices
+
+
+def test_an_instance_linted_on_its_own_follows_its_parents_to_the_domain_bundle(tmp_path):
+    k = _domain(tmp_path, {"releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
+                           "releases/rel-1/requests/req-9": "kind: Request\nstate: escalated\nparent: ../..\n"})
+    rep = lint(k / "releases/rel-1/requests/req-9")[0]
+    assert [(i["code"], i["path"]) for i in rep.errors] == [("BAD_STATE", "index.md")]
+    assert "open | in-review | closed" in rep.errors[0]["message"]
+    lost = _tree_bundle(tmp_path / "lost", "kind: Request\nstate: open\nparent: ../nowhere\n")
+    assert ("BAD_PARENT", "index.md") in [(i["code"], i["path"]) for i in lint(lost)[0].errors]
+
+
+def test_only_the_index_of_a_kind_directory_lives_there(tmp_path):
+    k = _domain(tmp_path, {"requests/req-1": _OPEN})
+    (k / "requests/notes.md").write_text("---\ntype: Term\ntitle: N\ndescription: N.\n" + _TGEN + "---\n\nText.\n",
+                                         encoding="utf-8")
+    assert _rule16(lint(k)[0]) == [("PROFILE_OUTSIDE_LAYER", "requests/notes.md")]
+
+
+
+def test_held_kinds_skip_abstract_kinds_and_aliases_name_one_kind(tmp_path):
+    prof = (_KINDS_PROFILE.replace("holds: [Request] }", "holds: [Request, Req, Operational Bundle] }")
+            + "aliases:\n  types:\n    Req: Request\n")
+    k = _domain(tmp_path, {"releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
+                           "releases/rel-1/requests/r": "kind: Req\nstate: bogus\nparent: ../..\n"})
+    (k / OWN_REL).write_text((k / OWN_REL).read_text(encoding="utf-8").replace(_KINDS_PROFILE, prof), encoding="utf-8")
+    rep = lint(k)[0]
+    assert sorted((i["code"], i["path"]) for i in rep.errors) == [
+        ("BAD_STATE", "releases/rel-1/requests/r/index.md"), ("PROFILE_INVALID", "base/profile.md")], rep.errors
+    assert "abstract kind" in next(i["message"] for i in rep.errors if i["code"] == "PROFILE_INVALID")
+    assert len(rep.instances) == 2 and rep.concepts == 4
+    assert lint(k / "releases/rel-1")[0].instances[0]["kind"] == "Request"
+
+
+def test_what_an_instance_ignores_is_reported_with_its_path(tmp_path):
+    k = _domain(tmp_path, {"requests/req-1": _OPEN})
+    (k / "requests/req-1/.okfignore").write_text("drafts/\n", encoding="utf-8")
+    (k / "requests/req-1/drafts").mkdir()
+    (k / "requests/req-1/drafts/x.md").write_text("plain\n", encoding="utf-8")
+    assert lint(k)[0].ignored == ["requests/req-1/drafts/"]
 
 
 if __name__ == "__main__":

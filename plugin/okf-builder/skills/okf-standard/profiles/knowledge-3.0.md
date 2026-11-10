@@ -98,12 +98,15 @@ types:
     description: The bundle's conflict register, conflict-log.md, zero or one per bundle
   Domain Profile: {}
   Log: {}
+kinds:
+  Operational Bundle: { description: "A unit of work that opens, runs and closes; abstract: every operational kind a domain bundle declares extends it" }
 rules:
   - { name: answered-question-names-its-answer, when: { type: Open Question, question_status: answered }, require: [answered_by], level: warn, code: QUESTION_NO_ANSWER }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-04T18:33:13Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-10T22:56:31Z }
 sources:
   - { id: types, resource: references/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }
   - { id: domain-profile, resource: references/OKF-STANDARD.md, title: "OKF standard §4.1: Domain Profile" }
+  - { id: bundles, resource: references/OKF-STANDARD.md, title: "OKF standard §2.2: Domain and operational bundles" }
   - { id: frontmatter, resource: references/OKF-STANDARD.md, title: "OKF standard §3.1: Frontmatter" }
   - { id: conformance, resource: references/OKF-STANDARD.md, title: "OKF standard §7: Conformance" }
   - { id: spec-computation, resource: references/OKF-SPEC-v0.2.md, title: "OKF spec v0.2 §10.2: Contract fields of an Attested Computation" }
@@ -125,6 +128,12 @@ A field without a code is checked in a bundle that has a `base/profile.md`, like
 The keys every concept may carry stay with the spec-level checks, in code, because they apply to every type, an undeclared one included[^frontmatter]: `generated` (`PROFILE_NO_GENERATED` in a 0.2 bundle, `PROFILE_NO_TIMESTAMP` for `timestamp` in a 0.1 one, `BAD_GENERATED`), `verified` (`BAD_VERIFIED`), `status` (`BAD_STATUS`), `stale_after` (`STALE`), `sources` (`BAD_SOURCES`), and the `BAD_ACTOR` and `BAD_ISO` checks of their actors and timestamps.
 
 So do the checks across concepts or over a body (ADR-0026, decision 6)[^domain-profile]: at most one Conflict Log per bundle, the layer rule of a 3.0 bundle, an open question past its `review_on` (`QUESTION_REVIEW_DUE`), the single fence of an Attested Computation, and the structure of `index.md` and `log.md`. They apply to a local type through the standard type it extends.
+
+# Kinds
+
+## Operational Bundle
+
+The abstract kind of a unit of work that opens, runs and closes[^bundles]. It has no `directory`, so it has no instances: a domain bundle's own kinds extend it and name their directories. Its states are `open` and `closed`, which every kind has; a kind adds states between them. A bundle without `kind` is a domain bundle, open-ended, and is never declared here.
 
 # Types
 

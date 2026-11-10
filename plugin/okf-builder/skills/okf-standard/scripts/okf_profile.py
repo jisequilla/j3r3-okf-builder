@@ -45,9 +45,15 @@ FIELD_TYPES = ("string", "integer", "boolean", "date", "datetime", "date_or_date
 KEY_TYPES = ("string", "integer", "boolean", "date", "datetime", "date_or_datetime", "actor", "enum", "path")
 LEVELS = ("error", "warn")
 RANK = {"warn": 0, "error": 1}
-PROFILE_KEYS = ("extends", "types", "families", "forbidden", "fixed", "by_type", "rules", "validator", "questions",
-                "aliases")
+PROFILE_KEYS = ("extends", "types", "kinds", "families", "forbidden", "fixed", "by_type", "rules", "validator",
+                "questions", "aliases")
 TYPE_KEYS = {"extends", "description", "fields", "directory", "note"}
+KIND_KEYS = {"extends", "description", "directory", "states", "holds", "note"}
+OPERATIONAL = "Operational Bundle"  # the abstract kind every operational kind extends (standard §2.2, ADR-0038)
+DOMAIN_BUNDLE = "Domain Bundle"     # the kind a bundle without `kind` is; never declared under kinds
+BASE_STATES = ("open", "closed")    # the states of every operational kind; closed is the only terminal one
+KIND_DIR_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*/$")
+RESERVED_KIND_DIRS = ("fragments/", "base/", "projections/")
 FIELD_KEYS = {"type", "of", "values", "keys", "required", "level", "code", "note"}
 MAP_KEY_KEYS = {"type", "values", "required", "note"}  # a key of a map field: one level deep, its breaches the field's
 FAMILY_KEYS = {"types", "required", "fixed", "forbidden", "fields", "description", "note"}
@@ -219,6 +225,40 @@ def validate_schema(fm: dict) -> list[str]:
                 if "extends" in t and not (isinstance(t["extends"], str) and t["extends"].strip()):
                     errs.append(f"types.{tid}.extends: the id of one type")
                 _check_fields_map(t.get("fields"), f"types.{tid}.fields", errs)
+    kinds = fm.get("kinds")
+    if kinds is not None:
+        if not _is_map(kinds):
+            errs.append("kinds: a map kind id → definition")
+        else:
+            for kid, k in kinds.items():
+                w = f"kinds.{kid}"
+                if kid == DOMAIN_BUNDLE:
+                    errs.append(f"{w}: '{DOMAIN_BUNDLE}' is the kind of a bundle without kind, never declared")
+                    continue
+                if k is None:
+                    continue
+                if not _is_map(k):
+                    errs.append(f"{w}: a map {{ extends, description, directory, states, holds }}")
+                    continue
+                extra = sorted(set(k) - KIND_KEYS)
+                if extra:
+                    errs.append(f"{w}: unknown key(s) {', '.join(extra)}")
+                if "extends" in k and not (isinstance(k["extends"], str) and k["extends"].strip()):
+                    errs.append(f"{w}.extends: the id of one kind")
+                if "directory" in k:
+                    d = k["directory"]
+                    if not (isinstance(d, str) and KIND_DIR_RE.match(d)):
+                        errs.append(f"{w}.directory: one kebab-case directory name ending in / (requests/)")
+                    elif d in RESERVED_KIND_DIRS:
+                        errs.append(f"{w}.directory: {d} is a layer of the bundle")
+                if "states" in k:
+                    st = k["states"]
+                    if not (_str_list(st) and st):
+                        errs.append(f"{w}.states: a non-empty list of state names")
+                    elif set(st) & set(BASE_STATES):
+                        errs.append(f"{w}.states: open and closed are every kind's; list only the states between them")
+                if "holds" in k and not _str_list(k["holds"]):
+                    errs.append(f"{w}.holds: a list of kind ids")
     fams = fm.get("families")
     if fams is not None:
         if not _is_map(fams):
@@ -348,6 +388,7 @@ class Resolved:
     """The Domain Profile of a bundle, composed from its layers."""
     sources: list[str] = field(default_factory=list)
     types: dict = field(default_factory=dict)        # id → { extends, description, fields: {f: def}, source }
+    kinds: dict = field(default_factory=dict)        # id → { extends, description, directory, states, holds, source }
     forbidden: dict = field(default_factory=dict)    # key → { reason, level, code, source }
     fixed: dict = field(default_factory=dict)        # key → { value, level, code, source }
     families: dict = field(default_factory=dict)     # /base/dir/ → { types, required, fixed, forbidden, source }
@@ -360,6 +401,7 @@ class Resolved:
     has_own: bool = False                            # base/profile.md is in force (3.0, not deprecated)
     builtin_file: bool = False                       # the built-in layer came from its file or its inlined copy
     extended: set = field(default_factory=set)       # bundle rels of the working-tree profiles extends reaches
+    layers: list = field(default_factory=list)       # the Layers merged, general to specific (an instance reuses them)
 
     def add(self, code: str, path: str, msg: str) -> None:
         self.findings.append({"level": "ERROR", "code": code, "path": path, "message": msg})
@@ -504,14 +546,19 @@ def builtin_text(builtin: Path | None = None) -> str | None:
     return BUILTIN_TEXT if builtin is None else None
 
 
-def load_profile(bundle: Path, read_own: bool | None = None, builtin: Path | None = None) -> Resolved:
-    """Compose the Domain Profile of a bundle. read_own defaults to: the bundle is knowledge/3.0."""
+def load_profile(bundle: Path, read_own: bool | None = None, builtin: Path | None = None,
+                 domain: Resolved | None = None) -> Resolved:
+    """Compose the Domain Profile of a bundle. read_own defaults to: the bundle is knowledge/3.0.
+    domain: for an operational bundle (standard §2.2), the Domain Profile of the domain bundle at the top of its tree;
+    its layers come first, in place of the built-in layer, and the bundle's own base/profile.md may not declare kinds."""
     r = Resolved()
     if read_own is None:
         read_own = declared_profile(bundle) == PROFILE_30
-    text = builtin_text(builtin)
-    layers: list[Layer] = []
-    if text is not None:
+    text = None if domain is not None else builtin_text(builtin)
+    layers: list[Layer] = list(domain.layers) if domain is not None else []
+    if domain is not None:
+        r.builtin_file, r.has_own = domain.builtin_file, domain.has_own
+    elif text is not None:
         fm, err = _fm_of(text)
         errs = [err] if fm is None else validate_schema(fm)
         for e in errs:
@@ -519,8 +566,8 @@ def load_profile(bundle: Path, read_own: bool | None = None, builtin: Path | Non
         if not errs:
             layers.append(Layer(BUILTIN, fm))
             r.builtin_file = True
-    if not r.builtin_file:
-        layers.append(Layer(BUILTIN, {"types": {n: {} for n in STANDARD_TYPE_NAMES}}))
+    if domain is None and not r.builtin_file:
+        layers.append(Layer(BUILTIN, {"types": {n: {} for n in STANDARD_TYPE_NAMES}, "kinds": {OPERATIONAL: {}}}))
     own = bundle / OWN_REL
     if read_own and own.is_file():
         fm, err = _fm_of(own.read_text(encoding="utf-8"))
@@ -533,8 +580,17 @@ def load_profile(bundle: Path, read_own: bool | None = None, builtin: Path | Non
             reader = _Reader(bundle, r)
             reader.visit(("wt", OWN_REL), OWN_REL, fm, None, [])
             r.extended.discard(OWN_REL)
+            if domain is not None:
+                for lay in reader.layers:
+                    if lay.data.get("kinds"):
+                        r.add("PROFILE_INVALID", lay.source, "kinds: only a domain bundle declares kinds; an "
+                              "operational bundle follows the kinds of its domain bundle (standard §2.2)")
+                        lay.data = {k: v for k, v in lay.data.items() if k != "kinds"}
             layers += reader.layers
+    r.layers = layers
     _merge(r, layers)
+    if domain is not None:  # the domain bundle reports what its own layers break; an instance reports only its own
+        r.findings = [f for f in r.findings if f not in domain.findings]
     return r
 
 
@@ -681,6 +737,15 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
                 continue
             r.types[tid] = {**{k: v for k, v in t.items() if k != "fields"},
                             "fields": _stamp(t.get("fields"), src), "source": src}
+        for kid, k in (d.get("kinds") or {}).items():
+            k = k or {}
+            if kid in r.kinds:
+                r.add("PROFILE_DUPLICATE_ID", src, f"kind '{kid}' declared by {r.kinds[kid]['source']} and by {src}")
+                continue
+            if kid in r.types:
+                r.add("PROFILE_DUPLICATE_ID", src, f"kind '{kid}' is named like a type declared by {r.types[kid]['source']}")
+                continue
+            r.kinds[kid] = {**k, "source": src}
         for key, store in (("forbidden", r.forbidden), ("fixed", r.fixed)):
             for k, e in (d.get(key) or {}).items():
                 cur = store.get(k)
@@ -732,11 +797,14 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
                 r.add("PROFILE_REDEFINED", t["source"],
                       f"type '{tid}' declares field '{fid}' again, inherited from '{inherited[fid]['declared_by']}' "
                       f"({inherited[fid]['source']})")
+    _check_kinds(r)
     all_fields = {f: t["source"] for t in r.types.values() for f in t["fields"]}
     for name, a in r.aliases["types"].items():
         if name in r.types:
             r.add("PROFILE_DUPLICATE_ID", a["source"], f"alias '{name}' is named like a type declared by {r.types[name]['source']}")
-        if a["to"] not in r.types:
+        if name in r.kinds:
+            r.add("PROFILE_DUPLICATE_ID", a["source"], f"alias '{name}' is named like a kind declared by {r.kinds[name]['source']}")
+        if a["to"] not in r.types and a["to"] not in r.kinds:
             r.add("PROFILE_INVALID", a["source"], f"alias '{name}' stands for '{a['to']}', which no layer declares")
     for name, a in r.aliases["fields"].items():
         if name in all_fields:
@@ -764,6 +832,79 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
            for lay in layers for tid, e in (lay.data.get("by_type") or {}).items()]
     _merge_families(r, layers, order, bts)
     _merge_by_type(r, order, bts)
+
+
+def kind_ancestors(r: Resolved, k: str) -> list[str]:
+    """The kinds k extends, nearest first; stops at an undeclared kind or a loop."""
+    out, cur = [], r.kinds.get(k, {}).get("extends")
+    while cur and cur in r.kinds and cur not in out and cur != k:
+        out.append(cur)
+        cur = r.kinds[cur].get("extends")
+    return out
+
+
+def canonical_kind(r: Resolved | None, k) -> str | None:
+    """The declared id of a kind written by its id or a type alias that stands for it; None when no kind matches."""
+    if r is None or not isinstance(k, str):
+        return None
+    if k in r.kinds:
+        return k
+    a = r.aliases["types"].get(k)
+    return a["to"] if a and a["to"] in r.kinds else None
+
+
+def kind_in_force(r: Resolved, k: str) -> dict:
+    """What a kind puts in force: its directory (its own; a kind without one is abstract), its states (open, the
+    states it and the kinds it extends add, in order, closed) and the kinds it holds (its own and inherited)."""
+    chain = [*reversed(kind_ancestors(r, k)), k]
+    added, holds = [], []
+    for c in chain:
+        for st in r.kinds[c].get("states") or []:
+            if st not in added:
+                added.append(st)
+        for h in r.kinds[c].get("holds") or []:
+            if h not in holds:
+                holds.append(h)
+    return {"kind": k, "directory": r.kinds[k].get("directory"), "description": r.kinds[k].get("description"),
+            "extends": r.kinds[k].get("extends"), "states": [BASE_STATES[0], *added, BASE_STATES[1]], "holds": holds,
+            "source": r.kinds[k]["source"]}
+
+
+def operational_kinds(r: Resolved) -> list[str]:
+    """The kinds that may have instances: those with a directory, in declaration order."""
+    return [k for k in r.kinds if r.kinds[k].get("directory")]
+
+
+def _check_kinds(r: Resolved) -> None:
+    """Each kind extends a declared kind, without a loop, ends at Operational Bundle, holds declared kinds, and no two
+    kinds share a directory (PROFILE_INVALID)."""
+    dirs: dict = {}
+    for kid, k in r.kinds.items():
+        ext = k.get("extends")
+        if kid == OPERATIONAL:
+            continue
+        if not ext:
+            r.add("PROFILE_INVALID", k["source"], f"kind '{kid}' must extend '{OPERATIONAL}' or another kind")
+            continue
+        if ext not in r.kinds:
+            r.add("PROFILE_INVALID", k["source"], f"kind '{kid}' extends '{ext}', which no layer declares")
+            continue
+        if ext == kid or kid in kind_ancestors(r, ext):
+            r.add("PROFILE_INVALID", k["source"], f"kind '{kid}' extends itself")
+            continue
+        for h in k.get("holds") or []:
+            ch = canonical_kind(r, h)
+            if ch is None:
+                r.add("PROFILE_INVALID", k["source"], f"kind '{kid}' holds '{h}', which no layer declares as a kind")
+            elif not r.kinds[ch].get("directory"):
+                r.add("PROFILE_INVALID", k["source"], f"kind '{kid}' holds '{h}', an abstract kind (no directory), "
+                      "which has no instances")
+        d = k.get("directory")
+        if d:
+            if d in dirs:
+                r.add("PROFILE_INVALID", k["source"], f"kinds '{dirs[d]}' and '{kid}' share the directory {d}")
+            else:
+                dirs[d] = kid
 
 
 def _reach(r: Resolved, t: str) -> list[str]:
@@ -1022,8 +1163,13 @@ def in_force(r: Resolved, path: str = "/") -> dict:
     return {"path": path, "sources": r.sources, "families": [{"dir": f["dir"], "types": f["types"], "source": f["source"]}
                                                              for f in fams],
             "types_allowed": allowed, "types": types,
+            "kinds": {k: kind_in_force(r, k) for k in r.kinds if k == OPERATIONAL or k in _well_formed_kinds(r)},
             "rules": r.rules, "aliases": r.aliases, "validators": r.validators, "questions": r.questions,
             "findings": r.findings}
+
+
+def _well_formed_kinds(r: Resolved) -> list[str]:
+    return [k for k in r.kinds if k == OPERATIONAL or OPERATIONAL in kind_ancestors(r, k)]
 
 
 def format_in_force(info: dict) -> str:
@@ -1051,6 +1197,11 @@ def format_in_force(info: dict) -> str:
             lines.append(f"  fixed {k} = {e.get('value')!r} ({_lvl(e)})  [{e['source']}]")
         for k, e in ti["forbidden"].items():
             lines.append(f"  forbidden {k} ({_lvl(e)})  [{e['source']}]")
+    for k, ki in (info.get("kinds") or {}).items():
+        ext = f" extends {ki['extends']}" if ki.get("extends") else ""
+        where = f" in {ki['directory']}" if ki.get("directory") else " (abstract)"
+        held = f", holds {', '.join(ki['holds'])}" if ki["holds"] else ""
+        lines.append(f"kind {k}{ext}{where}: states {' → '.join(ki['states'])}{held}  [{ki['source']}]")
     for rule in info["rules"]:
         lines.append(f"rule {rule['name']}: when {rule['when']} require {rule['require']} ({_lvl(rule)})  [{rule['source']}]")
     for kind in ("types", "fields"):
@@ -2024,6 +2175,67 @@ def test_the_shipped_builtin_profile_declares_material_and_repository_as_maps():
         "url": ("string", True), "commit": ("string", True)}
     assert "material" not in type_in_force(load_profile(Path("/nonexistent"), read_own=False), "Knowledge Fragment")[
         "required"]
+
+
+# --- kinds (standard §2.2, ADR-0038) ---
+_KINDS = ("kinds:\n"
+          "  Request: { extends: Operational Bundle, description: A request, directory: requests/, states: [in-review] }\n"
+          "  Urgent Request: { extends: Request, description: An urgent one, directory: urgent/, states: [escalated] }\n"
+          "  Release: { extends: Operational Bundle, description: A release, directory: releases/, holds: [Request] }\n")
+
+
+def test_the_shipped_builtin_profile_declares_the_abstract_operational_kind():
+    r = load_profile(Path("/nonexistent"), read_own=False)
+    assert list(r.kinds) == [OPERATIONAL] and not r.findings
+    assert kind_in_force(r, OPERATIONAL)["states"] == ["open", "closed"] and operational_kinds(r) == []
+
+
+def test_kinds_inherit_states_and_holds_and_only_kinds_with_a_directory_have_instances(tmp_path):
+    r = load_profile(_bundle(tmp_path, _KINDS))
+    assert not r.findings, r.findings
+    assert operational_kinds(r) == ["Request", "Urgent Request", "Release"]
+    assert kind_in_force(r, "Urgent Request")["states"] == ["open", "in-review", "escalated", "closed"]
+    assert kind_in_force(r, "Release")["holds"] == ["Request"] and kind_in_force(r, "Request")["holds"] == []
+    assert in_force(r)["kinds"]["Release"]["directory"] == "releases/"
+    assert "kind Release extends Operational Bundle in releases/: states open → closed, holds Request" in \
+        format_in_force(in_force(r))
+
+
+def test_each_breach_of_the_kinds_schema_is_profile_invalid(tmp_path):
+    bad = ("kinds:\n"
+           "  A: { extends: Operational Bundle, directory: base/ }\n"
+           "  B: { extends: Operational Bundle, directory: Bees }\n"
+           "  C: { extends: Operational Bundle, directory: cs/, states: [open, waiting] }\n"
+           "  D: { extends: Operational Bundle, directory: ds/, color: red }\n"
+           "  Domain Bundle: { extends: Operational Bundle }\n")
+    msgs = [f["message"] for f in load_profile(_bundle(tmp_path, bad)).findings]
+    assert {f.split(":")[0] for f in msgs} >= {"kinds.A.directory", "kinds.B.directory", "kinds.C.states", "kinds.D",
+                                               "kinds.Domain Bundle"}, msgs
+
+
+def test_kinds_compose_one_id_one_directory_declared_targets(tmp_path):
+    bad = ("kinds:\n"
+           "  Request: { extends: Operational Bundle, directory: requests/, holds: [Ghost] }\n"
+           "  Ticket: { extends: Operational Bundle, directory: requests/ }\n"
+           "  Orphan: { extends: Nothing, directory: orphans/ }\n"
+           "  Loose: { directory: loose/ }\n"
+           "  Term: { extends: Operational Bundle, directory: terms/ }\n")
+    r = load_profile(_bundle(tmp_path, bad))
+    got = sorted((f["code"], f["message"]) for f in r.findings)
+    assert ("PROFILE_DUPLICATE_ID", "kind 'Term' is named like a type declared by built-in") in got
+    msgs = " | ".join(m for _, m in got)
+    for frag in ("holds 'Ghost'", "share the directory requests/", "extends 'Nothing'", "'Loose' must extend"):
+        assert frag in msgs, msgs
+
+
+def test_an_operational_bundle_reuses_the_domain_layers_and_may_not_declare_kinds(tmp_path):
+    domain = load_profile(_bundle(tmp_path / "d", _KINDS))
+    inst = _bundle(tmp_path / "i", "kinds:\n  X: { extends: Operational Bundle, directory: xs/ }\n")
+    r = load_profile(inst, domain=domain)
+    assert [(f["code"], f["path"]) for f in r.findings] == [("PROFILE_INVALID", OWN_REL)]
+    assert "Request" in r.kinds and "X" not in r.kinds and r.has_own
+    plain = load_profile(_bundle(tmp_path / "p"), domain=domain)
+    assert not plain.findings and plain.sources == domain.sources and plain.has_own
 
 
 if __name__ == "__main__":
