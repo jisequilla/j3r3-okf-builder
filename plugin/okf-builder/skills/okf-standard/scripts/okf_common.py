@@ -467,6 +467,21 @@ def _root_key(bundle: Path, key: str) -> str | None:
     return str(v) if v is not None else None
 
 
+def root_frontmatter(bundle: Path) -> dict:
+    """The frontmatter of the bundle's root index.md, or {} when it has none or it cannot be parsed."""
+    idx = bundle / "index.md"
+    if not idx.is_file():
+        return {}
+    raw, _ = split_frontmatter(idx.read_text(encoding="utf-8"))
+    if raw is None:
+        return {}
+    try:
+        fm = parse_yaml(raw)
+    except Exception:  # noqa: BLE001
+        return {}
+    return fm if isinstance(fm, dict) else {}
+
+
 def declared_version(bundle: Path) -> str | None:
     return _root_key(bundle, "okf_version")
 
