@@ -33,7 +33,16 @@ knowledge/2.0 → knowledge/3.0 (--profile; okf_version is not changed):
     other path (/standard/..., a repo-relative resource) is left as it is
   - the root index.md, base/index.md and every index below base/ are regenerated
     (# Notes kept); okf_profile "knowledge/3.0" in the root index.md; an entry in log.md
+  - what lint's scan leaves out is left unedited: at the root, the paths .okfignore matches,
+    every nested bundle (an operational instance included) and a root directory that holds
+    nothing else but its index.md (a kind's directory of instances) stay where they are;
+    inside a directory that moves they move with it, and each .okfignore entry anchored
+    under that directory follows them (decisions/drafts/ → base/decisions/drafts/); a nested
+    bundle is migrated on its own (okf_migrate.py <its directory>)
   With --to as well, the profile step runs first and the version step walks its result.
+
+Both steps migrate only what lint reads: the paths .okfignore matches and nested bundles are
+left byte-identical (a plain directory of Markdown without OKF frontmatter is read as today).
 
 --out DIR writes a migrated copy and leaves the source bundle untouched (recommended for 0.2→0.1).
 It edits the frontmatter text by key blocks to keep order, comments and unknown keys;
@@ -54,6 +63,7 @@ from okf_common import (  # noqa: E402
     BASE_DIR,
     CITATIONS_RE,
     LAYER_DIRS,
+    OKFIGNORE,
     PROFILE_30,
     SUPPORTED_VERSIONS,
     declared_profile,
@@ -61,6 +71,7 @@ from okf_common import (  # noqa: E402
     find_bundle,
     load_doc,
     parse_yaml,
+    scan_bundle,
     split_frontmatter,
     walk_bundle,
 )
@@ -344,12 +355,41 @@ class Move:
         return posixpath.relpath(self.new(rel), new_dir) + slash + sep + anchor
 
 
+def left_out(bundle: Path) -> list[str]:
+    """The paths lint's scan leaves out that migrate leaves alone: what .okfignore excludes and every nested bundle
+    (an operational instance included), a directory with a trailing '/'. Non-OKF directories are not among them."""
+    sc = scan_bundle(bundle)
+    return [*sc.ignored, *sc.nested]
+
+
+def _under(rel: str, out: list[str]) -> bool:
+    return any(rel == o or (o.endswith("/") and rel.startswith(o)) for o in out)
+
+
+def bundle_docs(bundle: Path, out: list[str] | None = None) -> list:
+    """The .md walk_bundle reads, less those under a left_out path: the documents migrate edits."""
+    out = left_out(bundle) if out is None else out
+    return [d for d in walk_bundle(bundle) if not _under(d.rel, out)]
+
+
 def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
-    """(root directories, root concepts) that move under base/."""
+    """(root directories, root concepts) that move under base/. A left_out path stays at the root, and so does a
+    directory that holds no document migrate reads besides its own index.md while a left_out path lies below it
+    (the directory of a kind's instances, ADR-0039 decision 3)."""
+    out = left_out(bundle)
+    read = {d.rel for d in bundle_docs(bundle, out)}
+
+    def stays(name: str) -> bool:
+        pre = name + "/"
+        if _under(pre, out):
+            return True
+        holds_out = any(o.startswith(pre) and o != pre for o in out)
+        return holds_out and not any(r.startswith(pre) and r != pre + "index.md" for r in read)
+
     dirs = [p.name for p in sorted(bundle.iterdir())
-            if p.is_dir() and not p.name.startswith(".") and p.name not in LAYER_DIRS]
+            if p.is_dir() and not p.name.startswith(".") and p.name not in LAYER_DIRS and not stays(p.name)]
     files = [p.name for p in sorted(bundle.iterdir())
-             if p.is_file() and p.suffix == ".md" and p.name not in ROOT_KEEP
+             if p.is_file() and p.suffix == ".md" and p.name not in ROOT_KEEP and not _under(p.name, out)
              and (load_doc(bundle, p).frontmatter or {}).get("type") != "Conflict Log"]
     return dirs, files
 
@@ -385,6 +425,27 @@ def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
     return "\n".join([*lines[:body_start], body])
 
 
+def rewrite_okfignore(text: str, dirs: list[str]) -> str:
+    """Prefix base/ to each .okfignore entry anchored under a moved root directory, so the path it names stays
+    ignored at its new place (decisions/drafts/ → base/decisions/drafts/). An entry with no '/' but a trailing one
+    matches a name at any depth and is kept, as are comments, blank lines and entries whose first segment is a glob."""
+    def entry(line: str) -> str:
+        body = line.rstrip()
+        if not body or body.startswith("#"):
+            return line
+        prefix = body[0] if body[0] in "!\\" else ""
+        pat = body[len(prefix):]
+        lead = "/" if pat.startswith("/") else ""
+        rest = pat[len(lead):]
+        if "/" not in rest.rstrip("/") and not lead:
+            return line
+        if rest.split("/", 1)[0] not in dirs:
+            return line
+        return prefix + lead + BASE_DIR + "/" + rest + line[len(body):]
+
+    return "\n".join(entry(line) for line in text.split("\n"))
+
+
 def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
     dirs, files = profile_moves(bundle)
     clash = [n for n in dirs + files if (bundle / BASE_DIR / n).exists()]
@@ -393,11 +454,14 @@ def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
         return 1
     move = Move(dirs, files)
     rewritten = {}
-    for doc in walk_bundle(bundle):
+    for doc in bundle_docs(bundle):
         text = doc.path.read_text(encoding="utf-8")
         new = rewrite_paths(text, doc.rel, move)
         if new != text:
             rewritten[doc.rel] = new
+    ignore = bundle / OKFIGNORE
+    ignore_text = ignore.read_text(encoding="utf-8") if ignore.is_file() else ""
+    new_ignore = rewrite_okfignore(ignore_text, dirs)
     dry = "(dry) " if dry_run else ""
     for n in dirs:
         print(f"{dry}move {n}/ → {BASE_DIR}/{n}/")
@@ -405,7 +469,11 @@ def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
         print(f"{dry}move {n} → {BASE_DIR}/{n}")
     for rel in rewritten:
         print(f"{dry}rewrote links in {move.new(rel)}")
+    if new_ignore != ignore_text:
+        print(f"{dry}rewrote {OKFIGNORE}")
     if not dry_run:
+        if new_ignore != ignore_text:
+            ignore.write_text(new_ignore, encoding="utf-8")
         (bundle / BASE_DIR).mkdir(exist_ok=True)
         for n in dirs + files:
             shutil.move(str(bundle / n), str(bundle / BASE_DIR / n))
@@ -491,7 +559,7 @@ def main(argv=None) -> int:
 
     notes: list[str] = []
     changed = 0
-    for doc in walk_bundle(work):
+    for doc in bundle_docs(work):
         if doc.is_reserved:
             continue
         new = migrate_concept(doc.path.read_text(encoding="utf-8"), args.to, args.actor, args.keep_extensions, notes, doc.rel,
@@ -777,6 +845,203 @@ def test_option_combinations(tmp_path, capsys):
         with pytest.raises(SystemExit):
             main([str(k), *argv])
         assert msg in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# What lint's scan leaves out (.okfignore, nested bundles, instances) stays alone
+# --------------------------------------------------------------------------
+def _lines(out: str, *prefixes: str) -> list[str]:
+    return [line for line in out.splitlines() if line.startswith(prefixes)]
+
+
+def _changed(before: dict[str, str], after: dict[str, str]) -> set[str]:
+    return {rel for rel in after if after[rel] != before.get(rel)}
+
+
+def test_version_step_skips_ignored_and_nested(tmp_path, capsys):
+    from okf_lint import _OPEN, _domain, _tree_bundle
+
+    v = _domain(tmp_path, {"requests/req-1": _OPEN,
+                           "incidents/inc-1": "kind: Incident\nstate: open\nparent: ../..\n",
+                           "releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
+                           "releases/rel-1/requests/req-9": _OPEN})
+    (v / ".okfignore").write_text("base/scratch/\nbase/wip.md\n", encoding="utf-8")
+    (v / "base" / "scratch").mkdir()
+    (v / "base" / "scratch" / "draft.md").write_text(_concept("Term", "Draft"), encoding="utf-8")
+    (v / "base" / "wip.md").write_text(_concept("Term", "WIP"), encoding="utf-8")
+    _tree_bundle(v / "base" / "other-bundle")
+    before = _tree(v)
+    out = tmp_path / "out"
+    capsys.readouterr()
+    assert main([str(v), "--to", "0.1", "--out", str(out)]) == 0
+    printed = capsys.readouterr().out
+    assert _lines(printed, "migrated ") == ["migrated project.md", "migrated base/profile.md"]
+    assert f"2 concepts migrated to OKF v0.1 → {out}" in printed.splitlines()
+    assert _changed(before, _tree(out)) == {"index.md", "log.md", "project.md", "base/profile.md"}
+    assert _tree(v) == before
+
+
+def _bundle_01(k: Path, plants: bool) -> Path:
+    k.mkdir(parents=True)
+    (k / "index.md").write_text('---\nokf_version: "0.1"\n---\n\n# Tables\n\n* [Orders](orders.md) - x\n',
+                                encoding="utf-8")
+    (k / "orders.md").write_text(_V01, encoding="utf-8")
+    if plants:
+        (k / ".okfignore").write_text("scratch/\n", encoding="utf-8")
+        (k / "scratch").mkdir()
+        (k / "scratch" / "s.md").write_text(_V01, encoding="utf-8")
+        (k / "nested").mkdir()
+        (k / "nested" / "index.md").write_text('---\nokf_version: "0.1"\n---\n\n# Tables\n\n* [N](n.md) - n\n',
+                                               encoding="utf-8")
+        (k / "nested" / "n.md").write_text(_V01, encoding="utf-8")
+    return k
+
+
+def test_version_step_01_to_02_skips_ignored_and_nested(tmp_path, capsys):
+    runs = {}
+    for plants in (False, True):
+        src = _bundle_01(tmp_path / f"src-{plants}", plants)
+        out = tmp_path / f"out-{plants}"
+        capsys.readouterr()
+        assert main([str(src), "--to", "0.2", "--out", str(out)]) == 0
+        runs[plants] = (_lines(capsys.readouterr().out, "migrated "), _tree(src), _tree(out))
+    assert runs[True][0] == runs[False][0] == ["migrated orders.md"]
+    src_tree, out_tree = runs[True][1], runs[True][2]
+    assert ({r: t for r, t in out_tree.items() if r.split("/")[0] in ("scratch", "nested")}
+            == {r: t for r, t in src_tree.items() if r.split("/")[0] in ("scratch", "nested")})
+
+
+_PLANTED = ("nested", "requests", "scratch", "notes.md", ".okfignore")
+
+
+def _plant_20(k: Path) -> Path:
+    """_bundle_20 plus what the profile step must leave at the root: ignored paths, a nested bundle, a kind's
+    directory of instances."""
+    (k / ".okfignore").write_text("scratch/\nnotes.md\n", encoding="utf-8")
+    (k / "scratch").mkdir()
+    (k / "scratch" / "s.md").write_text(_concept("Term", "S", body="[x](/decisions/ADR-0001-x.md)\n"), encoding="utf-8")
+    (k / "notes.md").write_text(_concept("Term", "Notes", body="[x](decisions/ADR-0001-x.md)\n"), encoding="utf-8")
+    for rel, keys in (("nested", ""), ("requests/req-1", "kind: Request\nstate: open\nparent: ../..\n")):
+        b = k / rel
+        (b / "decisions").mkdir(parents=True)
+        (b / "index.md").write_text(f'---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n{keys}---\n\n'
+                                    "# Subdirectories\n\n* [decisions](decisions/index.md) - D.\n", encoding="utf-8")
+        (b / "log.md").write_text("# Bundle history\n\n## 2026-11-11\n* **Initialization**: test.\n", encoding="utf-8")
+        (b / "decisions" / "index.md").write_text("# decisions\n\n* [Y](ADR-0001-y.md) - Y.\n", encoding="utf-8")
+        up = "../" * (rel.count("/") + 2)
+        (b / "decisions" / "ADR-0001-y.md").write_text(_concept(
+            "Architecture Decision", "Y",
+            body=f"[own](/decisions/ADR-0001-y.md) and [up]({up}decisions/ADR-0001-x.md).\n"), encoding="utf-8")
+    (k / "requests" / "index.md").write_text("# requests\n\n* [req-1](req-1/index.md) - R.\n", encoding="utf-8")
+    return k
+
+
+def _planted(tree: dict[str, str]) -> dict[str, str]:
+    return {rel: text for rel, text in tree.items() if rel.split("/")[0] in _PLANTED}
+
+
+def _profile_lines(k: Path, capsys, *extra: str) -> list[str]:
+    capsys.readouterr()
+    assert main([str(k), "--profile", "knowledge/3.0", *extra]) == 0
+    return _lines(capsys.readouterr().out, "move ", "rewrote ", "(dry) move ", "(dry) rewrote ")
+
+
+def test_profile_leaves_ignored_and_nested_at_the_root(tmp_path, capsys):
+    plain = _profile_lines(_bundle_20(tmp_path / "a"), capsys)
+    p = _plant_20(_bundle_20(tmp_path / "b"))
+    before = _planted(_tree(p))
+    lines = _profile_lines(p, capsys)
+    assert [x for x in lines if x.startswith("move ")] == [x for x in plain if x.startswith("move ")]
+    assert [x for x in lines if x.startswith("rewrote ")] == [x for x in plain if x.startswith("rewrote ")]
+    assert _planted(_tree(p)) == before
+    assert "[own](/decisions/ADR-0001-y.md)" in before["nested/decisions/ADR-0001-y.md"]
+
+
+def test_profile_dry_run_leaves_ignored_and_nested(tmp_path, capsys):
+    plain = _profile_lines(_bundle_20(tmp_path / "a"), capsys)
+    p = _plant_20(_bundle_20(tmp_path / "b"))
+    before = _tree(p)
+    assert _profile_lines(p, capsys, "--dry-run") == ["(dry) " + x for x in plain]
+    assert _tree(p) == before
+
+
+_Z = _concept("Architecture Decision", "Z", body="[abs](/decisions/ADR-0001-x.md) and [up](../ADR-0001-x.md).\n")
+
+
+def _plant_sub(k: Path) -> Path:
+    """A nested bundle decisions/sub/ beside the ADR of _bundle_20, linking a path the profile step moves."""
+    sub = k / "decisions" / "sub"
+    sub.mkdir()
+    (sub / "index.md").write_text('---\nokf_version: "0.2"\n---\n\n# Decisions\n\n* [Z](z.md) - Z.\n',
+                                  encoding="utf-8")
+    (sub / "z.md").write_text(_Z, encoding="utf-8")
+    return k
+
+
+def test_profile_moves_a_directory_that_also_holds_documents(tmp_path, capsys):
+    plain = _profile_lines(_bundle_20(tmp_path / "a"), capsys)
+    k = _plant_sub(_bundle_20(tmp_path / "b"))
+    lines = _profile_lines(k, capsys)
+    assert "move decisions/ → base/decisions/" in lines
+    assert lines == plain
+    assert (k / "base" / "decisions" / "sub" / "z.md").read_text(encoding="utf-8") == _Z
+
+
+def test_version_step_leaves_a_nested_bundle_inside_a_layer_directory(tmp_path, capsys):
+    runs = {}
+    for plants in (False, True):
+        src = _bundle_20(tmp_path / f"src-{plants}")
+        if plants:
+            _plant_sub(src)
+        out = tmp_path / f"out-{plants}"
+        capsys.readouterr()
+        assert main([str(src), "--to", "0.1", "--out", str(out)]) == 0
+        runs[plants] = (_lines(capsys.readouterr().out, "migrated "), _tree(out))
+    assert runs[True][0] == runs[False][0]
+    assert {r: t for r, t in runs[True][1].items() if r.startswith("decisions/sub/")} == {
+        "decisions/sub/index.md": '---\nokf_version: "0.2"\n---\n\n# Decisions\n\n* [Z](z.md) - Z.\n',
+        "decisions/sub/z.md": _Z}
+
+
+def test_profile_moves_a_non_okf_directory_and_rewrites_its_links(tmp_path, capsys):
+    k = _bundle_20(tmp_path)
+    (k / "plain").mkdir()
+    (k / "plain" / "a.md").write_text("See [x](/decisions/ADR-0001-x.md).\n", encoding="utf-8")
+    lines = _profile_lines(k, capsys)
+    assert "move plain/ → base/plain/" in lines and "rewrote links in base/plain/a.md" in lines
+    assert (k / "base" / "plain" / "a.md").read_text(encoding="utf-8") == "See [x](/base/decisions/ADR-0001-x.md).\n"
+
+
+
+_D = "---\ntype: Term\ntitle: D\ndescription: d\n---\n\nSee [a](/decisions/ADR-0001-adopt-kafka.md).\n"
+
+
+def test_profile_moves_an_ignored_path_inside_a_moved_directory_with_its_okfignore_entry(tmp_path, capsys):
+    import pytest
+
+    fixture = Path(__file__).resolve().parents[5] / "examples" / "fixtures" / "knowledge-2.0"
+    if not fixture.is_dir():
+        pytest.skip("examples/fixtures/knowledge-2.0 not present (script copied outside the repo)")
+    k = tmp_path / "knowledge"
+    shutil.copytree(fixture, k)
+    (k / ".okfignore").write_text("# drafts\ndecisions/drafts/\n*.tmp\nscratch/\n", encoding="utf-8")
+    (k / "decisions" / "drafts").mkdir()
+    (k / "decisions" / "drafts" / "d.md").write_text(_D, encoding="utf-8")
+    lines = _profile_lines(k, capsys)
+    assert (k / ".okfignore").read_text(encoding="utf-8") == "# drafts\nbase/decisions/drafts/\n*.tmp\nscratch/\n"
+    assert (k / "base" / "decisions" / "drafts" / "d.md").read_text(encoding="utf-8") == _D
+    assert not (k / "decisions").exists()
+    assert scan_bundle(k).ignored == ["base/decisions/drafts/"]
+    assert "rewrote .okfignore" in lines
+
+
+def test_rewrite_okfignore_follows_only_anchored_entries_under_a_moved_directory():
+    text = ("# c\n\ndecisions/drafts/\n/decisions\n!decisions/drafts/keep.md\n\\#odd/x\n"
+            "drafts/\nother/\n*.tmp\n**/wip/\nfragments/old/\nnotes.md\nother/x/\n")
+    assert rewrite_okfignore(text, ["decisions", "other"]) == (
+        "# c\n\nbase/decisions/drafts/\n/base/decisions\n!base/decisions/drafts/keep.md\n\\#odd/x\n"
+        "drafts/\nother/\n*.tmp\n**/wip/\nfragments/old/\nnotes.md\nbase/other/x/\n")
+    assert rewrite_okfignore(text, []) == text
 
 
 if __name__ == "__main__":
