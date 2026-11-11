@@ -1297,7 +1297,7 @@ def scan_notices(scan, reported: list[tuple[str, int]] = (), linted: set = froze
     return out
 
 # --------------------------------------------------------------------------
-# Domain and operational bundles (standard §2.2, §7 rule 16; ADR-0038)
+# Domain and operational bundles (standard §2.2, §7 rule 16; ADR-0039)
 # --------------------------------------------------------------------------
 @dataclass
 class Tree:
@@ -1449,6 +1449,12 @@ def check_bundle_kind(bundle: Path, fm: dict, prof: Resolved, tree: Tree | None,
                     if n:
                         rep.error("CLOSED_LOOSE_END", d.rel, f"a closed bundle holds {n} open or proposed conflict"
                                   f"{'s' if n != 1 else ''}: resolve or dismiss each, or carry it up into the parent")
+            for d in docs:
+                fm_d = resolve_aliases(prof, d.frontmatter or {})
+                if (d.rel.startswith(FRAGMENTS_DIR + "/") and _is_fragment(fm_d, prof)
+                        and fm_d.get("distillation_status") == "pending"):
+                    rep.error("CLOSED_LOOSE_END", d.rel, "a closed bundle holds a pending fragment: distill it before "
+                              "closing (standard §2.2)")
         elif closed_at is not None:
             rep.error("BAD_CLOSED_AT", "index.md", f"closed_at on a bundle whose state is {state}")
     deps = fm.get("depends_on")
@@ -2076,6 +2082,12 @@ def test_question_bad_status_errors(tmp_path):
     assert _qcodes(tmp_path, fields) == [("ERROR", "BAD_QUESTION_STATUS")]
 
 
+def test_question_carried_up_is_a_valid_status_naming_its_target(tmp_path):
+    fields = _QUESTION_FIELDS.replace("question_status: open", "question_status: carried")
+    assert _qcodes(tmp_path / "a", fields + "carried_to: ../../base/questions/who-approves-refunds.md\n") == []
+    assert _qcodes(tmp_path / "b", fields) == [("WARN", "QUESTION_NO_CARRIED_TO")]
+
+
 def test_question_owner_not_an_actor_warns(tmp_path):
     fields = _QUESTION_FIELDS.replace("owner: human:alice", "owner: Alice")
     assert _qcodes(tmp_path, fields) == [("WARN", "BAD_ACTOR")]
@@ -2254,7 +2266,7 @@ _EVERY_BREACH_FINDINGS = [
 ]
 _BAD_STATUS_FINDINGS = [
     ('ERROR', 'BAD_QUESTION_STATUS', 'base/questions/who-approves-refunds.md',
-     "question_status 'closed' is not open|answered|dropped (§7)"),
+     "question_status 'closed' is not open|answered|dropped|carried (§7)"),
 ]
 
 
@@ -4310,7 +4322,7 @@ def test_the_examples_material_is_hashed_and_one_changed_byte_is_an_error(tmp_pa
         ("ERROR", "FRAGMENT_MATERIAL_CHANGED", "fragments/2026-11-03-refund-topic-retention-chat.md")]
 
 
-# --- domain and operational bundles (standard §2.2, §7 rule 16; ADR-0038) ---
+# --- domain and operational bundles (standard §2.2, §7 rule 16; ADR-0039) ---
 _KINDS_PROFILE = ("kinds:\n"
                   "  Request: { extends: Operational Bundle, description: A request, directory: requests/, "
                   "states: [in-review] }\n"
@@ -4407,6 +4419,10 @@ def test_each_breach_of_rule_16_names_the_instance(tmp_path):
     question = ("---\ntype: Open Question\ntitle: Q\ndescription: Q.\nowner: human:x\nquestion_status: open\n"
                 "asked_in: /fragments/x.md\n" + _TGEN + "---\n\n# Question\n\nWhy?\n")
     closed = "kind: Request\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n"
+    carried = {"conflict-log.md": conflict.replace("| open |", "| carried |"),
+               "base/questions/why.md": question.replace("question_status: open", "question_status: carried\n"
+                                                         "carried_to: base/questions/why.md"),
+               "fragments/d.md": _fragment("distilled"), "fragments/c.md": _fragment("conflict")}
     k = _domain(tmp_path, {
         "requests/unknown": "kind: Ticket\nstate: open\nparent: ../..\n",
         "requests/no-kind": "",
@@ -4414,7 +4430,10 @@ def test_each_breach_of_rule_16_names_the_instance(tmp_path):
         "requests/bad-state": "kind: Request\nstate: done\nparent: ../..\n",
         "requests/no-closed-at": "kind: Request\nstate: closed\nparent: ../..\n",
         "requests/open-closed-at": _OPEN + "closed_at: 2026-11-10T09:00:00Z\n",
-        "requests/loose": (closed, {"conflict-log.md": conflict, "base/questions/why.md": question}),
+        "requests/loose": (closed, {"conflict-log.md": conflict, "base/questions/why.md": question,
+                                    "fragments/p.md": _fragment("pending")}),
+        "requests/carried": (closed, carried),
+        "requests/open-pending": (_OPEN, {"fragments/p.md": _fragment("pending")}),
         "requests/bad-deps": _OPEN + "depends_on: [x]\n",
         "incidents/misplaced": _OPEN,
         "releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
@@ -4432,6 +4451,7 @@ def test_each_breach_of_rule_16_names_the_instance(tmp_path):
         ("BAD_CLOSED_AT", "requests/open-closed-at/index.md"),
         ("CLOSED_LOOSE_END", "requests/loose/conflict-log.md"),
         ("CLOSED_LOOSE_END", "requests/loose/base/questions/why.md"),
+        ("CLOSED_LOOSE_END", "requests/loose/fragments/p.md"),
         ("BAD_DEPENDS_ON", "requests/bad-deps/index.md"),
         ("KIND_NOT_HELD", "incidents/misplaced/index.md"),
         ("KIND_NOT_HELD", "releases/rel-1/incidents/inc-9/index.md"),
@@ -4441,6 +4461,26 @@ def test_each_breach_of_rule_16_names_the_instance(tmp_path):
         {OKF_PROFILE}
     assert "1 open or proposed conflict" in next(i["message"] for i in rep.items if i["code"] == "CLOSED_LOOSE_END"
                                                  and i["path"].endswith("conflict-log.md"))
+    assert next(i["message"] for i in rep.items if i["path"] == "requests/loose/fragments/p.md") == \
+        "a closed bundle holds a pending fragment: distill it before closing (standard §2.2)"
+    assert not [i for i in rep.items if i["path"].startswith(("requests/carried/", "requests/open-pending/"))
+                and i["code"] in ("CLOSED_LOOSE_END", "BAD_QUESTION_STATUS", "QUESTION_NO_CARRIED_TO")], rep.items
+
+
+def _fragment(status: str, field: str | None = None) -> str:
+    """A Knowledge Fragment of an instance with the given distillation_status (or the field line given instead)."""
+    return ("---\ntype: Knowledge Fragment\ntitle: F\ndescription: F.\nstatus: draft\noccurred_at: 2026-11-09\n"
+            "origin: a meeting\nparticipants: [human:x]\n" + (field or f"distillation_status: {status}") + "\n"
+            + _TGEN + "---\n\n# Record\n\nText.\n\n# Distillation\n\nText.\n")
+
+
+def test_a_pending_fragment_in_a_closed_instance_is_read_through_the_value_aliases(tmp_path):
+    closed = "kind: Request\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n"
+    aliases = "aliases:\n  values: [{ from: { ingerido: false }, to: { distillation_status: pending } }]\n"
+    k = _tree_bundle(tmp_path / "knowledge", kind_dirs=("requests",), profile=_KINDS_PROFILE + aliases)
+    _tree_bundle(k / "requests/req-1", closed, extra={"fragments/f.md": _fragment("", "ingerido: false")})
+    _list_instances(k / "requests")
+    assert _rule16(lint(k)[0]) == [("CLOSED_LOOSE_END", "requests/req-1/fragments/f.md")]
 
 
 def test_a_domain_bundle_declares_no_state_parent_or_closed_at(tmp_path):

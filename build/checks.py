@@ -270,6 +270,14 @@ def bundles(tmp: Path) -> None:
     print("knowledge and examples/knowledge on knowledge/3.0; the 2.0 fixture is frozen")
 
 
+def index(tmp: Path) -> None:
+    """every index.md of knowledge and examples/knowledge is what okf_index.py would write"""
+    for bundle in (Path("knowledge"), EX):
+        summary = last_line(uv(S / "okf_index.py", bundle, "--check", ok=(0, 1)))
+        expect(summary == "0 index.md out of date", f"{bundle}: {summary}")
+        print(bundle, summary)
+
+
 def workflows(tmp: Path) -> None:
     """each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways
     (ADR-0028 decision 5)"""
@@ -342,7 +350,7 @@ def dogfood(tmp: Path) -> None:
 
 STEPS = {"unit": unit, "init-0.2": init_02, "init-0.1": init_01, "google-fixtures": google_fixtures,
          "migration": migration, "profile-migration": profile_migration, "m365": m365, "copilot": copilot,
-         "builtin-profile": builtin_profile, "copies": copies, "m365-agent": m365_agent, "bundles": bundles,
+         "builtin-profile": builtin_profile, "copies": copies, "m365-agent": m365_agent, "bundles": bundles, "index": index,
          "workflows": workflows, "obsidian-setup": obsidian_setup, "dogfood": dogfood}
 
 

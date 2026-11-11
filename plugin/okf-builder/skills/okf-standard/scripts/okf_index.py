@@ -14,6 +14,11 @@ Usage:
   heading starts with "# Notes" (or "# Notas").
 - Never writes into or below the root projections/ (not OKF, ADR-0019); the root
   index lists it only if projections/index.md exists.
+- Skips what lint's scan leaves out, as lint does: the paths .okfignore matches,
+  nested bundles (an operational instance included: run okf_index.py on it) and
+  non-OKF directories. It writes no index.md there and lists neither ignored paths
+  nor non-OKF directories; a nested bundle stays listed in its parent's index, and
+  a directory holding only nested bundles (a kind directory) keeps its index.md.
 - --check: writes nothing; exit 1 if any index.md would change.
 """
 from __future__ import annotations
@@ -28,8 +33,10 @@ from okf_common import (  # noqa: E402
     PROFILE_30,
     PROJECTIONS_DIR,
     RESERVED,
+    Scan,
     find_bundle,
     load_doc,
+    scan_bundle,
     split_frontmatter,
 )
 
@@ -106,18 +113,51 @@ def existing_root_fm_and_notes(idx: Path) -> tuple[str, str]:
     return fm, notes
 
 
-def build_index(bundle: Path, d: Path) -> str:
+def _rel(bundle: Path, p: Path) -> str:
+    return p.resolve().relative_to(bundle.resolve()).as_posix()
+
+
+def left_out(bundle: Path, sc: Scan, p: Path) -> str | None:
+    """Why lint's scan leaves p out of the bundle ('.okfignore', 'nested bundle', 'not OKF'), or None. What lies below
+    an ignored directory or a nested bundle is left out with it, a file with its non-OKF directory; a directory below a
+    non-OKF directory is judged on its own."""
+    rel = _rel(bundle, p)
+    if rel == ".":
+        return None
+    as_dir = rel + "/"
+    if any(as_dir.startswith(e) if e.endswith("/") else rel == e for e in sc.ignored):
+        return ".okfignore"
+    if any(as_dir.startswith(n) for n in sc.nested):
+        return "nested bundle"
+    home = rel.rpartition("/")[0] + "/" if p.is_file() else as_dir
+    if any(home == d for d, _ in sc.not_okf):
+        return "not OKF"
+    return None
+
+
+def holds_content(bundle: Path, sc: Scan, d: Path) -> bool:
+    """d holds a .md below it that lint's scan does not leave out, or a nested bundle (a kind directory holds only its
+    instances)."""
+    rel = _rel(bundle, d)
+    pre = "" if rel == "." else rel + "/"
+    return (any(left_out(bundle, sc, q) is None for q in d.rglob("*.md"))
+            or any(n.startswith(pre) for n in sc.nested))
+
+
+def build_index(bundle: Path, d: Path, sc: Scan | None = None) -> str:
+    sc = sc if sc is not None else scan_bundle(bundle)
     is_root = d.resolve() == bundle.resolve()
     concepts = []
     for p in sorted(d.iterdir()):
-        if p.is_file() and p.suffix == ".md" and p.name not in RESERVED:
+        if p.is_file() and p.suffix == ".md" and p.name not in RESERVED and left_out(bundle, sc, p) is None:
             doc = load_doc(bundle, p)
             fm = doc.frontmatter or {}
             concepts.append((str(fm.get("type") or "Other"), fm.get("title") or p.stem,
                              fm.get("description") or "", p.name, fm.get("status")))
     subdirs = [p for p in sorted(d.iterdir()) if p.is_dir() and not p.name.startswith(".")
-               and (bool(list(p.rglob("*.md"))) if not (is_root and p.name == PROJECTIONS_DIR)
-                    else (p / "index.md").is_file())]
+               and ((p / "index.md").is_file() if is_root and p.name == PROJECTIONS_DIR
+                    else left_out(bundle, sc, p) == "nested bundle"
+                    or (left_out(bundle, sc, p) is None and holds_content(bundle, sc, p)))]
 
     groups: dict[str, list] = {}
     for c in concepts:
@@ -164,19 +204,22 @@ def in_projections(bundle: Path, d: Path) -> bool:
 
 def index_targets(bundle: Path, sub: Path | None = None) -> list[Path]:
     """Directories whose index.md is regenerated: `sub` (default: the bundle) and every directory below it
-    holding a .md, without hidden directories and never inside the root projections/."""
+    holding a .md lint's scan keeps or a nested bundle, without hidden directories, never inside the root projections/
+    and never where lint's scan leaves the path out (.okfignore, a nested bundle, a non-OKF directory)."""
+    sc = scan_bundle(bundle)
     top = sub or bundle
     below = [p for p in sorted(top.rglob("*")) if p.is_dir() and not any(
         part.startswith(".") for part in p.relative_to(bundle).parts)]
-    return [d for d in [top, *below] if not in_projections(bundle, d)
-            and (d == bundle or any(q.suffix == ".md" for q in d.rglob("*.md")))]
+    return [d for d in [top, *below] if not in_projections(bundle, d) and left_out(bundle, sc, d) is None
+            and (d == bundle or holds_content(bundle, sc, d))]
 
 
 def regenerate(bundle: Path, targets: list[Path], check: bool = False) -> int:
     """Write (or, with check, report) each out-of-date index.md of `targets`; return how many differ."""
     changed = 0
+    sc = scan_bundle(bundle)
     for d in targets:
-        new = build_index(bundle, d)
+        new = build_index(bundle, d, sc)
         idx = d / "index.md"
         old = idx.read_text(encoding="utf-8") if idx.exists() else None
         if old != new:
@@ -207,7 +250,14 @@ def main(argv=None) -> int:
         if in_projections(bundle, d):
             print(f"ERROR: {PROJECTIONS_DIR}/ is not OKF; okf-index does not write there.", file=sys.stderr)
             return 2
-        targets = [d] if d == bundle or any(q.suffix == ".md" for q in d.rglob("*.md")) else []
+        sc = scan_bundle(bundle)
+        reason = left_out(bundle, sc, d)
+        if reason is not None:
+            why = "nested bundle: run okf_index.py on it" if reason == "nested bundle" else reason
+            print(f"ERROR: {_rel(bundle, d)}/ is not part of this bundle ({why}); okf-index does not write there.",
+                  file=sys.stderr)
+            return 2
+        targets = [d] if d == bundle or holds_content(bundle, sc, d) else []
     else:
         targets = index_targets(bundle)
     changed = regenerate(bundle, targets, args.check)
@@ -316,6 +366,100 @@ def test_default_root_frontmatter_is_30(tmp_path):
     (k / "base").mkdir(parents=True)
     main([str(k)])
     assert f'okf_profile: "{PROFILE_30}"' in (k / "index.md").read_text(encoding="utf-8")
+
+
+# --- what lint's scan leaves out: .okfignore, nested bundles, non-OKF directories (standard §2, §2.2) ---
+_INSTANCES = ("requests/req-1", "incidents/inc-1", "releases/rel-1")
+
+
+def _plant(tmp: Path) -> Path:
+    """K: a domain bundle with four instances (okf_lint._domain), an .okfignore'd directory and file, a non-OKF
+    directory and a nested bundle that is no instance."""
+    from okf_lint import _OPEN, _domain, _tree_bundle
+
+    k = _domain(tmp, {"requests/req-1": _OPEN,
+                      "incidents/inc-1": "kind: Incident\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n",
+                      "releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
+                      "releases/rel-1/requests/req-9": "kind: Request\nstate: in-review\nparent: ../..\n"})
+    (k / ".okfignore").write_text("base/scratch/\nbase/wip.md\n", encoding="utf-8")
+    (k / "base" / "scratch").mkdir()
+    (k / "base" / "scratch" / "draft.md").write_text("---\ntype: Term\ntitle: Draft\ndescription: D.\n---\n\n# Definition\n",
+                                                     encoding="utf-8")
+    (k / "base" / "wip.md").write_text("---\ntype: Term\ntitle: WIP\ndescription: W.\n---\n\n# Definition\n", encoding="utf-8")
+    (k / "base" / "vendor").mkdir()
+    (k / "base" / "vendor" / "readme.md").write_text("# Vendor\n\nPlain Markdown.\n", encoding="utf-8")
+    _tree_bundle(k / "base" / "other-bundle")
+    return k
+
+
+def _tree(root: Path) -> dict:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def _lint_view(k: Path) -> tuple[list, list]:
+    from okf_lint import lint
+
+    rep = lint(k)[0]
+    return sorted((i["code"], i["path"]) for i in rep.items), list(rep.notices)
+
+
+def test_index_leaves_each_instance_byte_identical(tmp_path):
+    k = _plant(tmp_path)
+    before = {rel: _tree(k / rel) for rel in _INSTANCES}
+    assert main([str(k)]) == 0
+    assert {rel: _tree(k / rel) for rel in _INSTANCES} == before
+    assert (k / "requests/req-1/index.md").read_text(encoding="utf-8").startswith(
+        '---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\nkind: Request\nstate: open\nparent: ../..\n---\n')
+    assert main([str(k), "--check"]) == 0
+
+
+def test_lint_findings_and_notices_unchanged_by_index(tmp_path):
+    k = _plant(tmp_path)
+    before = _lint_view(k)
+    assert before[0] == []
+    main([str(k)])
+    assert _lint_view(k) == before
+
+
+def test_index_writes_only_outside_excluded_paths(tmp_path, capsys):
+    k = _plant(tmp_path)
+    (k / "requests" / "index.md").unlink()  # the kind directory holds nothing but its instance: still a target
+    capsys.readouterr()
+    assert main([str(k)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "WROTE index.md", "WROTE base/index.md", "WROTE fragments/index.md", "WROTE incidents/index.md",
+        "WROTE releases/index.md", "WROTE requests/index.md", "6 index.md regenerated"]
+
+
+def test_parent_index_skips_ignored_and_not_okf(tmp_path):
+    k = _plant(tmp_path)
+    main([str(k)])
+    assert (k / "base/index.md").read_text(encoding="utf-8") == (
+        "> The project's knowledge, in typed directories.\n\n# Domain Profile\n\n* [DP](profile.md) - DP. _(draft)_\n\n"
+        "# Subdirectories\n\n* [other-bundle](other-bundle/index.md) - Concepts in other-bundle.\n")
+    assert (k / "requests/index.md").read_text(encoding="utf-8") == (
+        "> Concepts in requests.\n\n# Subdirectories\n\n* [req-1](req-1/index.md) - Concepts in req-1.\n")
+    assert not (k / "base/scratch/index.md").exists() and not (k / "base/vendor/index.md").exists()
+
+
+def test_dir_into_excluded_path_exits_2(tmp_path, capsys):
+    k = _plant(tmp_path)
+    before = _tree(k)
+    for d, why in (("requests/req-1", "nested bundle: run okf_index.py on it"), ("base/scratch", ".okfignore"),
+                   ("base/vendor", "not OKF"), ("base/other-bundle", "nested bundle: run okf_index.py on it")):
+        capsys.readouterr()
+        assert main([str(k), "--dir", d]) == 2
+        assert capsys.readouterr().err == f"ERROR: {d}/ is not part of this bundle ({why}); okf-index does not write there.\n"
+        assert _tree(k) == before
+
+
+def test_an_instance_indexed_as_its_own_bundle_keeps_its_root_frontmatter(tmp_path):
+    k = _plant(tmp_path)
+    req = k / "requests" / "req-1"
+    fm = (req / "index.md").read_text(encoding="utf-8").partition("---\n\n")[0]
+    assert main([str(req)]) == 0
+    assert (req / "index.md").read_text(encoding="utf-8").startswith(fm + "---\n\n# ")
+    assert main([str(req), "--check"]) == 0
 
 
 if __name__ == "__main__":
