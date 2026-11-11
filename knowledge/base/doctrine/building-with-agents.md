@@ -6,8 +6,8 @@ resource: /.claude/workflows/okf-layer-ticket.js
 tags: [doctrine, agents, workflow, process]
 status: stable
 owner: human:jisequilla
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-06T19:20:00Z }
-verified: { by: human:jisequilla, at: 2026-11-10T22:38:26Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-11T18:21:33Z }
+verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:26Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }]
 sources:
   - { id: adr-0009, resource: /base/decisions/ADR-0009-build-in-layers-and-tickets.md, title: "ADR-0009: Build multi-stage changes in layers and delegated tickets" }
   - { id: adr-0028, resource: /base/decisions/ADR-0028-where-things-go.md, title: "ADR-0028: Where things go" }
@@ -27,13 +27,14 @@ sources:
   - { id: s-owner, resource: /fragments/2026-11-04-audit-build-session.md, title: "2026-11-04 session: How the owner decided" }
   - { id: s-ov8, resource: /fragments/2026-11-06-obsidian-viewer-build.md, title: "2026-11-06 session: What the tests and reviewers passed" }
   - { id: s-ov8-fix, resource: /fragments/2026-11-06-obsidian-viewer-build.md, title: "2026-11-06 session: The fix" }
+  - { id: s-lessons, resource: /fragments/2026-11-10-build-lessons-from-two-repos.md, title: "2026-11-10: How two other repos build with agents" }
 ---
 
 # Principles
 
 How to carry them out is the runbook [Build a change in layers](/base/runbooks/build-in-layers.md); the rules every agent obeys are the [agents policy](/base/policies/agents-in-this-repo.md). Each principle here says why it holds and which run taught it.
 
-1. **The main session judges and does not implement.** Builders work in their own worktrees and open draft PRs; fresh-context reviewers read only the PR; the main session verifies, asks the owner and merges. *Why:* a session that both builds and judges grades its own work, and loses half-done work to compaction[^adr-0009]. *Evidence:* in A5 the fresh-context review found four defects in the git-facts script the builder had delivered, and a separate fix agent corrected them[^s-a5]. A fix that the main session's own verification finds may be made by it when the owner chooses, with each new assertion shown failing on revert; the owner chose this for the two defects that opening PR #75 in Obsidian found[^s-ov8-fix].
+1. **The main session judges and does not implement.** Builders work in their own worktrees and open draft PRs; fresh-context reviewers read only the PR; the main session verifies, asks the owner and merges. *Why:* a session that both builds and judges grades its own work, and loses half-done work to compaction[^adr-0009]. *Evidence:* in A5 the fresh-context review found four defects in the git-facts script the builder had delivered, and a separate fix agent corrected them[^s-a5]. A fix that the main session's own verification finds may be made by it when the owner chooses, with each new assertion shown failing on revert; the owner chose this for the two defects that opening PR #75 in Obsidian found[^s-ov8-fix]. On 2026-11-10 the main session built okf-3vg.1 and okf-3vg.2 itself; one fresh-context review still found a crash on a kind holding an abstract kind and an instance linted twice through an alias, both fixed before the merge[^s-lessons].
 2. **The ticket's text lives in the tracker**, never only in a session's scratch folder. *Why:* scratch folders are not kept. *Evidence:* the A2 ticket files were gone and were rebuilt from the beads, where their text had been stored[^s-lost].
 3. **Measure a proposed check against the repo's own data before the ticket is written.** Run the idea over `knowledge/`, `examples/` and the fixtures and count what it would report. *Why:* a check specified in the abstract meets real data in the pre-flight, and each stop costs a round with the owner. *Evidence:* A2 needed four pre-flights: a secret pattern matching 176 ADR file names, checks firing on the repo's accepted ADRs, a verification older than a migration[^s-a2].
 4. **Read the whole source before stating what it holds.** A claim about code or data names what was read. *Why:* a claim from a partial read is passed on as fact and is caught only by the next check, if any. *Evidence:* the agent said `mask_secrets` had token-prefix patterns and that every ledger row linked a concept; the pre-flights found neither was true[^s-a2b][^s-a4].
@@ -45,6 +46,8 @@ How to carry them out is the runbook [Build a change in layers](/base/runbooks/b
 10. **Irreversible and outward actions go through the owner's own words.** Merging, publishing a release and deleting remote branches are done on the owner's written instruction naming them, or by the owner. *Why:* they reach past the repo and cannot be taken back quietly. *Evidence:* the owner ran the remote branch deletions and named each merge and the release[^s-a1][^s-branches][^s-release].
 11. **Check a release on a bundle outside the repo before announcing it.** *Why:* the repo's own bundles are kept clean, so they cannot show what an upgrade reports elsewhere. *Evidence:* the v0.9.0 notes missed `FRAGMENT_NO_LEDGER`, which another bundle reported 26 times on its first run[^s-release].
 12. **Verify in the tool that reads the output.** A change whose output another tool reads (Obsidian, a platform, a CI runner) is opened in that tool, on a clean checkout, before it merges. *Why:* tests that compare the output with the script's own constants, and reviewers who read the diff, share the author's assumptions about the tool. *Evidence:* PR #75 passed seven proven criteria and two fresh-context reviewers; a fresh clone opened in Obsidian showed `app.json` rewritten on open and 13 `index.md` files in the views[^s-ov8].
+13. **Every option of an owner's question gets the same depth.** Each option says what it does, what it costs and when it is the right one, at a similar length; the recommended one is marked, not argued alone. *Why:* reasoning given to one option and not the others steers the owner toward it. *Evidence:* in the interviewing repo the recommended option carried a median of 146 characters of reasoning and each alternative 29, and the owner kept accepting; this repo's questions on 2026-11-10 gave the recommended option most of the reasoning[^s-lessons].
+14. **Merge the commit that was reviewed.** Reviewers record the head commit they read, and the merge goes through only while the head is still that commit; a head that moved is reviewed again. *Why:* code that lands between the review and the merge reaches main unreviewed, under a message that does not describe it. *Evidence:* in the inline repo a session kept writing into the working tree after handing off, and a pull request merged code nobody had reviewed[^s-lessons].
 
 A principle that becomes a decision is an ADR, which this doctrine then links; a rule that comes out of it is added to the agents policy[^adr-0028].
 
@@ -56,6 +59,7 @@ A principle that becomes a decision is an ADR, which this doctrine then links; a
 * [ADR-0028: Where things go](/base/decisions/ADR-0028-where-things-go.md)
 * [2026-11-04 · Building the knowledge audit and v0.9.0 with agent workflows](/fragments/2026-11-04-audit-build-session.md)
 * [2026-11-06 · Building the Obsidian viewer setup (okf-ov8) with an agent workflow](/fragments/2026-11-06-obsidian-viewer-build.md)
+* [2026-11-10 · How two other repos build with agents, and what this repo takes from them](/fragments/2026-11-10-build-lessons-from-two-repos.md)
 
 [^adr-0009]: ADR-0009, Context and Decision.
 [^adr-0028]: ADR-0028, decisions 7 and 8.
@@ -75,3 +79,4 @@ A principle that becomes a decision is an ADR, which this doctrine then links; a
 [^s-owner]: The 2026-11-04 session, "How the owner decided".
 [^s-ov8]: The 2026-11-06 session, "What the tests and reviewers passed".
 [^s-ov8-fix]: The 2026-11-06 session, "The fix".
+[^s-lessons]: The 2026-11-10 fragment, "The inline repo", "The interviewing repo" and "The comparison".
