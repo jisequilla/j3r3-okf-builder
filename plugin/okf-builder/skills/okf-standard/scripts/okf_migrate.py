@@ -934,18 +934,42 @@ def test_profile_dry_run_leaves_ignored_and_nested(tmp_path, capsys):
     assert _tree(p) == before
 
 
-def test_profile_moves_a_directory_that_also_holds_documents(tmp_path, capsys):
-    k = _bundle_20(tmp_path)
+_Z = _concept("Architecture Decision", "Z", body="[abs](/decisions/ADR-0001-x.md) and [up](../ADR-0001-x.md).\n")
+
+
+def _plant_sub(k: Path) -> Path:
+    """A nested bundle decisions/sub/ beside the ADR of _bundle_20, linking a path the profile step moves."""
     sub = k / "decisions" / "sub"
     sub.mkdir()
-    (sub / "index.md").write_text('---\nokf_version: "0.1"\n---\n\n# Decisions\n\n* [Z](z.md) - Z.\n',
+    (sub / "index.md").write_text('---\nokf_version: "0.2"\n---\n\n# Decisions\n\n* [Z](z.md) - Z.\n',
                                   encoding="utf-8")
-    z = _concept("Architecture Decision", "Z", body="[own](/z.md) and [up](../ADR-0001-x.md).\n")
-    (sub / "z.md").write_text(z, encoding="utf-8")
+    (sub / "z.md").write_text(_Z, encoding="utf-8")
+    return k
+
+
+def test_profile_moves_a_directory_that_also_holds_documents(tmp_path, capsys):
+    plain = _profile_lines(_bundle_20(tmp_path / "a"), capsys)
+    k = _plant_sub(_bundle_20(tmp_path / "b"))
     lines = _profile_lines(k, capsys)
     assert "move decisions/ → base/decisions/" in lines
-    assert not [x for x in lines if "decisions/sub/" in x]
-    assert (k / "base" / "decisions" / "sub" / "z.md").read_text(encoding="utf-8") == z
+    assert lines == plain
+    assert (k / "base" / "decisions" / "sub" / "z.md").read_text(encoding="utf-8") == _Z
+
+
+def test_version_step_leaves_a_nested_bundle_inside_a_layer_directory(tmp_path, capsys):
+    runs = {}
+    for plants in (False, True):
+        src = _bundle_20(tmp_path / f"src-{plants}")
+        if plants:
+            _plant_sub(src)
+        out = tmp_path / f"out-{plants}"
+        capsys.readouterr()
+        assert main([str(src), "--to", "0.1", "--out", str(out)]) == 0
+        runs[plants] = (_lines(capsys.readouterr().out, "migrated "), _tree(out))
+    assert runs[True][0] == runs[False][0]
+    assert {r: t for r, t in runs[True][1].items() if r.startswith("decisions/sub/")} == {
+        "decisions/sub/index.md": '---\nokf_version: "0.2"\n---\n\n# Decisions\n\n* [Z](z.md) - Z.\n',
+        "decisions/sub/z.md": _Z}
 
 
 def test_profile_moves_a_non_okf_directory_and_rewrites_its_links(tmp_path, capsys):
