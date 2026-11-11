@@ -3,11 +3,11 @@ type: Architecture Decision
 title: "ADR-0038: A domain bundle defines its operational kinds in base and holds their instances as bundles next to its layers, each naming its parent"
 description: A bundle is either a domain bundle, whose knowledge never closes, or an operational bundle, a unit of work that opens and closes; the domain bundle's Domain Profile defines each operational kind (its directory, its states and the kinds it may hold) and a family of base/ says how that work is done; each instance is a full bundle stored in its kind's directory next to the layers, never inside base/, whose root index.md declares kind, state, parent and a declarative depends_on; lint recurses into instances; a closing instance distills its whole base/ one level up, each concept promoted, opened as a conflict or kept, and closes only once its open conflicts and questions are resolved or carried up; a closed one is frozen or extracted.
 tags: [adr, standard, bundles, profile]
-status: stable
+status: deprecated
 adr_id: ADR-0038
-decision_status: accepted
+decision_status: superseded
 supersedes:
-superseded_by:
+superseded_by: /base/decisions/ADR-0039-closing-operational-bundles.md
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-10T22:34:16Z }
 verified: { by: human:jisequilla, at: 2026-11-10T22:34:50Z }
 sources:
