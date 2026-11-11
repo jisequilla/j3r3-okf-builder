@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Refuses a commit whose staged root copies (standard/, templates/) or Obsidian setup (knowledge/) are stale.
+# Checks the index, not the working tree. Installed by `just hooks`.
+set -euo pipefail
+staged="$(mktemp -d)"
+trap 'rm -rf "$staged"' EXIT
+git checkout-index --all --prefix="$staged/"
+if ! out="$(uv run -q "$staged/build/checks.py" copies obsidian-setup 2>&1)"; then
+    printf '%s\n' "$out" >&2
+    echo "pre-commit: staged generated files are stale; regenerate them (just copies / just obsidian --force) and stage the result" >&2
+    exit 1
+fi

@@ -54,6 +54,11 @@ secrets:
         gitleaks dir "$d" --no-banner --redact
     done
 
+# Install the pre-commit hook in this clone: it refuses a commit whose staged root copies or Obsidian setup are stale
+hooks:
+    git config core.hooksPath .githooks
+    @echo "pre-commit hook installed (.githooks/pre-commit)"
+
 # The link packages .claude/skills and .agents/skills point at the source
 check-links:
     #!/usr/bin/env bash
