@@ -7,7 +7,7 @@ tags: [system, scripts, python]
 status: stable
 owner: human:jisequilla
 runtime: uv
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-11T21:37:42Z }
 verified: { by: human:jisequilla, at: 2026-11-09T10:56:54Z }
 ---
 
@@ -18,7 +18,7 @@ verified: { by: human:jisequilla, at: 2026-11-09T10:56:54Z }
 | okf_init.py | Scaffold of `knowledge/` (v0.2 or v0.1) | files; regenerates indexes |
 | okf_lint.py | Spec conformance (§11) + profile; version detection | ERROR/WARN findings, `--json`, exit code |
 | okf_profile.py | Loads and composes a knowledge/3.0 bundle's Domain Profile (built-in, `extends`, `base/profile.md`); `--check-builtin` checks the built-in profile against the standard's §4 | PROFILE_* findings, `--json`; library of okf_lint.py |
-| okf_index.py | Regenerates `index.md` per directory from frontmatter | `--check` for CI |
+| okf_index.py | Regenerates `index.md` per directory from frontmatter; skips what lint's scan leaves out (`.okfignore`, nested bundles, non-OKF directories), still listing a nested bundle in its parent's index; `--dir` into one exits 2 | `--check` for CI |
 | okf_migrate.py | 0.1 ↔ 0.2, `--dry-run`, `--out`, `--keep-extensions`, `--file` | files + entry in log.md |
 | okf_audit.py | Repository history for `okf-review`'s audit mode: concepts deleted or renamed since a reference point (read-only) | `--since`, `--json` |
 | okf_projection.py | Knowledge projections ([ADR-0022](/base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md), [ADR-0031](/base/decisions/ADR-0031-projection-tools-transient-exception.md)): each `projection.yaml`, the dependency rule and drift by nature (`PROJ_*` codes, `PROJ_DRIFT` a warning); runs a rendered projection's `render` only with `--run-render`; `--record-hashes` writes a composed projection's hashes in place | `--json`, `--strict`, exit code |
