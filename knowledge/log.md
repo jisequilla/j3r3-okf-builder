@@ -1,6 +1,7 @@
 # Bundle history
 
 ## 2026-11-11
+* **Update**: [OKF scripts](/base/systems/scripts-okf.md) (okf-4j8): `okf_index.py` reads the bundle through lint's scan and leaves alone what it leaves out, the paths `.okfignore` matches, nested bundles (every operational instance) and non-OKF directories: it writes no `index.md` there, lists neither ignored paths nor non-OKF directories, keeps listing a nested bundle in its parent's index and a kind directory's own `index.md`, and `--dir` into an excluded path exits 2; `OKF-STANDARD.md` §2 names `okf-index` and `okf-migrate` beside `okf-lint`; `examples/knowledge/base/index.md` regenerated, and the `index` step of `just test` keeps both repository bundles indexed; its `verified` stays, older than the new `generated.at`, until human:jisequilla verifies it again.
 * **Verification**: [ADR-0039](/base/decisions/ADR-0039-closing-operational-bundles.md) (round okf-3vg) verified by human:jisequilla on the private review page (ADR-0033), at its `generated.at`, now `decision_status: accepted` and `status: stable`; the answer kept in [2026-11-11 · Verification of ADR-0039 on the review page](/fragments/2026-11-11-verification-adr-0039.md).
 * **Creation**: [2026-11-11 · Verification of ADR-0039 on the review page](/fragments/2026-11-11-verification-adr-0039.md): the owner's stored answer, confirmed and applied.
 * **Deprecation**: [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md), superseded by ADR-0039.
