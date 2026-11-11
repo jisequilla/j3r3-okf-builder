@@ -51,7 +51,7 @@ if (!build || !build.pr_number) return { ticket, stage: 'build', pre, build }
 
 const LENSES = [
   { key: 'correctness', text: 'Lens: correctness. Does the diff do what the ticket table says, without contradicting the ADRs the ticket or the common context names, and without regressions?' },
-  { key: 'tests', text: 'Lens: tests. Is each acceptance criterion really proven (would its test fail if the change were reverted)? Are the build/checks.py steps and script --test cases sound? Read the evidence pasted in the PR body; do NOT run just test in the builder's checkout (it writes dist/ there); you may run single script --test commands from a fresh checkout of the PR branch in the scratchpad.' },
+  { key: 'tests', text: 'Lens: tests. Is each acceptance criterion really proven (would its test fail if the change were reverted)? Are the build/checks.py steps and script --test cases sound? Read the evidence pasted in the PR body; do NOT run just test in the checkout of the builder (it writes dist/ there); you may run single script --test commands from a fresh checkout of the PR branch in the scratchpad.' },
 ]
 const review = (round) => parallel(LENSES.map(l => () => agent(`${READ}
 You are a reviewer with fresh context. Review PR #${build.pr_number} of jisequilla/j3r3-okf-builder (gh pr view ${build.pr_number}; gh pr diff ${build.pr_number}). Do not read any builder report other than the PR itself. Record in head_sha the PR head commit you read (gh pr view ${build.pr_number} --json headRefOid). ${l.text}
