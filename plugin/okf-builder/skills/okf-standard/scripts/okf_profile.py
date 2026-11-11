@@ -49,7 +49,7 @@ PROFILE_KEYS = ("extends", "types", "kinds", "families", "forbidden", "fixed", "
                 "questions", "aliases")
 TYPE_KEYS = {"extends", "description", "fields", "directory", "note"}
 KIND_KEYS = {"extends", "description", "directory", "states", "holds", "note"}
-OPERATIONAL = "Operational Bundle"  # the abstract kind every operational kind extends (standard §2.2, ADR-0038)
+OPERATIONAL = "Operational Bundle"  # the abstract kind every operational kind extends (standard §2.2, ADR-0039)
 DOMAIN_BUNDLE = "Domain Bundle"     # the kind a bundle without `kind` is; never declared under kinds
 BASE_STATES = ("open", "closed")    # the states of every operational kind; closed is the only terminal one
 KIND_DIR_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*/$")
@@ -1416,7 +1416,7 @@ def test_the_shipped_builtin_profile_loads_and_matches_section_4():
     fragment = type_in_force(r, "Knowledge Fragment")
     assert {k: (e["level"], e["code"]) for k, e in fragment["required"].items()} == {
         k: ("warn", "FRAGMENT_NO_FIELD") for k in ("occurred_at", "origin", "participants", "distillation_status")}
-    assert [x["code"] for x in r.rules] == ["QUESTION_NO_ANSWER"]
+    assert [x["code"] for x in r.rules] == ["QUESTION_NO_ANSWER", "QUESTION_NO_CARRIED_TO"]
 
 
 def test_check_builtin_names_each_type_or_field_that_differs_from_section_4(tmp_path):
@@ -2177,7 +2177,7 @@ def test_the_shipped_builtin_profile_declares_material_and_repository_as_maps():
         "required"]
 
 
-# --- kinds (standard §2.2, ADR-0038) ---
+# --- kinds (standard §2.2, ADR-0039) ---
 _KINDS = ("kinds:\n"
           "  Request: { extends: Operational Bundle, description: A request, directory: requests/, states: [in-review] }\n"
           "  Urgent Request: { extends: Request, description: An urgent one, directory: urgent/, states: [escalated] }\n"

@@ -88,10 +88,11 @@ types:
     description: What the team does not know yet, named <kebab-slug>.md
     fields:
       owner: { type: actor, level: warn, code: BAD_ACTOR, required: { level: warn, code: QUESTION_NO_FIELD }, note: Who answers for the question }
-      question_status: { type: enum, values: [open, answered, dropped], code: BAD_QUESTION_STATUS, required: { level: warn, code: QUESTION_NO_FIELD } }
+      question_status: { type: enum, values: [open, answered, dropped, carried], code: BAD_QUESTION_STATUS, required: { level: warn, code: QUESTION_NO_FIELD } }
       asked_in: { type: path, level: warn, required: { level: warn, code: QUESTION_NO_FIELD }, note: "The fragment where it arose, /fragments/<file>" }
       blocks: { type: list, of: path, level: warn, note: The concepts it holds up }
       answered_by: { type: path, level: warn, note: The concept that answers it }
+      carried_to: { type: string, level: warn, note: "The parent bundle's item it was carried up into, as a path relative to the instance root" }
       review_on: { type: date_or_datetime, level: warn, code: BAD_ISO, note: The date to look at it again }
   Conflict Log:
     directory: /
@@ -102,7 +103,8 @@ kinds:
   Operational Bundle: { description: "A unit of work that opens, runs and closes; abstract: every operational kind a domain bundle declares extends it" }
 rules:
   - { name: answered-question-names-its-answer, when: { type: Open Question, question_status: answered }, require: [answered_by], level: warn, code: QUESTION_NO_ANSWER }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-10T22:56:31Z }
+  - { name: carried-question-names-its-target, when: { type: Open Question, question_status: carried }, require: [carried_to], level: warn, code: QUESTION_NO_CARRIED_TO }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-11T21:34:17Z }
 sources:
   - { id: types, resource: references/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }
   - { id: domain-profile, resource: references/OKF-STANDARD.md, title: "OKF standard §4.1: Domain Profile" }
@@ -175,9 +177,10 @@ No extra fields: the common keys of §3.1 and the body headings of their templat
 
 - `owner`, `question_status`, `asked_in`: each one missing is a warning, `QUESTION_NO_FIELD`[^types].
 - `owner` is an actor, because it names the person who answers the question; another form is `BAD_ACTOR`, a warning[^spec-actor].
-- `question_status` is `open`, `answered` or `dropped`; another value is `BAD_QUESTION_STATUS`, an error[^conformance].
-- `blocks`, `answered_by`, `review_on`: optional. `review_on` is `YYYY-MM-DD` or ISO 8601 with an offset; another form is `BAD_ISO`, a warning.
+- `question_status` is `open`, `answered`, `dropped` or `carried` (carried up into the parent bundle when an operational bundle closes, standard §2.2); another value is `BAD_QUESTION_STATUS`, an error[^conformance].
+- `blocks`, `answered_by`, `carried_to`, `review_on`: optional. `carried_to` is the parent bundle's open question or Conflict Log a carried question went into, as a path relative to the instance root (`../../base/questions/<slug>.md`), so it is text, not a bundle path. `review_on` is `YYYY-MM-DD` or ISO 8601 with an offset; another form is `BAD_ISO`, a warning.
 - Rule `answered-question-names-its-answer`: an answered question names the concept that answers it in `answered_by`; without it, `QUESTION_NO_ANSWER`, a warning[^types].
+- Rule `carried-question-names-its-target`: a carried question names the parent's item in `carried_to`; without it, `QUESTION_NO_CARRIED_TO`, a warning[^bundles].
 
 ## Domain Profile, Log
 
