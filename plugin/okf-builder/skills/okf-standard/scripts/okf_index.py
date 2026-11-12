@@ -10,6 +10,10 @@ Usage:
 
 - Groups concepts by `type` inside each directory.
 - Lists subdirectories with the first sentence of their own index.md, or their name.
+- Lists, in the directory of each kind the bundle holds (standard §2.2, §5.1), its instances under
+  `# Instances`, each with its project.md description and its state; the kind's description from the
+  Domain Profile is that index's blockquote and the parent's description of the directory. On an
+  instance it finds the domain profile through the `parent` chain, as lint does.
 - Keeps the root frontmatter (okf_version, okf_profile) and any section whose
   heading starts with "# Notes" (or "# Notas").
 - Never writes into or below the root projections/ (not OKF, ADR-0019); the root
@@ -36,9 +40,12 @@ from okf_common import (  # noqa: E402
     Scan,
     find_bundle,
     load_doc,
+    root_frontmatter,
     scan_bundle,
     split_frontmatter,
 )
+from okf_lint import Report, find_tree, kind_instances  # noqa: E402
+from okf_profile import kind_in_force, load_profile  # noqa: E402
 
 DIR_DESCRIPTIONS = {
     "fragments": "Records of events, distilled into the base.",
@@ -144,9 +151,41 @@ def holds_content(bundle: Path, sc: Scan, d: Path) -> bool:
             or any(n.startswith(pre) for n in sc.nested))
 
 
-def build_index(bundle: Path, d: Path, sc: Scan | None = None) -> str:
+def kind_dirs(bundle: Path, sc: Scan) -> dict[str, tuple[str, list[str]]]:
+    """The directory of each kind this bundle holds (bundle-relative, no trailing slash): the kind's description from
+    the Domain Profile (the domain bundle's, found through the parent chain for an instance) and its instances
+    (scan.nested form). A broken parent chain is printed on stderr and the bundle's own profile is used."""
+    rep = Report()
+    tree = find_tree(bundle, rep)
+    for i in rep.items:
+        print(f"WARNING: {i['code']}: {i['message']}", file=sys.stderr)
+    domain = tree.domain if tree is not None else None
+    prof = load_profile(bundle, domain=domain)
+    domain = domain or prof
+    out = {}
+    for k, d, rels in kind_instances(bundle, root_frontmatter(bundle), prof, domain, sc):
+        desc = kind_in_force(domain, k)["description"]
+        out[d.rstrip("/")] = (str(desc).strip() if desc else f"Instances of {k}.", rels)
+    return out
+
+
+def instance_entry(inst: Path) -> str:
+    """`* [id](id/index.md) - <project.md description> _(state: <state>)_` for an instance of a kind directory."""
+    pj = inst / "project.md"
+    fm = (load_doc(inst, pj).frontmatter if pj.is_file() else None) or {}
+    desc = fm.get("description") if isinstance(fm, dict) else None
+    state = root_frontmatter(inst).get("state")
+    line = f"* [{inst.name}]({inst.name}/index.md)"
+    if desc:
+        line += f" - {desc}"
+    return line + (f" _(state: {state})_" if state is not None and str(state).strip() else " _(no state)_")
+
+
+def build_index(bundle: Path, d: Path, sc: Scan | None = None, kinds: dict | None = None) -> str:
     sc = sc if sc is not None else scan_bundle(bundle)
+    kinds = kinds if kinds is not None else kind_dirs(bundle, sc)
     is_root = d.resolve() == bundle.resolve()
+    kind_desc, instances = kinds.get(_rel(bundle, d), (None, []))
     concepts = []
     for p in sorted(d.iterdir()):
         if p.is_file() and p.suffix == ".md" and p.name not in RESERVED and left_out(bundle, sc, p) is None:
@@ -157,7 +196,8 @@ def build_index(bundle: Path, d: Path, sc: Scan | None = None) -> str:
     subdirs = [p for p in sorted(d.iterdir()) if p.is_dir() and not p.name.startswith(".")
                and ((p / "index.md").is_file() if is_root and p.name == PROJECTIONS_DIR
                     else left_out(bundle, sc, p) == "nested bundle"
-                    or (left_out(bundle, sc, p) is None and holds_content(bundle, sc, p)))]
+                    or (left_out(bundle, sc, p) is None and holds_content(bundle, sc, p)))
+               and _rel(bundle, p) + "/" not in instances]
 
     groups: dict[str, list] = {}
     for c in concepts:
@@ -172,7 +212,7 @@ def build_index(bundle: Path, d: Path, sc: Scan | None = None) -> str:
             fm_prefix = f'---\nokf_version: "0.2"\nokf_profile: "{PROFILE_30}"\n---\n\n'
     else:
         _, notes = existing_root_fm_and_notes(d / "index.md")
-        out.append(f"> {dir_description(d)}\n")
+        out.append(f"> {kind_desc or dir_description(d)}\n")
 
     for t in ordered:
         out.append(f"# {plural_heading(t)}\n")
@@ -183,12 +223,17 @@ def build_index(bundle: Path, d: Path, sc: Scan | None = None) -> str:
                 line += f" - {desc}"
             out.append(line + tag)
         out.append("")
+    if instances:
+        out.append("# Instances\n")
+        out += [instance_entry(bundle / rel.rstrip("/")) for rel in instances]
+        out.append("")
     if subdirs:
         out.append("# Subdirectories\n")
         for s in subdirs:
-            out.append(f"* [{s.name}]({s.name}/index.md) - {dir_description(s)}")
+            desc = kinds[_rel(bundle, s)][0] if _rel(bundle, s) in kinds else dir_description(s)
+            out.append(f"* [{s.name}]({s.name}/index.md) - {desc}")
         out.append("")
-    if not ordered and not subdirs:
+    if not ordered and not subdirs and not instances:
         out.append(f"# {d.name}\n")
         out.append("_(empty)_\n")
     body = "\n".join(out).rstrip() + "\n"
@@ -218,8 +263,9 @@ def regenerate(bundle: Path, targets: list[Path], check: bool = False) -> int:
     """Write (or, with check, report) each out-of-date index.md of `targets`; return how many differ."""
     changed = 0
     sc = scan_bundle(bundle)
+    kinds = kind_dirs(bundle, sc)
     for d in targets:
-        new = build_index(bundle, d, sc)
+        new = build_index(bundle, d, sc, kinds)
         idx = d / "index.md"
         old = idx.read_text(encoding="utf-8") if idx.exists() else None
         if old != new:
@@ -438,7 +484,7 @@ def test_parent_index_skips_ignored_and_not_okf(tmp_path):
         "> The project's knowledge, in typed directories.\n\n# Domain Profile\n\n* [DP](profile.md) - DP. _(draft)_\n\n"
         "# Subdirectories\n\n* [other-bundle](other-bundle/index.md) - Concepts in other-bundle.\n")
     assert (k / "requests/index.md").read_text(encoding="utf-8") == (
-        "> Concepts in requests.\n\n# Subdirectories\n\n* [req-1](req-1/index.md) - Concepts in req-1.\n")
+        "> A request\n\n# Instances\n\n* [req-1](req-1/index.md) - P. _(state: open)_\n")
     assert not (k / "base/scratch/index.md").exists() and not (k / "base/vendor/index.md").exists()
 
 
@@ -460,6 +506,116 @@ def test_an_instance_indexed_as_its_own_bundle_keeps_its_root_frontmatter(tmp_pa
     assert main([str(req)]) == 0
     assert (req / "index.md").read_text(encoding="utf-8").startswith(fm + "---\n\n# ")
     assert main([str(req), "--check"]) == 0
+
+
+# --- the directory of each kind lists its instances and their states (standard §2.2, §5.1; ADR-0039 decision 3) ---
+def _kinds(tmp: Path) -> Path:
+    """K: okf_lint._domain with its three kinds and four instances, one of them held by an instance."""
+    from okf_lint import _OPEN, _domain
+
+    return _domain(tmp, {"requests/req-1": _OPEN,
+                         "incidents/inc-1": "kind: Incident\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n",
+                         "releases/rel-1": "kind: Release\nstate: open\nparent: ../..\n",
+                         "releases/rel-1/requests/req-9": "kind: Request\nstate: in-review\nparent: ../..\n"})
+
+
+def test_kind_index_lists_instances_with_state(tmp_path):
+    k = _kinds(tmp_path)
+    assert main([str(k)]) == 0
+    want = {"requests": "> A request\n\n# Instances\n\n* [req-1](req-1/index.md) - P. _(state: open)_\n",
+            "incidents": "> An incident\n\n# Instances\n\n* [inc-1](inc-1/index.md) - P. _(state: closed)_\n",
+            "releases": "> A release\n\n# Instances\n\n* [rel-1](rel-1/index.md) - P. _(state: open)_\n"}
+    assert {d: (k / d / "index.md").read_text(encoding="utf-8") for d in want} == want
+    assert main([str(k), "--check"]) == 0
+    (k / "requests" / "index.md").unlink()
+    assert main([str(k), "--dir", "requests"]) == 0
+    assert (k / "requests" / "index.md").read_text(encoding="utf-8") == want["requests"]
+
+
+def test_root_lists_kind_dirs_with_their_description(tmp_path):
+    k = _kinds(tmp_path)
+    main([str(k)])
+    root = (k / "index.md").read_text(encoding="utf-8")
+    assert root.partition("# Subdirectories\n\n")[2] == (
+        "* [base](base/index.md) - The project's knowledge, in typed directories.\n"
+        "* [fragments](fragments/index.md) - Records of events, distilled into the base.\n"
+        "* [incidents](incidents/index.md) - An incident\n"
+        "* [releases](releases/index.md) - A release\n"
+        "* [requests](requests/index.md) - A request\n")
+
+
+def test_instance_holding_a_kind_indexes_its_kind_dir(tmp_path):
+    k = _kinds(tmp_path)
+    rel = k / "releases" / "rel-1"
+    fm = (rel / "index.md").read_text(encoding="utf-8").partition("---\n\n")[0]
+    assert main([str(rel)]) == 0
+    assert (rel / "requests" / "index.md").read_text(encoding="utf-8") == (
+        "> A request\n\n# Instances\n\n* [req-9](req-9/index.md) - P. _(state: in-review)_\n")
+    root = (rel / "index.md").read_text(encoding="utf-8")
+    assert root.startswith(fm + "---\n\n") and "* [requests](requests/index.md) - A request\n" in root
+    assert main([str(rel), "--check"]) == 0
+
+
+def test_an_instance_holding_no_kind_has_no_kind_index(tmp_path):
+    k = _kinds(tmp_path)
+    req = k / "requests" / "req-1"
+    assert kind_dirs(req, scan_bundle(req)) == {}
+    assert main([str(req)]) == 0
+    assert [p.relative_to(req).as_posix() for p in sorted(req.rglob("index.md"))
+            if "# Instances" in p.read_text(encoding="utf-8") or "_(state:" in p.read_text(encoding="utf-8")] == []
+
+
+def test_state_change_makes_kind_index_out_of_date(tmp_path, capsys):
+    k = _kinds(tmp_path)
+    main([str(k)])
+    idx = k / "requests" / "req-1" / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("state: open", "state: in-review"), encoding="utf-8")
+    capsys.readouterr()
+    assert main([str(k), "--check"]) == 1
+    assert capsys.readouterr().out == "OUT OF DATE requests/index.md\n1 index.md out of date\n"
+
+
+def test_kind_description_comes_from_the_profile(tmp_path, capsys):
+    from okf_profile import OWN_REL
+
+    k = _kinds(tmp_path)
+    main([str(k)])
+    prof = k / OWN_REL
+    prof.write_text(prof.read_text(encoding="utf-8").replace("description: A request", "description: A customer request"),
+                    encoding="utf-8")
+    capsys.readouterr()
+    assert main([str(k), "--check"]) == 1
+    assert capsys.readouterr().out == "OUT OF DATE index.md\nOUT OF DATE requests/index.md\n2 index.md out of date\n"
+    main([str(k)])
+    assert (k / "requests" / "index.md").read_text(encoding="utf-8").startswith("> A customer request\n")
+
+
+def test_kind_index_edge_entries(tmp_path):
+    from okf_lint import _OPEN, _domain
+
+    k = _domain(tmp_path, {"requests/req-1": _OPEN, "requests/req-0": _OPEN, "requests/req-2": "kind: Request\nparent: ../..\n",
+                           "requests/req-3": _OPEN})
+    pj = k / "requests" / "req-1" / "project.md"
+    pj.write_text(pj.read_text(encoding="utf-8").replace("description: P.\n", ""), encoding="utf-8")
+    (k / "requests" / "req-3" / "project.md").unlink()
+    idx = k / "requests" / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8") + "\n# Notes\n\nKept by hand.\n", encoding="utf-8")
+    main([str(k)])
+    assert idx.read_text(encoding="utf-8") == (
+        "> A request\n\n# Instances\n\n"
+        "* [req-0](req-0/index.md) - P. _(state: open)_\n"
+        "* [req-1](req-1/index.md) _(state: open)_\n"
+        "* [req-2](req-2/index.md) - P. _(no state)_\n"
+        "* [req-3](req-3/index.md) _(state: open)_\n"
+        "\n# Notes\n\nKept by hand.\n")
+
+
+def test_lint_clean_after_index(tmp_path):
+    k = _kinds(tmp_path)
+    before = _lint_view(k)
+    assert before[0] == []
+    main([str(k)])
+    assert _lint_view(k) == before
 
 
 if __name__ == "__main__":

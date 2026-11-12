@@ -1341,6 +1341,18 @@ def held_kinds(fm: dict, prof: Resolved) -> list:
     return out
 
 
+def kind_instances(bundle: Path, fm: dict, prof: Resolved, domain: Resolved, scan) -> list[tuple[str, str, list[str]]]:
+    """For each kind this bundle holds: the kind, its directory and its instances, the non-hidden subdirectories of
+    that directory that are nested bundles (scan.nested form, sorted)."""
+    out = []
+    for k in held_kinds(fm, prof):
+        d = kind_in_force(domain, k)["directory"]
+        here = bundle / d
+        subs = sorted(p for p in here.iterdir() if p.is_dir() and not p.name.startswith(".")) if here.is_dir() else []
+        out.append((k, d, [f"{d}{sub.name}/" for sub in subs if f"{d}{sub.name}/" in scan.nested]))
+    return out
+
+
 def find_tree(bundle: Path, rep: Report) -> Tree | None:
     """The tree of an operational bundle linted on its own, followed up through each `parent` to the domain bundle.
     None for a domain bundle and for an extracted one (no parent); a broken chain is BAD_PARENT."""
@@ -1485,15 +1497,9 @@ def lint_instances(bundle: Path, fm: dict, prof: Resolved, tree: Tree | None, sc
     domain = tree.domain if tree is not None else prof
     allowed = held_kinds(fm, prof)
     linted: set = set()
-    for k in allowed:
-        d = kind_in_force(domain, k)["directory"]
-        here = bundle / d
-        if not here.is_dir():
-            continue
-        for sub in sorted(p for p in here.iterdir() if p.is_dir() and not p.name.startswith(".")):
-            rel = f"{d}{sub.name}/"
-            if rel not in scan.nested:
-                continue
+    for k, _, rels in kind_instances(bundle, fm, prof, domain, scan):
+        for rel in rels:
+            sub = bundle / rel.rstrip("/")
             linted.add(rel)
             child, _, _ = lint(sub, profile, version, validators, True, Tree(domain, bundle, allowed, k))
             for i in child.items:
@@ -1548,11 +1554,10 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
             linted = lint_instances(bundle, root_fm, prof, tree, scan, rep, profile, version, validators)
         else:
             dom = tree.domain if tree is not None else prof
-            for k in held_kinds(root_fm, prof):
-                d = kind_in_force(dom, k)["directory"]
-                n = sum(1 for r in scan.nested if r.startswith(d) and r.count("/") == d.count("/") + 1)
+            for k, d, rels in kind_instances(bundle, root_fm, prof, dom, scan):
+                n = len(rels)
                 if n:
-                    linted |= {r for r in scan.nested if r.startswith(d) and r.count("/") == d.count("/") + 1}
+                    linted |= set(rels)
                     rep.notices.append(f"{d}: {n} {k} instance{'s' if n != 1 else ''} not checked (--no-nested)")
     rep.notices[:0] = scan_notices(scan, outside_layers(scan.not_okf) if layered else [], linted)
     if profile:
@@ -4515,6 +4520,19 @@ def test_only_the_index_of_a_kind_directory_lives_there(tmp_path):
                                          encoding="utf-8")
     assert _rule16(lint(k)[0]) == [("PROFILE_OUTSIDE_LAYER", "requests/notes.md")]
 
+
+
+def test_kind_instances_are_the_nested_bundles_of_each_kind_directory(tmp_path):
+    k = _domain(tmp_path, {"requests/req-2": _OPEN, "requests/req-1": _OPEN})
+    (k / "requests/stray").mkdir()
+    (k / "requests/stray/x.md").write_text("plain\n", encoding="utf-8")
+    (k / "requests/.hidden").mkdir()
+    prof = load_profile(k)
+    assert kind_instances(k, root_frontmatter(k), prof, prof, scan_bundle(k)) == [
+        ("Request", "requests/", ["requests/req-1/", "requests/req-2/"]), ("Incident", "incidents/", []),
+        ("Release", "releases/", [])]
+    assert [i["path"] for i in lint(k)[0].instances] == ["requests/req-1/", "requests/req-2/"]
+    assert "requests/: 2 Request instances not checked (--no-nested)" in lint(k, nested=False)[0].notices
 
 
 def test_held_kinds_skip_abstract_kinds_and_aliases_name_one_kind(tmp_path):
