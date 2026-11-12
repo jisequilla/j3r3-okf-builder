@@ -154,11 +154,13 @@ def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
     from okf_lint import held_kinds  # noqa: E402
     from okf_profile import PROFILE_30 as P30, canonical_kind, kind_in_force, load_profile, operational_kinds
 
-    if not ident or ident in (".", "..") or "/" in ident or "\\" in ident:
-        raise Refusal(f"--id '{ident}' must be one directory name (no '/', not '.' or '..')")
+    if not ident.strip() or ident != ident.strip() or ident in (".", "..") or "/" in ident or "\\" in ident:
+        raise Refusal(f"--id '{ident}' must be one directory name (no '/', no surrounding blanks, not '.' or '..')")
     hfm = root_frontmatter(holder)
     if not (holder / "index.md").is_file() or hfm.get("okf_version") is None:
         raise Refusal(f"--in {holder} is not a bundle (no index.md declaring okf_version)")
+    if hfm.get("state") == "closed":
+        raise Refusal(f"--in {holder} is closed: a closed instance is frozen and nothing in it is edited (standard §2.2)")
     domain, fm = holder, hfm
     for _ in range(32):
         if fm.get("kind") in (None, "Domain Bundle"):
@@ -180,7 +182,10 @@ def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
     held = held_kinds(hfm, prof)
     if k not in held:
         raise Refusal(f"{holder} does not hold {k} (it holds: {', '.join(held) or 'nothing'})")
-    return holder / kind_in_force(prof, k)["directory"].strip("/") / ident, k
+    target = holder / kind_in_force(prof, k)["directory"].strip("/") / ident
+    if target.exists() and not target.is_dir():
+        raise Refusal(f"--id '{ident}' names a file of {target.parent.name}/, not an instance directory")
+    return target, k
 
 
 def write(path: Path, content: str, force: bool) -> str:
@@ -491,6 +496,30 @@ def test_instance_refuses_an_id_that_is_no_single_directory_name(tmp_path, capsy
     for i, ident in enumerate(("", ".", "..", "a/b", "../r")):
         err = _refused(tmp_path / str(i), capsys, "", "--instance", "Request", "--id", ident)
         assert "must be one directory name" in err, ident
+
+
+def test_instance_refuses_a_blank_id_or_one_naming_a_file_of_the_kind_directory(tmp_path, capsys):
+    for i, ident in enumerate((" ", " r1", "index.md")):
+        k = _kinds_domain(tmp_path / str(i))
+        assert main(["--instance", "Request", "--id", "r0", "--in", str(k), *_INST]) == 0
+        before = _files(k)
+        capsys.readouterr()
+        assert main(["--instance", "Request", "--id", ident, "--in", str(k), *_INST]) == 2, ident
+        assert _files(k) == before, ident
+        assert "--id" in capsys.readouterr().err, ident
+
+
+def test_instance_refuses_a_closed_holder(tmp_path, capsys):
+    k = _kinds_domain(tmp_path)
+    assert main(["--instance", "Release", "--id", "v1", "--in", str(k), *_INST]) == 0
+    idx = k / "releases" / "v1" / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("state: open\n", "state: closed\nclosed_at: "
+                                                           "2026-11-12T09:00:00Z\n", 1), encoding="utf-8")
+    before = _files(k)
+    capsys.readouterr()
+    assert main(["--instance", "Request", "--id", "r9", "--in", str(k / "releases" / "v1"), *_INST]) == 2
+    assert _files(k) == before
+    assert "is closed" in capsys.readouterr().err
 
 
 def test_instance_over_an_existing_one_skips_its_files(tmp_path):
