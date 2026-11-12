@@ -1,6 +1,6 @@
 ---
 name: okf-distill
-description: Distills one pending knowledge fragment into the OKF bundle. Reads the concepts it touches, proposes a change set of additions, confirmations, updates, refutations and conflicts, with unanswered questions as open questions, action items listed for the tracker and knowledge that fits no type as a Domain Profile change, and applies it only after the person approves, opening conflicts in the Conflict Log. Use when the user says "distill this fragment", "what does this meeting change", "process the pending fragments", "okf distill", or after okf-fragment has captured an event.
+description: Distills one pending knowledge fragment into the OKF bundle. Reads the concepts it touches, proposes a change set of additions, confirmations, updates, refutations and conflicts, with unanswered questions as open questions, action items listed for the tracker and knowledge that fits no type as a Domain Profile change, and applies it only after the person approves, opening conflicts in the Conflict Log. Use when the user says "distill this fragment", "what does this meeting change", "process the pending fragments", "okf distill", or after okf-fragment has captured an event. Also closes an operational instance into its parent through okf_close.py ("close this request", "close the instance", "okf close").
 ---
 
 # okf-distill
@@ -8,6 +8,8 @@ description: Distills one pending knowledge fragment into the OKF bundle. Reads 
 > **Paths.** `<skills>` is the directory that holds the `okf-*` skills (the parent of this skill): `${CLAUDE_PLUGIN_ROOT}/skills` in the Claude plugin; `.claude/skills`, `.agents/skills`, `.github/skills` or `.gemini/skills` in a repo. The scripts live in `<skills>/okf-standard/scripts/` and the templates in `<skills>/okf-standard/templates/`. Without uv, `python3` works if PyYAML is installed.
 
 Turns what a fragment records into changes to the bundle's concepts. It proposes; the person decides. Nothing is written before the person approves the change set, and approving a change set is not reviewing a concept: distillation never sets `verified`.
+
+To close an operational instance into its parent, follow **Closing mode**, at the end of this skill, instead of these steps.
 
 ## Steps
 
@@ -62,3 +64,29 @@ Turns what a fragment records into changes to the bundle's concepts. It proposes
     ```
     Fix any ERROR before finishing.
 11. **Close**: list what was applied, rejected and left open (with the `C-NNN` IDs), the open questions created or answered, and the action items to file in the tracker, describing each change as it is in the files (from `git diff` when the bundle is in Git), never as smaller than it is; remind the person that the new and changed concepts stay `draft` and unverified, and point to `okf-review` to resolve the conflicts and review the concepts. If `projections/` holds projections, run `uv run "<skills>/okf-standard/scripts/okf_projection.py" <bundle> --json`, never with `--run-render` or `--record-hashes`, and list the projections to refresh: each `PROJ_DRIFT` whose ref names a concept this run created, changed or deprecated, and, from reading only the `refs` of their `projection.yaml`, the rendered projections in `not_checked` and the recomputable ones in `to_recompute` whose refs name one, as possibly stale (no render ran; recomputed by hand). Leave out the projections under `frozen`, and report the script's errors as they are. Change nothing in `projections/`, and point to `okf-projection` for the refresh.
+
+## Closing mode
+
+Closes an operational instance into its parent, the bundle its root `index.md` names in `parent`, one level up (standard §2.2, ADR-0039): a request a release holds closes into the release, and every path below is then the release's. `okf_close.py` checks the closing and writes it; sorting each concept is the person's and yours, never the script's. Nothing is written before the person approves.
+
+1. **Check**: `uv run "<skills>/okf-standard/scripts/okf_close.py" <instance> --json`. With any blocker, show it and stop: `PENDING_FRAGMENT` (distill that fragment into the instance first, with the steps above), `CHILD_OPEN` (close that instance first), `PARENT_CLOSED`, `ALREADY_CLOSED` or `NOT_INSTANCE`. Otherwise the report lists `concepts` (each with `from_parent`, its bundle path from the parent, and `parent_same_path`), the open `questions` and the open or proposed `conflicts`.
+2. **Loose ends**: ask the person, for each open question and conflict, whether it is settled now or carried up. One settled now is answered, dropped, resolved or dismissed inside the instance under the usual rules (the steps above, `okf-review`), before the closing goes on.
+3. **Sort each concept** against the parent, reading the parent's concept at `parent_same_path` and the ones it names:
+
+   | Outcome | When | In the parent |
+   |---|---|---|
+   | **promote** | Lasting knowledge | An Addition (a new concept, `status: draft`, no `verified`, even when the instance's was verified), or a Confirmation or Update of the concept it states or refines, or a Refutation when it outdates one undisputed; the parent concept's `verified` is never touched |
+   | **conflict** | It contradicts the parent and it is unclear which is right | A row in the parent's Conflict Log, created from `<skills>/okf-standard/templates/conflict-log.md` if there is none, its Source the closing fragment; nothing in the instance changes |
+   | **stays** | It is about this unit of work only | Nothing |
+
+   When in doubt between promote and conflict, it is a conflict.
+4. **Propose the change set** and stop: one row per concept (Concept · Outcome · Target in the parent · Proposed change · Why), then each question and conflict to carry with the parent item it becomes. Apply nothing until the person approves; a rejected promote stays.
+5. **Apply in the parent**, with the rules of steps 6, 9 and 10 above:
+   - each promoted concept cites the instance concept in `sources` (`{ id: <id>, resource: <from_parent>, title: ... }`) and in a footnote;
+   - each carried question becomes an Open Question of the parent's `base/questions/`, its `owner` kept, `question_status: open`, `asked_in` and a `sources` entry its `from_parent`;
+   - each carried conflict becomes an `open` row of the parent's Conflict Log, its Source the closing fragment and its Description linking the instance's Conflict Log (`/<kind directory>/<id>/conflict-log.md`).
+
+   Write nothing in the instance: the script writes its carried values and its closing.
+6. **Write the closing fragment** in the parent's `fragments/` (`<date>-closing-<id>.md`, template `<skills>/okf-standard/templates/fragment.md`): `origin: closing of <Kind> <id>`, `participants` the approver and you, and a `# Record` with one `##` per instance concept, and per carried conflict, holding the proposal and the decision. Its `# Distillation` ledger has one row per instance concept: Kind `promote`, `conflict` or `stays`; Outcome as in step 7 above; Concept the instance concept linked down from the parent (`/<kind directory>/<id>/base/...`), plus the parent concept for promote. Each carried conflict gets a row of its own: Kind `conflict`, Outcome `open: C-NNN` (its row in the parent's Conflict Log), Concept the instance's Conflict Log linked down (`/<kind directory>/<id>/conflict-log.md`) plus the parent's Conflict Log. Its `distillation_status` is `distilled`: the conflicts it opens in the parent stay open in the parent's Conflict Log, not in the fragment. Links run down only: nothing in the instance links its parent, which it names as a path in code.
+7. **Close**: run `uv run "<skills>/okf-standard/scripts/okf_close.py" <instance> --apply --fragment /fragments/<file>.md --by human:<approver> --actor okf-builder/<model> --carry base/questions/<q>.md=/base/questions/<q>.md --carry C-001=C-NNN --dry-run`, show the writes, then run it without `--dry-run`. It checks the ledger against the concepts, each promoted concept's source, each carry target and its link back, and writes nothing when one fails: fix the parent and run it again. Once it passes, the instance is `state: closed` with `closed_at`, each carried item says `carried` and names its parent item, an instance fragment whose conflicts are all carried is `distilled`, and both bundles' indexes are regenerated.
+8. **Log and validate**: a **Closing** entry in the instance's `log.md` and an **Update** entry in the parent's, naming the instance and linking the closing fragment, then `uv run "<skills>/okf-standard/scripts/okf_lint.py" <parent>`: fix any ERROR, and no rule-16 code may remain.
