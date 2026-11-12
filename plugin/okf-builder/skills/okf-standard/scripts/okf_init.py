@@ -150,8 +150,10 @@ class Refusal(Exception):
 
 def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
     """The directory of the new instance and the kind's declared id; Refusal when the id is no single directory name,
-    the holder is no bundle, it or a bundle above it is closed (frozen, standard §2.2), the kind is unknown, abstract
-    or not held by the holder, or the id names a file of the kind's directory."""
+    the holder is no bundle, it or a bundle above it (the domain bundle included) is closed (frozen, standard §2.2),
+    the walk up to the domain bundle breaks (a bundle with no parent, a parent that is no bundle, more than 32
+    levels), the kind is unknown, abstract or not held by the holder, or the id names a file of the kind's
+    directory."""
     from okf_lint import held_kinds  # noqa: E402
     from okf_profile import PROFILE_30 as P30, canonical_kind, kind_in_force, load_profile, operational_kinds
 
