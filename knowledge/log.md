@@ -1,5 +1,10 @@
 # Bundle history
 
+## 2026-11-12
+* **Verification**: [Build a change in layers](/base/runbooks/build-in-layers.md) verified again by human:jisequilla at `generated.at` 2026-11-12T21:34:01Z, in answer to a structured question (ADR-0033), now `status: stable`; the answer kept in [2026-11-12 · Re-verification of the runbook after okf-k9o](/fragments/2026-11-12-reverification-runbook-okf-k9o.md).
+* **Creation**: [2026-11-12 · Re-verification of the runbook after okf-k9o](/fragments/2026-11-12-reverification-runbook-okf-k9o.md): the structured question and the owner's answer, confirmed.
+* **Update**: [Build a change in layers](/base/runbooks/build-in-layers.md) (okf-k9o), from the gaps layer 1 of okf-3vg showed: a ticket names the human-verified concepts it must edit, its bar exempts `VERIFIED_STALE` on them and the owner verifies them again after the merge; a classification stage, one agent with fresh context that rules each finding against the bar whatever the reviewer's label, decides the fix rounds; the workflow gains the entries `fix` (a fix round on findings classified by hand) and `rebase` (one fresh reviewer checks with `git range-diff` that a rebase after the review changed only the conflicting files). `okf-layer-ticket.js` implements them and returns `classifier_failed`. Now `status: draft` until re-verified.
+
 ## 2026-11-11
 * **Verification**: [OKF scripts](/base/systems/scripts-okf.md) verified again by human:jisequilla at commit `4df51a5`, `generated.at` 2026-11-11T22:27:29Z, in answer to a structured question (ADR-0033), now `status: stable`; the answer kept in [2026-11-11 · Re-verification of the OKF scripts after okf-4j8 and okf-3vg.7](/fragments/2026-11-11-reverification-scripts-okf.md).
 * **Creation**: [2026-11-11 · Re-verification of the OKF scripts after okf-4j8 and okf-3vg.7](/fragments/2026-11-11-reverification-scripts-okf.md): the structured question and the owner's answer, confirmed.
