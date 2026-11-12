@@ -98,6 +98,32 @@ references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-
 """
 
 
+# okf-distill's Closing mode runs okf_close.py, which no M365 skill ships (ADR-0039 decision 12): the section becomes a
+# note, and the routing sentence and the description's closing sentence go
+CLOSING_RE = re.compile(r"^## Closing mode\n.*?(?=^## |\Z)", re.M | re.S)
+M365_NO_CLOSING = ("## Closing mode\n\nClosing an operational instance is not available in Microsoft 365 Copilot: it needs "
+                   "okf_close.py, which this package does not ship. Close the instance from Claude Code or from the GitHub "
+                   "Copilot pack.\n")
+CLOSING_ROUTING = ("To close an operational instance into its parent, follow **Closing mode**, at the end of this skill, "
+                   "instead of these steps.\n\n")
+CLOSING_DESCRIPTION = (' Also closes an operational instance into its parent through okf_close.py ("close this request", '
+                       '"close the instance", "okf close").')
+
+
+def strip_closing(text: str) -> str:
+    """okf-distill's SKILL.md without its Closing mode, its routing sentence and its description's closing sentence."""
+    if "okf_close" not in text:
+        return text
+    for part in (CLOSING_ROUTING, CLOSING_DESCRIPTION):
+        if text.count(part) != 1:
+            raise SystemExit(f"okf-distill: SKILL.md does not hold this text once, so its closing cannot be removed: {part!r}")
+    text = text.replace(CLOSING_ROUTING, "").replace(CLOSING_DESCRIPTION, "")
+    text, n = CLOSING_RE.subn(M365_NO_CLOSING, text)
+    if n != 1 or "okf_close" in CLOSING_RE.sub("", text):
+        raise SystemExit("okf-distill: SKILL.md names okf_close outside its one ## Closing mode section")
+    return text
+
+
 def ships(skill: str) -> list[str]:
     """What the skill's M365 copy carries besides SKILL.md, as prose fragments."""
     parts = []
@@ -112,6 +138,8 @@ def rewrite(text: str, skill: str) -> str:
     parts = ships(skill)
     text = PATHS_NOTE_RE.sub(f"> **Paths.** This skill is self-contained: {' and '.join(parts)} of its own base directory.\n"
                              if parts else "", text)
+    if skill == "okf-distill":
+        text = strip_closing(text)
     if skill == "okf-standard":
         text = INVENTORY_RE.sub(M365_INVENTORY, text)
         text = text.replace("<skills>/okf-standard/references/", "references/")

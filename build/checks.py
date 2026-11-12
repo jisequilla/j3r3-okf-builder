@@ -28,6 +28,8 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = Path("plugin/okf-builder")
 REF = PLUGIN / "skills" / "okf-standard"
@@ -36,7 +38,12 @@ EX = Path("examples/knowledge")
 FIXTURES = Path("examples/fixtures")
 M365 = Path("dist/m365/package/skills")
 SCRIPTS = ("okf_init", "okf_index", "okf_lint", "okf_profile", "okf_migrate", "okf_audit", "okf_projection",
-           "okf_obsidian")
+           "okf_obsidian", "okf_close")
+CLOSING = FIXTURES / "closing-instance" / "knowledge"
+# The note that replaces okf-distill's Closing mode in the M365 package, exactly
+M365_NO_CLOSING = ("## Closing mode\n\nClosing an operational instance is not available in Microsoft 365 Copilot: it needs "
+                   "okf_close.py, which this package does not ship. Close the instance from Claude Code or from the GitHub "
+                   "Copilot pack.\n")
 INIT = ("--title", "T", "--description", "D", "--actor", "human:test")
 
 
@@ -202,6 +209,31 @@ def m365(tmp: Path) -> None:
     expect(wanted <= found, f"exported okf-lint missed {sorted(wanted - found)}")
     print("exported okf-lint reports", ", ".join(sorted(wanted)))
 
+    sys.path.insert(0, str(ROOT / "build"))
+    import export_m365
+
+    expect(export_m365.M365_NO_CLOSING == M365_NO_CLOSING, f"M365_NO_CLOSING is {export_m365.M365_NO_CLOSING!r}")
+    shipped = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "dist" / "m365").rglob("okf_close.py"))
+    expect(not shipped, f"okf_close.py reaches the M365 package: {shipped}")
+    distill = text(M365 / "okf-distill" / "SKILL.md")
+    at = distill.find("\n## Closing mode\n") + 1
+    expect(at > 0, "the exported okf-distill has no Closing mode note")
+    end = distill.find("\n## ", at)
+    section = distill[at:end + 1 if end >= 0 else len(distill)]
+    expect(section.rstrip() + "\n" == M365_NO_CLOSING, f"the exported Closing mode is {section!r}")
+    rest = distill[:at] + distill[at + len(section):]
+    for leak in ("okf_close", "## Closing mode", export_m365.CLOSING_ROUTING.strip()):
+        expect(leak not in rest, f"the exported okf-distill still holds {leak!r} outside its note")
+
+    def description(md: str) -> str:
+        return yaml.safe_load(md.split("---\n")[1])["description"]
+
+    source = description(text(PLUGIN / "skills" / "okf-distill" / "SKILL.md"))
+    expect(export_m365.CLOSING_DESCRIPTION in source, "the source okf-distill description has no closing sentence")
+    expect(description(distill) == source.replace(export_m365.CLOSING_DESCRIPTION, ""),
+           f"the exported okf-distill description is {description(distill)!r}")
+    print("exported okf-distill: no okf_close.py, its Closing mode replaced by the note, its description without closing")
+
 
 def copilot(tmp: Path) -> None:
     """Copilot pack: every skill exported with its SKILL.md and the @okf agent naming each one; each SKILL.md's
@@ -356,10 +388,121 @@ def dogfood(tmp: Path) -> None:
     print("projections", slugs, "with no findings")
 
 
+_CLOSE_APPLY = ("--apply", "--fragment", "/fragments/2026-11-09-closing-req-0042.md",
+                "--carry", "base/questions/who-approves-partial-refunds.md=/base/questions/who-approves-partial-refunds.md",
+                "--carry", "C-001=C-002", "--by", "human:test", "--actor", "okf-builder/test", "--at", "2026-11-09T17:00:00Z")
+_CLOSE_PLANTS = {  # defect: (file of the copy, old text, new text, failures as (check, subject))
+    "a: stays row deleted": ("fragments/2026-11-09-closing-req-0042.md",
+                             "| Refund retry | stays | applied | [req-0042: Refund retry]"
+                             "(/requests/req-0042/base/runbooks/refund-retry.md) |\n", "",
+                             [(2, "/fragments/2026-11-09-closing-req-0042.md")]),
+    "b: promoted source removed": ("base/domain/refund-window.md",
+                                   "  - { id: req-0042, resource: /requests/req-0042/base/domain/refund-window.md, "
+                                   'title: "req-0042: Refund window" }\n', "",
+                                   [(3, "/fragments/2026-11-09-closing-req-0042.md")]),
+    "c: asked_in changed": ("base/questions/who-approves-partial-refunds.md", "asked_in: /requests/req-0042/",
+                            "asked_in: /requests/req-0041/", [(4, "/base/questions/who-approves-partial-refunds.md")]),
+    "d: question carry omitted": (None, None, None, [(4, "/base/questions/who-approves-partial-refunds.md")]),
+    "e: C-002 not linking the instance": ("conflict-log.md",
+                                          "[req-0042's conflict log](/requests/req-0042/conflict-log.md)",
+                                          "req-0042's conflict log", [(4, "C-001")]),
+    "pending fragment in the instance": ("requests/req-0042/fragments/2026-11-05-scoping-call.md",
+                                         "distillation_status: conflict", "distillation_status: pending",
+                                         [(1, "fragments/2026-11-05-scoping-call.md")]),
+}
+
+
+def _tree_hash(root: Path) -> dict:
+    import hashlib
+
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def _frontmatter(path: Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8").split("---\n")[1])
+
+
+def closing(tmp: Path) -> None:
+    """closing of the fixture's open Request with okf_close.py: its report exact; each planted defect or a pending
+    fragment fails --apply with its failures and no file changed; --apply then closes it, lint --strict finding
+    nothing, the question and the conflict row carried; every concept a promote row links in the parent is a draft
+    with no verified"""
+    close = S / "okf_close.py"
+    k = tmp / "closing" / "knowledge"
+    shutil.copytree(ROOT / CLOSING, k)
+    inst = k / "requests" / "req-0042"
+    q = "base/questions/who-approves-partial-refunds.md"
+    report = json.loads(uv(close, inst, "--json"))
+    expected = {"instance": str(inst), "parent": "../..", "kind": "Request", "state": "open", "blockers": [],
+                "concepts": [
+                    {"path": "/base/domain/dual-approval.md", "type": "Term", "title": "Dual approval",
+                     "from_parent": "/requests/req-0042/base/domain/dual-approval.md", "parent_same_path": None},
+                    {"path": "/base/domain/refund-window.md", "type": "Term", "title": "Refund window",
+                     "from_parent": "/requests/req-0042/base/domain/refund-window.md",
+                     "parent_same_path": "/base/domain/refund-window.md"},
+                    {"path": "/" + q, "type": "Open Question", "title": "Who approves partial refunds?",
+                     "from_parent": "/requests/req-0042/" + q, "parent_same_path": "/" + q},
+                    {"path": "/base/runbooks/refund-retry.md", "type": "Runbook", "title": "Refund retry",
+                     "from_parent": "/requests/req-0042/base/runbooks/refund-retry.md", "parent_same_path": None}],
+                "questions": [{"path": "/" + q, "owner": "human:maria"}],
+                "conflicts": [{"id": "C-001", "state": "open",
+                               "description": "Ana says the refund API returns 200 for a refund still pending; Maria "
+                                              "says finance reads every 200 as paid"}]}
+    expect(report == expected, json.dumps(report, indent=2))
+    print("report:", len(report["concepts"]), "concepts, 1 question, 1 conflict, no blocker")
+
+    for name, (rel, old, new, failures) in _CLOSE_PLANTS.items():
+        copy = tmp / "closing-planted" / name.split(":")[0].replace(" ", "-") / "knowledge"
+        shutil.copytree(ROOT / CLOSING, copy)
+        args = list(_CLOSE_APPLY)
+        if rel is None:
+            del args[3:5]
+        else:
+            body = (copy / rel).read_text(encoding="utf-8")
+            expect(old in body, f"{name}: {old!r} not in {rel}")
+            (copy / rel).write_text(body.replace(old, new), encoding="utf-8")
+        before = _tree_hash(copy)
+        out = uv(close, copy / "requests" / "req-0042", *args, ok=(1,))
+        got = [(int(m.group(1)), m.group(2)) for m in re.finditer(r"^FAIL check (\d+): (\S+):", out, re.M)]
+        expect(got == failures, f"{name}: failures {got}, expected {failures}\n{out}")
+        expect(_tree_hash(copy) == before, f"{name}: --apply changed files after a failed check")
+        print(f"planted {name}: exit 1, {got}, no file changed")
+
+    uv(close, inst, *_CLOSE_APPLY)
+    found = json.loads(uv(S / "okf_lint.py", k, "--strict", "--json"))
+    expect(found["findings"] == [], found["findings"])
+    instances = [(i["path"], i["kind"], i["state"]) for i in found["instances"]]
+    expect(instances == [("requests/req-0042/", "Request", "closed")], instances)
+    fm = _frontmatter(inst / "index.md")
+    closed_at = fm.get("closed_at")
+    fm["closed_at"] = closed_at.isoformat().replace("+00:00", "Z") if hasattr(closed_at, "isoformat") else closed_at
+    want = {"okf_version": "0.2", "okf_profile": "knowledge/3.0", "kind": "Request", "state": "closed",
+            "closed_at": "2026-11-09T17:00:00Z", "parent": "../.."}
+    expect(fm == want, fm)
+    qfm = _frontmatter(inst / q)
+    expect(qfm["question_status"] == "carried" and qfm["carried_to"] == "../../" + q, qfm)
+    row = next(line for line in (inst / "conflict-log.md").read_text(encoding="utf-8").splitlines()
+               if line.startswith("| C-001 "))
+    expect([c.strip() for c in row.strip("|").split("|")][4:] == ["carried up to C-002 (`../../conflict-log.md`)",
+                                                                 "carried", "human:test"], row)
+    print("applied: lint --strict finds nothing;", instances, "; question and C-001 carried")
+
+    ledger = (k / "fragments" / "2026-11-09-closing-req-0042.md").read_text(encoding="utf-8")
+    promoted = sorted({m.group(1) for line in ledger.splitlines() if re.match(r"^\|[^|]*\|\s*promote\s*\|", line)
+                       for m in re.finditer(r"\]\((/[^)\s]+)\)", line) if not m.group(1).startswith("/requests/")})
+    expect(promoted, "no promote row links a parent concept")
+    bad = [p for p in promoted if _frontmatter(k / p.lstrip("/")).get("status") != "draft"
+           or "verified" in _frontmatter(k / p.lstrip("/"))]
+    expect(not bad, f"promoted concepts not a draft without verified: {bad}")
+    print("promoted concepts are drafts with no verified:", ", ".join(promoted))
+
+
 STEPS = {"unit": unit, "init-0.2": init_02, "init-0.1": init_01, "google-fixtures": google_fixtures,
          "migration": migration, "profile-migration": profile_migration, "m365": m365, "copilot": copilot,
          "builtin-profile": builtin_profile, "copies": copies, "m365-agent": m365_agent, "bundles": bundles, "index": index,
-         "workflows": workflows, "obsidian-setup": obsidian_setup, "dogfood": dogfood}
+         "workflows": workflows, "obsidian-setup": obsidian_setup, "dogfood": dogfood,
+         "closing": closing}
 
 
 def main(argv: list[str] | None = None) -> int:
