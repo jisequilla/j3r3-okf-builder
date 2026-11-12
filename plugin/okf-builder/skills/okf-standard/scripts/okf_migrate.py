@@ -71,11 +71,13 @@ from okf_common import (  # noqa: E402
     find_bundle,
     load_doc,
     parse_yaml,
+    root_frontmatter,
     scan_bundle,
     split_frontmatter,
     walk_bundle,
 )
 from okf_index import index_targets, regenerate  # noqa: E402
+from okf_profile import DOMAIN_BUNDLE  # noqa: E402
 
 DROP_ON_DOWNGRADE = ["verified", "status", "stale_after", "usage_window"]
 
@@ -372,19 +374,29 @@ def bundle_docs(bundle: Path, out: list[str] | None = None) -> list:
     return [d for d in walk_bundle(bundle) if not _under(d.rel, out)]
 
 
+def is_instance(bundle: Path) -> bool:
+    """A nested bundle is an operational instance when its root index.md declares a kind other than Domain Bundle,
+    read as the raw value (a 2.0 bundle being migrated has no kinds to resolve it against)."""
+    kind = root_frontmatter(bundle).get("kind")
+    return kind is not None and str(kind) != DOMAIN_BUNDLE
+
+
 def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
     """(root directories, root concepts) that move under base/. A left_out path stays at the root, and so does a
-    directory that holds no document migrate reads besides its own index.md while a left_out path lies below it
-    (the directory of a kind's instances, ADR-0039 decision 3)."""
-    out = left_out(bundle)
+    directory that holds at least one operational instance and no document migrate reads besides its own index.md
+    (the directory of a kind's instances, ADR-0039 decision 3). A directory that holds only ignored paths or nested
+    bundles without kind moves, carrying them."""
+    sc = scan_bundle(bundle)
+    out = [*sc.ignored, *sc.nested]
     read = {d.rel for d in bundle_docs(bundle, out)}
+    instances = [n for n in sc.nested if is_instance(bundle / n)]
 
     def stays(name: str) -> bool:
         pre = name + "/"
         if _under(pre, out):
             return True
-        holds_out = any(o.startswith(pre) and o != pre for o in out)
-        return holds_out and not any(r.startswith(pre) and r != pre + "index.md" for r in read)
+        holds = any(i.startswith(pre) and i != pre for i in instances)
+        return holds and not any(r.startswith(pre) and r != pre + "index.md" for r in read)
 
     dirs = [p.name for p in sorted(bundle.iterdir())
             if p.is_dir() and not p.name.startswith(".") and p.name not in LAYER_DIRS and not stays(p.name)]
@@ -985,6 +997,56 @@ def test_profile_moves_a_directory_that_also_holds_documents(tmp_path, capsys):
     assert "move decisions/ → base/decisions/" in lines
     assert lines == plain
     assert (k / "base" / "decisions" / "sub" / "z.md").read_text(encoding="utf-8") == _Z
+
+
+_SUB = '---\nokf_version: "0.2"\n---\n\n# Notes\n\nKept by hand.\n'
+
+
+def _plant_holders(k: Path) -> Path:
+    """_bundle_20 plus two root directories that hold no instance: policies/ with only an ignored drafts/, and
+    external/ with only a nested bundle that declares no kind."""
+    (k / ".okfignore").write_text("policies/drafts/\n", encoding="utf-8")
+    (k / "policies" / "drafts").mkdir(parents=True)
+    (k / "policies" / "index.md").write_text("# policies\n\n_(empty)_\n", encoding="utf-8")
+    (k / "policies" / "drafts" / "p.md").write_text(_concept("Policy", "Draft"), encoding="utf-8")
+    (k / "external" / "sub").mkdir(parents=True)
+    (k / "external" / "index.md").write_text("# external\n\n_(empty)_\n", encoding="utf-8")
+    (k / "external" / "sub" / "index.md").write_text(_SUB, encoding="utf-8")
+    return k
+
+
+def _lint_pairs(k: Path) -> list[tuple[str, str]]:
+    from okf_lint import lint
+
+    rep, _, _ = lint(k)
+    return sorted((i["code"], i["path"]) for i in rep.items)
+
+
+def test_profile_moves_a_directory_that_holds_no_instance(tmp_path):
+    plain = _bundle_20(tmp_path / "a")
+    assert main([str(plain), "--profile", "knowledge/3.0"]) == 0
+    k = _plant_holders(_bundle_20(tmp_path / "b"))
+    before = _tree(k)
+    assert main([str(k), "--profile", "knowledge/3.0"]) == 0
+    assert sorted(p.name for p in k.iterdir() if p.is_dir()) == [".obsidian", "base", "fragments"]
+    assert (k / ".okfignore").read_text(encoding="utf-8") == "base/policies/drafts/\n"
+    assert _lint_pairs(k) == _lint_pairs(plain) == [("FRAGMENT_NO_LEDGER", "fragments/2026-10-31-m.md")]
+    after = _tree(k)
+    assert after["base/policies/drafts/p.md"] == before["policies/drafts/p.md"]
+    assert ({r: t for r, t in after.items() if r.startswith("base/external/sub/")}
+            == {"base/" + r: t for r, t in before.items() if r.startswith("external/sub/")})
+    assert "base/external/sub/" in scan_bundle(k).nested
+
+
+def test_profile_leaves_a_directory_of_instances_beside_a_bundle_without_kind(tmp_path, capsys):
+    plain = _profile_lines(_bundle_20(tmp_path / "a"), capsys)
+    k = _plant_20(_bundle_20(tmp_path / "b"))
+    (k / "requests" / "other").mkdir()
+    (k / "requests" / "other" / "index.md").write_text(_SUB, encoding="utf-8")
+    before = _planted(_tree(k))
+    lines = _profile_lines(k, capsys)
+    assert [x for x in lines if x.startswith("move ")] == [x for x in plain if x.startswith("move ")]
+    assert _planted(_tree(k)) == before and (k / "requests" / "other" / "index.md").is_file()
 
 
 def test_version_step_leaves_a_nested_bundle_inside_a_layer_directory(tmp_path, capsys):
