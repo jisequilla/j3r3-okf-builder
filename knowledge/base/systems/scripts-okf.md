@@ -4,11 +4,11 @@ title: OKF scripts
 description: okf_init, okf_lint, okf_profile, okf_index, okf_migrate, okf_audit, okf_projection and okf_obsidian (Python ≥ 3.9 and PyYAML, run with uv) in okf-standard/scripts.
 resource: /plugin/okf-builder/skills/okf-standard/scripts
 tags: [system, scripts, python]
-status: draft
+status: stable
 owner: human:jisequilla
 runtime: uv
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-12T04:06:05Z }
-verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:54Z }, { by: human:jisequilla, at: 2026-11-11T22:45:26Z }]
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:54Z }, { by: human:jisequilla, at: 2026-11-11T22:45:26Z }, { by: human:jisequilla, at: 2026-11-12T22:36:32Z }]
 ---
 
 # Responsibility
