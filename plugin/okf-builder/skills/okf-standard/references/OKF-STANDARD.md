@@ -434,6 +434,17 @@ okf_profile: "knowledge/3.0"
 * [base](base/index.md) - The project's knowledge, in typed directories.
 ```
 
+A kind's directory, here `requests/`: the kind's `description` from the Domain Profile as its blockquote, then one entry per instance, the instance's directory name, its `project.md` description and its `state`:
+
+```markdown
+> A customer request
+
+# Instances
+
+* [req-1](req-1/index.md) - Refund flow for the EU stores. _(state: open)_
+* [req-2](req-2/index.md) - Loyalty points on returns. _(state: closed)_
+```
+
 ### 5.2 `log.md`
 
 - At least at the root. A flat list grouped by ISO date `YYYY-MM-DD`, **most recent first**.

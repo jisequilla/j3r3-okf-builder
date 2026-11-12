@@ -152,9 +152,17 @@ def m365(tmp: Path) -> None:
     uv(migrate / "okf_migrate.py", FIXTURES / "knowledge-2.0", "--profile", "knowledge/3.0", "--out", p3)
     lint(p3, script=migrate / "okf_lint.py", zero_errors=True)
 
+    sibling = {p.stem for p in (ROOT / S).glob("*.py")}
     for d in sorted((ROOT / M365).glob("*/scripts")):
-        expect(not (d / "okf_lint.py").is_file() or (d / "okf_profile.py").is_file(),
-               f"{d.relative_to(ROOT)}: okf_lint.py without okf_profile.py")
+        for py in sorted(d.glob("*.py")):
+            mods = {n.module for n in ast.walk(ast.parse(py.read_text(encoding="utf-8")))
+                    if isinstance(n, ast.ImportFrom) and n.module} | {
+                a.name for n in ast.walk(ast.parse(py.read_text(encoding="utf-8")))
+                if isinstance(n, ast.Import) for a in n.names}
+            missing = sorted(m + ".py" for m in mods & sibling if not (d / f"{m}.py").is_file())
+            expect(not missing, f"{py.relative_to(ROOT)} imports {', '.join(missing)}, which its skill does not ship")
+    uv(M365 / "okf-index" / "scripts" / "okf_index.py", root / "knowledge", "--check")
+    print("each exported script ships the scripts it imports; exported okf_index.py checks a fresh bundle")
     for skill in ("okf-capture", "okf-fragment", "okf-distill"):
         expect("scripts/okf_migrate.py" in text(M365 / skill / "SKILL.md")
                and (ROOT / M365 / skill / "scripts" / "okf_migrate.py").is_file(),

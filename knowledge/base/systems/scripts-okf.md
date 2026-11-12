@@ -7,7 +7,7 @@ tags: [system, scripts, python]
 status: draft
 owner: human:jisequilla
 runtime: uv
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-12T04:00:33Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-12T04:06:05Z }
 verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:54Z }, { by: human:jisequilla, at: 2026-11-11T22:45:26Z }]
 ---
 
@@ -18,7 +18,7 @@ verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:54Z }, { by: human:jiseq
 | okf_init.py | Scaffold of `knowledge/` (v0.2 or v0.1) | files; regenerates indexes |
 | okf_lint.py | Spec conformance (§11) + profile; version detection | ERROR/WARN findings, `--json`, exit code |
 | okf_profile.py | Loads and composes a knowledge/3.0 bundle's Domain Profile (built-in, `extends`, `base/profile.md`); `--check-builtin` checks the built-in profile against the standard's §4 | PROFILE_* findings, `--json`; library of okf_lint.py |
-| okf_index.py | Regenerates `index.md` per directory from frontmatter; skips what lint's scan leaves out (`.okfignore`, nested bundles, non-OKF directories), still listing a nested bundle in its parent's index; `--dir` into one exits 2 | `--check` for CI |
+| okf_index.py | Regenerates `index.md` per directory from frontmatter; skips what lint's scan leaves out (`.okfignore`, nested bundles, non-OKF directories), still listing a nested bundle in its parent's index; lists each kind's instances with their state in the kind directory's index, under the kind's description from the Domain Profile; `--dir` into one exits 2 | `--check` for CI |
 | okf_migrate.py | 0.1 ↔ 0.2, knowledge/2.0 → 3.0 (`--profile`), `--dry-run`, `--out`, `--keep-extensions`, `--file`; migrates only what okf_lint.py reads: the paths `.okfignore` matches and nested bundles (operational instances included) stay byte-identical; the profile step keeps those at the root where they are, and keeps a root directory at the root only when it holds operational instances (nested bundles whose root `index.md` declares a `kind`) and no other document besides its `index.md` (a kind's directory of instances); it moves a root directory holding only ignored paths or nested bundles without `kind` under `base/` with them, moves those inside a moved directory with it and rewrites each `.okfignore` entry anchored under that directory to its new path | files + entry in log.md |
 | okf_audit.py | Repository history for `okf-review`'s audit mode: concepts deleted or renamed since a reference point (read-only) | `--since`, `--json` |
 | okf_projection.py | Knowledge projections ([ADR-0022](/base/decisions/ADR-0022-knowledge-projections-drift-by-nature.md), [ADR-0031](/base/decisions/ADR-0031-projection-tools-transient-exception.md)): each `projection.yaml`, the dependency rule and drift by nature (`PROJ_*` codes, `PROJ_DRIFT` a warning); runs a rendered projection's `render` only with `--run-render`; `--record-hashes` writes a composed projection's hashes in place | `--json`, `--strict`, exit code |
