@@ -1049,6 +1049,22 @@ def test_profile_leaves_a_directory_of_instances_beside_a_bundle_without_kind(tm
     assert _planted(_tree(k)) == before and (k / "requests" / "other" / "index.md").is_file()
 
 
+def test_profile_moves_a_directory_that_holds_an_instance_beside_a_document(tmp_path, capsys):
+    plain = _profile_lines(_bundle_20(tmp_path / "a"), capsys)
+    k = _bundle_20(tmp_path / "b")
+    inst = k / "decisions" / "req-9"
+    inst.mkdir()
+    (inst / "index.md").write_text('---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\nkind: Request\n'
+                                   "state: open\nparent: ../..\n---\n\n# Notes\n\nKept by hand.\n", encoding="utf-8")
+    before = {r: t for r, t in _tree(k).items() if r.startswith("decisions/req-9/")}
+    lines = _profile_lines(k, capsys)
+    assert "move decisions/ → base/decisions/" in lines
+    assert [x for x in lines if x.startswith("move ")] == [x for x in plain if x.startswith("move ")]
+    assert not (k / "decisions").exists()
+    assert {r: t for r, t in _tree(k).items() if r.startswith("base/decisions/req-9/")} == {
+        "base/" + r: t for r, t in before.items()}
+
+
 def test_version_step_leaves_a_nested_bundle_inside_a_layer_directory(tmp_path, capsys):
     runs = {}
     for plants in (False, True):
