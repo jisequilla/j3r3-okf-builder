@@ -61,7 +61,7 @@ uv run "<skills>/okf-standard/scripts/okf_init.py" --instance <Kind> --id <id> -
 - `<id>`: the instance's directory name, one path segment (`req-42`, `2026-11-incident-db`).
 - `--dirs`: the typed directories of the instance's `base/`; none by default, since an instance distills into few.
 
-The script writes `<holder>/<kind directory>/<id>/` with `index.md` (`okf_version`, `okf_profile`, `kind`, `state: open`, `parent: ../..`), `log.md`, `project.md`, `fragments/`, `base/` and `projections/`, then runs okf-index on the instance and on its holder, so the kind's `index.md` lists it. A kind the holder does not hold, an unknown or abstract kind, a holder that is no bundle or is closed (frozen, standard §2.2), or an id that is no single directory name (blank, with `/`, `.` or `..`, or naming a file of the kind's directory) exits 2 and writes nothing; say what the message names. Run `okf-lint` on the domain bundle afterwards. Closing an instance is `okf-distill`'s closing mode, not init.
+The script writes `<holder>/<kind directory>/<id>/` with `index.md` (`okf_version`, `okf_profile`, `kind`, `state: open`, `parent: ../..`), `log.md`, `project.md`, `fragments/`, `base/` and `projections/`, then runs okf-index on the instance and on its holder, so the kind's `index.md` lists it. A kind the holder does not hold, an unknown or abstract kind, a holder that is no bundle or is closed or inside a closed instance (frozen, standard §2.2), or an id that is no single directory name (blank, with `/`, `.` or `..`, or naming a file of the kind's directory) exits 2 and writes nothing; say what the message names. Run `okf-lint` on the domain bundle afterwards. Closing an instance is `okf-distill`'s closing mode, not init.
 
 ## Don't
 

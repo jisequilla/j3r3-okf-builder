@@ -149,8 +149,9 @@ class Refusal(Exception):
 
 
 def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
-    """The directory of the new instance and the kind's declared id; Refusal when the holder is no bundle, the kind
-    is unknown, abstract or not held by the holder, or the id is no single path segment."""
+    """The directory of the new instance and the kind's declared id; Refusal when the id is no single directory name,
+    the holder is no bundle, it or a bundle above it is closed (frozen, standard §2.2), the kind is unknown, abstract
+    or not held by the holder, or the id names a file of the kind's directory."""
     from okf_lint import held_kinds  # noqa: E402
     from okf_profile import PROFILE_30 as P30, canonical_kind, kind_in_force, load_profile, operational_kinds
 
@@ -159,10 +160,12 @@ def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
     hfm = root_frontmatter(holder)
     if not (holder / "index.md").is_file() or hfm.get("okf_version") is None:
         raise Refusal(f"--in {holder} is not a bundle (no index.md declaring okf_version)")
-    if hfm.get("state") == "closed":
-        raise Refusal(f"--in {holder} is closed: a closed instance is frozen and nothing in it is edited (standard §2.2)")
     domain, fm = holder, hfm
     for _ in range(32):
+        if fm.get("state") == "closed":
+            where = "is closed" if domain == holder else f"is inside {domain}, which is closed"
+            raise Refusal(f"--in {holder} {where}: a closed instance is frozen and nothing in it is edited "
+                          "(standard §2.2)")
         if fm.get("kind") in (None, "Domain Bundle"):
             break
         par = fm.get("parent")
@@ -520,6 +523,24 @@ def test_instance_refuses_a_closed_holder(tmp_path, capsys):
     assert main(["--instance", "Request", "--id", "r9", "--in", str(k / "releases" / "v1"), *_INST]) == 2
     assert _files(k) == before
     assert "is closed" in capsys.readouterr().err
+
+
+def test_instance_refuses_a_holder_inside_a_closed_instance(tmp_path, capsys):
+    from okf_lint import _KINDS_PROFILE, _tree_bundle
+
+    k = _tree_bundle(tmp_path / "knowledge", profile=_KINDS_PROFILE.replace("holds: [Request] }",
+                                                                            "holds: [Release, Request] }"))
+    assert main(["--instance", "Release", "--id", "v1", "--in", str(k), *_INST]) == 0
+    assert main(["--instance", "Release", "--id", "v1a", "--in", str(k / "releases" / "v1"), *_INST]) == 0
+    idx = k / "releases" / "v1" / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("state: open\n", "state: closed\nclosed_at: "
+                                                           "2026-11-12T09:00:00Z\n", 1), encoding="utf-8")
+    before = _files(k)
+    capsys.readouterr()
+    assert main(["--instance", "Request", "--id", "r9", "--in", str(k / "releases" / "v1" / "releases" / "v1a"),
+                 *_INST]) == 2
+    assert _files(k) == before
+    assert "which is closed" in capsys.readouterr().err
 
 
 def test_instance_over_an_existing_one_skips_its_files(tmp_path):
