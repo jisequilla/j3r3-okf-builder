@@ -382,8 +382,9 @@ def plan_closing(inst: Bundle, parent: Bundle | None, fragment: str, carries: di
             continue
         target = carries.get(r.id)
         if target is None:
-            plan.fail(4, r.id, f"an {r.state} conflict with no --carry: resolve or dismiss it in the instance, or "
-                      "carry it up")
+            article = "an" if r.state == "open" else "a"
+            plan.fail(4, r.id, f"{article} {r.state} conflict with no --carry: resolve or dismiss it in the instance, "
+                      "or carry it up")
             continue
         used.add(r.id)
         pr = prows.get(target)
@@ -625,6 +626,54 @@ def test_child_open(tmp_path, capsys):
         '---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\nkind: Request\nstate: open\nparent: ../..\n---\n',
         encoding="utf-8")
     assert _blockers(capsys, inst) == [{"code": "CHILD_OPEN", "path": "requests/req-0043/index.md"}]
+
+
+def test_a_closed_child_does_not_block(tmp_path, capsys):
+    inst = _fixture(tmp_path) / _REQ
+    (inst / "requests" / "req-0043").mkdir(parents=True)
+    (inst / "requests" / "req-0043" / "index.md").write_text(
+        '---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\nkind: Request\nstate: closed\n'
+        'closed_at: 2026-11-08T10:00:00Z\nparent: ../..\n---\n', encoding="utf-8")
+    code, rep = _report(capsys, inst)
+    assert (code, rep["blockers"]) == (0, [])
+
+
+def test_a_proposed_conflict_is_reported_and_needs_its_carry(tmp_path, capsys):
+    def plant(k):
+        _edit(k / _REQ / "conflict-log.md", "| sources disagree | | open | — |", "| sources disagree | | proposed | — |")
+    k = _fixture(tmp_path / "report")
+    plant(k)
+    code, rep = _report(capsys, k / _REQ)
+    assert code == 0
+    assert rep["conflicts"] == [{"id": "C-001", "state": "proposed",
+                                 "description": "Ana says the refund API returns 200 for a refund still pending; "
+                                                "Maria says finance reads every 200 as paid"}]
+    argv = _APPLY[:5] + _APPLY[7:]  # without --carry C-001=C-002
+    assert argv.count("--carry") == 1
+    assert _failures(tmp_path / "apply", capsys, plant, argv) == [
+        (4, "C-001", "a proposed conflict with no --carry: resolve or dismiss it in the instance, or carry it up")]
+
+
+def test_only_open_questions_are_reported_and_need_a_carry(tmp_path, capsys):
+    k = _fixture(tmp_path)
+    inst = k / _REQ
+    source = (inst / _QUESTION).read_text(encoding="utf-8")
+    rows = ""
+    for name, status in (("answered", "answered"), ("dropped", "dropped")):
+        (inst / f"base/questions/{name}.md").write_text(
+            source.replace("question_status: open\n", f"question_status: {status}\n")
+                  .replace("title: Who approves partial refunds?", f"title: An {name} question"), encoding="utf-8")
+        rows += f"| An {name} question | stays | applied | [req-0042: An {name} question]" \
+                f"(/requests/req-0042/base/questions/{name}.md) |\n"
+    _edit(k / _FRAGMENT.lstrip("/"), "| C-001 of req-0042 |", rows + "| C-001 of req-0042 |")
+    code, rep = _report(capsys, inst)
+    assert code == 0
+    assert rep["questions"] == [{"path": "/" + _QUESTION, "owner": "human:maria"}]
+    assert [c["path"] for c in rep["concepts"] if c["type"] == "Open Question"] == [
+        "/base/questions/answered.md", "/base/questions/dropped.md", "/" + _QUESTION]
+    before = {n: (inst / f"base/questions/{n}.md").read_text(encoding="utf-8") for n in ("answered", "dropped")}
+    assert main([str(inst), *_APPLY]) == 0
+    assert {n: (inst / f"base/questions/{n}.md").read_text(encoding="utf-8") for n in before} == before
 
 
 def test_pending_fragment_aliases_resolved(tmp_path, capsys):
