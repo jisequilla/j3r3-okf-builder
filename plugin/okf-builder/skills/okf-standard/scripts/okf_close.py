@@ -22,9 +22,8 @@ Usage:
   in the parent's fragments/.
 - --apply checks first, and on any failure writes nothing and exits 1, naming each one:
   1. nothing blocks;
-  2. --fragment is in the parent's fragments/, distilled (or conflict while a conflict it opened in the parent is
-     open), and the Concept cells of its ledger link, resolved from the parent, exactly the instance's concepts; each
-     row's Kind is promote, conflict or stays;
+  2. --fragment is in the parent's fragments/, distilled, and the Concept cells of its ledger link, resolved from
+     the parent, exactly the instance's concepts; each row's Kind is promote, conflict or stays;
   3. a promote row also links a parent concept whose sources hold resource == that instance concept's from_parent;
   4. every open question and every open or proposed conflict has a --carry: a question to an open Open Question of
      the parent whose asked_in is its from_parent, a conflict to an open row of the parent's Conflict Log whose Source
@@ -301,7 +300,7 @@ def check_fragment(inst: Bundle, parent: Bundle, fragment: str, items: list[dict
         return
     fm = parent.fm_of(doc)
     status = fm.get("distillation_status")
-    if not _is_fragment(fm, parent.prof) or status not in ("distilled", "conflict"):
+    if not _is_fragment(fm, parent.prof) or status != "distilled":
         plan.fail(2, fragment, f"is not a distilled Knowledge Fragment (distillation_status {status})")
         return
     led = read_ledger(doc.body)
@@ -698,6 +697,13 @@ def test_a_missing_ledger_row_fails_check_2(tmp_path, capsys):
         _edit(k / _FRAGMENT.lstrip("/"), "| Refund retry | stays | applied | [req-0042: Refund retry]"
               "(/requests/req-0042/base/runbooks/refund-retry.md) |\n", "")
     assert _failed_apply(tmp_path, capsys, plant) == [(2, _FRAGMENT)]
+
+
+def test_a_closing_fragment_not_distilled_fails_check_2(tmp_path, capsys):
+    for status in ("conflict", "pending"):
+        def plant(k, status=status):
+            _edit(k / _FRAGMENT.lstrip("/"), "distillation_status: distilled\n", f"distillation_status: {status}\n")
+        assert _failed_apply(tmp_path / status, capsys, plant) == [(2, _FRAGMENT)]
 
 
 def test_a_promoted_concept_without_its_source_fails_check_3(tmp_path, capsys):
