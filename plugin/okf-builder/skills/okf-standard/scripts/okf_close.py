@@ -653,9 +653,12 @@ def test_apply_closes_the_fixture_and_lint_finds_nothing(tmp_path, capsys):
     raw, _ = split_frontmatter(q.read_text(encoding="utf-8"))
     assert "question_status: carried\ncarried_to: ../../base/questions/who-approves-partial-refunds.md\n" in raw
     assert "generated: { by: okf-builder/test, at: 2026-11-09T17:00:00Z }" in raw
+    log = (inst / "conflict-log.md").read_text(encoding="utf-8")
     assert "| C-001 | [Scoping call](/fragments/2026-11-05-scoping-call.md) | Ana says the refund API returns 200 for a " \
            "refund still pending; Maria says finance reads every 200 as paid | sources disagree | carried up to C-002 " \
-           "(`../../conflict-log.md`) | carried | human:test |" in (inst / "conflict-log.md").read_text(encoding="utf-8")
+           "(`../../conflict-log.md`) | carried | human:test |" in log
+    assert split_frontmatter(log)[0].count("generated:") == 1
+    assert "generated: { by: okf-builder/test, at: 2026-11-09T17:00:00Z }" in split_frontmatter(log)[0]
     frag = (inst / "fragments" / "2026-11-05-scoping-call.md").read_text(encoding="utf-8")
     assert "distillation_status: distilled\n" in frag
     assert "| Pending refunds | Conflict | carried up: C-002 (`../../conflict-log.md`) | [Conflict log](/conflict-log.md) |" \
@@ -668,6 +671,18 @@ def test_apply_closes_the_fixture_and_lint_finds_nothing(tmp_path, capsys):
     assert [b["code"] for b in json.loads(capsys.readouterr().out)["blockers"]] == ["ALREADY_CLOSED"]
 
 
+def test_apply_regenerates_the_indexes_of_the_instance_and_of_the_parent(tmp_path):
+    k = _fixture(tmp_path)
+    inst_index = k / _REQ / "base" / "index.md"
+    fresh = inst_index.read_text(encoding="utf-8")
+    _edit(inst_index, "* [runbooks](runbooks/index.md) - Operational and incident procedures.\n", "")
+    assert main([str(k / _REQ), *_APPLY]) == 0
+    assert inst_index.read_text(encoding="utf-8") == fresh
+    assert (k / "requests" / "index.md").read_text(encoding="utf-8").split("\n")[-2] == (
+        "* [req-0042](req-0042/index.md) - A fictional change request to approve refunds faster, ready to close into "
+        "its domain bundle. _(state: closed)_")
+
+
 def test_dry_run_writes_nothing(tmp_path):
     k = _fixture(tmp_path)
     before = _hashes(k)
@@ -675,8 +690,8 @@ def test_dry_run_writes_nothing(tmp_path):
     assert _hashes(k) == before
 
 
-def _failed_apply(tmp_path, capsys, plant, argv=None) -> list[tuple[int, str]]:
-    """Plants a defect, runs --apply, and returns the (check, subject) of each failure once nothing was written."""
+def _failures(tmp_path, capsys, plant, argv=None) -> list[tuple[int, str, str]]:
+    """Plants a defect, runs --apply, and returns each failure (check, subject, message) once nothing was written."""
     k = _fixture(tmp_path)
     plant(k)
     before = _hashes(k)
@@ -684,12 +699,23 @@ def _failed_apply(tmp_path, capsys, plant, argv=None) -> list[tuple[int, str]]:
     proot = parent_root(inst)
     args = argv or _APPLY
     carries = parse_carries([args[i + 1] for i, a in enumerate(args) if a == "--carry"])
-    plan = plan_closing(inst, load_bundle(proot), _FRAGMENT, carries, "human:test", "okf-builder/test",
-                        "2026-11-09T17:00:00Z")
+    plan = plan_closing(inst, load_bundle(proot), args[args.index("--fragment") + 1], carries, "human:test",
+                        "okf-builder/test", "2026-11-09T17:00:00Z")
     assert main([str(k / _REQ), *args]) == 1
     assert _hashes(k) == before
     assert "nothing written" in capsys.readouterr().out
-    return [(c, s) for c, s, _ in plan.failures]
+    return plan.failures
+
+
+def _failed_apply(tmp_path, capsys, plant, argv=None) -> list[tuple[int, str]]:
+    """The (check, subject) of each failure of _failures."""
+    return [(c, s) for c, s, _ in _failures(tmp_path, capsys, plant, argv)]
+
+
+def _with_fragment(fragment: str) -> list[str]:
+    args = list(_APPLY)
+    args[args.index("--fragment") + 1] = fragment
+    return args
 
 
 def test_a_missing_ledger_row_fails_check_2(tmp_path, capsys):
@@ -706,6 +732,44 @@ def test_a_closing_fragment_not_distilled_fails_check_2(tmp_path, capsys):
         assert _failed_apply(tmp_path / status, capsys, plant) == [(2, _FRAGMENT)]
 
 
+def test_a_closing_fragment_outside_the_parents_fragments_fails_check_2(tmp_path, capsys):
+    def plant(k):
+        (k / "closing-req-0042.md").write_text((k / _FRAGMENT.lstrip("/")).read_text(encoding="utf-8"),
+                                               encoding="utf-8")
+    assert _failures(tmp_path, capsys, plant, _with_fragment("/closing-req-0042.md")) == [
+        (2, "/closing-req-0042.md", "is not in the parent's fragments/")]
+
+
+def test_a_closing_fragment_absent_fails_check_2(tmp_path, capsys):
+    assert _failures(tmp_path, capsys, lambda k: None, _with_fragment("/fragments/nowhere.md")) == [
+        (2, "/fragments/nowhere.md", "does not exist in the parent")]
+
+
+def test_a_closing_fragment_without_a_ledger_fails_check_2(tmp_path, capsys):
+    def plant(k):
+        path = k / _FRAGMENT.lstrip("/")
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text[:text.index("# Distillation")], encoding="utf-8")
+    assert _failures(tmp_path, capsys, plant) == [(2, _FRAGMENT, "has no ledger in # Distillation")]
+
+
+def test_a_ledger_row_with_a_kind_not_of_closing_fails_check_2(tmp_path, capsys):
+    def plant(k):
+        _edit(k / _FRAGMENT.lstrip("/"), "| Refund retry | stays |", "| Refund retry | keep |")
+    assert _failures(tmp_path, capsys, plant) == [
+        (2, _FRAGMENT, "ledger row 'Refund retry' has Kind 'keep', not promote, conflict or stays")]
+
+
+def test_a_ledger_linking_no_concept_of_the_instance_fails_check_2(tmp_path, capsys):
+    def plant(k):
+        _edit(k / _FRAGMENT.lstrip("/"), "(/requests/req-0042/base/runbooks/refund-retry.md) |",
+              "(/requests/req-0042/base/runbooks/refund-retry.md), [runbooks](/requests/req-0042/base/runbooks/"
+              "index.md) |")
+    assert _failures(tmp_path, capsys, plant) == [
+        (2, _FRAGMENT, "ledger links /requests/req-0042/base/runbooks/index.md, which is no concept of the "
+                       "instance's base/")]
+
+
 def test_a_promoted_concept_without_its_source_fails_check_3(tmp_path, capsys):
     def plant(k):
         _edit(k / "base/domain/refund-window.md", "  - { id: req-0042, resource: /requests/req-0042/base/domain/"
@@ -717,6 +781,20 @@ def test_a_parent_question_not_asked_in_the_instance_fails_check_4(tmp_path, cap
     def plant(k):
         _edit(k / _QUESTION, "asked_in: /requests/req-0042/", "asked_in: /requests/req-0041/")
     assert _failed_apply(tmp_path, capsys, plant) == [(4, "/" + _QUESTION)]
+
+
+def test_a_parent_question_not_open_fails_check_4(tmp_path, capsys):
+    def plant(k):
+        _edit(k / _QUESTION, "question_status: open\n", "question_status: answered\n")
+    assert _failures(tmp_path, capsys, plant) == [
+        (4, "/" + _QUESTION, f"carried to /{_QUESTION}, which is no open Open Question of the parent")]
+
+
+def test_a_parent_row_not_open_fails_check_4(tmp_path, capsys):
+    def plant(k):
+        _edit(k / "conflict-log.md", "| sources disagree | | open | — |", "| sources disagree | | resolved | human:ana |")
+    assert _failures(tmp_path, capsys, plant) == [
+        (4, "C-001", "carried to C-002, which is no open row of the parent's Conflict Log")]
 
 
 def test_an_open_question_without_carry_fails_check_4(tmp_path, capsys):
