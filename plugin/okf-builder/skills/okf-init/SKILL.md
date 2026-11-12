@@ -36,7 +36,7 @@ No `.okfignore` is created; when `knowledge/` holds paths that are not part of t
      --repo-url "<url>" [--purpose "<purpose>"] [--dirs a,b,c] [--okf-version 0.2|0.1]
    ```
    `--okf-version 0.1` only if the bundle must be consumed by tools that understand only 0.1; 0.2 by default.
-4. `knowledge/project.md` holds no placeholder: the script fills the title, description, repository link and Purpose, and leaves out what it cannot fill (Scope, Team and ownership, the other Key links rows), so a fresh bundle has no `SECTION_EMPTY`. Add a section from the project template (`<skills>/okf-standard/templates/project.md`) only when its content is known from the repo or the person; never write empty rows, placeholders or invented people.
+4. `knowledge/project.md` holds no placeholder: the script fills the title, description, repository link and Purpose, and leaves out what it cannot fill (Scope, Team and ownership, the other Key links rows), so a fresh bundle has no `SECTION_EMPTY`; its Knowledge map links only the typed directories created. Add a section from the project template (`<skills>/okf-standard/templates/project.md`) only when its content is known from the repo or the person; never write empty rows, placeholders or invented people.
 5. Add (or propose adding) to the repo's `CLAUDE.md`:
    ```
    ## Project knowledge
@@ -46,6 +46,22 @@ No `.okfignore` is created; when `knowledge/` holds paths that are not part of t
 6. Run `okf-lint` (`uv run "<skills>/okf-standard/scripts/okf_lint.py" <root>/knowledge`) and show the result. `INDEX_EMPTY` warnings in empty directories are expected.
 7. Offer the Obsidian viewer setup (ADR-0032): `uv run "<skills>/okf-standard/scripts/okf_obsidian.py" <root>/knowledge` writes `.obsidian/app.json` (Markdown links in relative form, updated on rename), `.obsidian/.gitignore` (git keeps only `app.json` and itself, not each reader's window state) and `knowledge.base` (Bases views: Decisions, Awaiting human review, By type, Going stale over `base/`, Fragments over `fragments/`, reading the fields, values and types the bundle's Domain Profile names through aliases and the local types that extend Architecture Decision), so `knowledge/` opens in Obsidian as a vault whose bundle-absolute links resolve. Run it only if the person accepts. It works on an existing bundle too: when the person asks for it on one, run this step alone and skip the others. It never overwrites an existing file without `--force`; show its `created`, `rewritten` and `skipped (exists)` lines.
 8. Summarize in 3–5 lines what was created and suggest the first capture (usually `okf-capture` with an ADR or the context architecture view).
+
+## Open a unit of work
+
+A domain bundle whose Domain Profile declares operational kinds under `kinds` (standard §2.2, ADR-0039) works each request, incident or release as an instance: a bundle of its own in its kind's directory, next to the layers. When the person starts one ("open a request for…", "new incident", "start release 2.3"), create it with:
+
+```bash
+uv run "<skills>/okf-standard/scripts/okf_init.py" --instance <Kind> --id <id> --in <holder> \
+  --title "<title>" --description "<description>" --actor <actor> [--purpose "<purpose>"] [--dirs a,b]
+```
+
+- `<Kind>`: an operational kind in force, by its id or a type alias the profile declares for it (written as the id). List them with `uv run "<skills>/okf-standard/scripts/okf_lint.py" <root>/knowledge --profiles`.
+- `<holder>`: the bundle that holds the instance: the domain bundle (`<root>/knowledge`), which holds every kind with a directory, or an instance whose kind lists `<Kind>` under `holds` (a request inside a release).
+- `<id>`: the instance's directory name, one path segment (`req-42`, `2026-11-incident-db`).
+- `--dirs`: the typed directories of the instance's `base/`; none by default, since an instance distills into few.
+
+The script writes `<holder>/<kind directory>/<id>/` with `index.md` (`okf_version`, `okf_profile`, `kind`, `state: open`, `parent: ../..`), `log.md`, `project.md`, `fragments/`, `base/` and `projections/`, then runs okf-index on the instance and on its holder, so the kind's `index.md` lists it. A kind the holder does not hold, an unknown or abstract kind, a holder that is no bundle or is closed or inside a closed instance (frozen, standard §2.2), or an id that is no single directory name (blank, with `/`, `.` or `..`, or naming a file of the kind's directory) exits 2 and writes nothing; say what the message names. Run `okf-lint` on the domain bundle afterwards. Closing an instance is `okf-distill`'s closing mode, not init.
 
 ## Don't
 
