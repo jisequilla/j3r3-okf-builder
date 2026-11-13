@@ -3,12 +3,13 @@ type: Architecture Decision
 title: "ADR-0041: A decision is a Decision; Architecture Decision is one kind of it, each kind has its own folder, prefix and sequence, and a link inside a record follows a decision that moves"
 description: The standard gains an abstract built-in type Decision that Architecture Decision extends, with no catalogue of kinds; each decision type declares its folder and prefix in the profile, has its own template and numbers on its own sequence; this repository declares a local Standard Decision, keeps plain Decision for how the repo works, and moves and renumbers the 31 decisions that are not about the plugin's architecture; a type declares its prefix in the key prefix, a decision carries decision_id and formerly, and a link inside a fragment's record has only its target rewritten when the decision it points to moves.
 tags: [adr, standard, decisions, profile, types]
-status: draft
+status: stable
 adr_id: ADR-0041
 decision_status: accepted
 supersedes: /base/decisions/ADR-0040-decision-types.md
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-13T20:22:13Z }
+verified: { by: human:jisequilla, at: 2026-11-13T21:32:44Z }
 sources:
   - { id: fragment, resource: /fragments/2026-11-13-decision-types-beyond-adr.md, title: "2026-11-13 · Not every decision is an Architecture Decision, and how the standard and this repo should type decisions" }
   - { id: answers, resource: /fragments/2026-11-13-decision-types-identity-and-existing-files.md, title: "2026-11-13 · Decision types, the owner's answers on where a kind's folder and prefix are declared and on moving the 29 existing ADRs" }
