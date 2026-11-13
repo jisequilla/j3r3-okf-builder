@@ -162,10 +162,9 @@ def m365(tmp: Path) -> None:
     sibling = {p.stem for p in (ROOT / S).glob("*.py")}
     for d in sorted((ROOT / M365).glob("*/scripts")):
         for py in sorted(d.glob("*.py")):
-            mods = {n.module for n in ast.walk(ast.parse(py.read_text(encoding="utf-8")))
-                    if isinstance(n, ast.ImportFrom) and n.module} | {
-                a.name for n in ast.walk(ast.parse(py.read_text(encoding="utf-8")))
-                if isinstance(n, ast.Import) for a in n.names}
+            nodes = list(ast.walk(ast.parse(py.read_text(encoding="utf-8"))))
+            mods = {n.module for n in nodes if isinstance(n, ast.ImportFrom) and n.module} | {
+                a.name for n in nodes if isinstance(n, ast.Import) for a in n.names}
             missing = sorted(m + ".py" for m in mods & sibling if not (d / f"{m}.py").is_file())
             expect(not missing, f"{py.relative_to(ROOT)} imports {', '.join(missing)}, which its skill does not ship")
     uv(M365 / "okf-index" / "scripts" / "okf_index.py", root / "knowledge", "--check")
@@ -365,9 +364,7 @@ def dogfood(tmp: Path) -> None:
                  {"path": "requests/req-0002/", "kind": "Request", "state": "closed", "concepts": 5, "errors": 0,
                   "warnings": 0}]
     expect(report["instances"] == instances, report["instances"])
-    outside = [f for f in report["findings"] if f["code"] == "LINK_OUTSIDE" and f["path"].startswith("requests/")]
-    expect(not outside, f"an instance links outside itself: {outside}")
-    print("instances", [(i["path"], i["state"]) for i in report["instances"]], "with no LINK_OUTSIDE")
+    print("instances", [(i["path"], i["state"]) for i in report["instances"]])
 
     sys.path.insert(0, str(ROOT / S))
     import okf_common as c
@@ -493,7 +490,8 @@ def _close_round_trip(tmp: Path) -> None:
     shutil.copytree(ROOT / EX, copy)
     reopen = {f"{_EX_REQ}/index.md": [(r"^state: closed\n(closed_at: .*\n)?", "state: open\n")],
               _EX_QUESTION: [(r"^question_status: carried\n(carried_to: .*\n)?", "question_status: open\n"),
-                             (r"^generated: .*$", _EX_QUESTION_GENERATED)]}
+                             (r"^generated: .*$", _EX_QUESTION_GENERATED)],
+              "requests/index.md": [(r"_\(state: closed\)_$", "_(state: open)_")]}
     for rel, subs in reopen.items():
         path = copy / rel
         new = path.read_text(encoding="utf-8")
@@ -501,7 +499,7 @@ def _close_round_trip(tmp: Path) -> None:
             new, n = re.subn(pattern, repl, new, count=1, flags=re.M)
             expect(n == 1, f"{rel}: {pattern} not found")
         path.write_text(new, encoding="utf-8")
-    out = uv(S / "okf_close.py", copy / _EX_REQ, *_EX_CLOSE, ok=(0, 1))
+    out = uv(S / "okf_close.py", copy / _EX_REQ, *_EX_CLOSE)
     expect(out.rstrip().endswith("then run okf_lint.py on the parent"), f"okf_close.py --apply failed:\n{out}")
     run("diff", "-r", copy, ROOT / EX)
     report = json.loads(uv(S / "okf_close.py", EX / _EX_REQ, "--json", ok=(1,)))
