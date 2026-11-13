@@ -1,6 +1,6 @@
 ---
 name: okf-init
-description: Creates the standard knowledge/ structure (OKF v0.2 bundle, knowledge/3.0 profile with the layers fragments/, base/ and projections/) in the current repository. Use when the user says "initialize OKF", "create the knowledge folder", "okf init", "scaffold knowledge", "prepare this repo for OKF", and to set up an existing bundle for reading in Obsidian when the user says "open the knowledge in Obsidian", "set up Obsidian for knowledge/", "okf obsidian".
+description: Creates the standard knowledge/ structure (OKF v0.2 bundle, knowledge/3.0 profile with the layers fragments/, base/ and projections/) in the current repository. Use when the user says "initialize OKF", "create the knowledge folder", "okf init", "scaffold knowledge", "prepare this repo for OKF", and to set up an existing bundle for reading in Obsidian when the user says "open the knowledge in Obsidian", "set up Obsidian for knowledge/", "okf obsidian". Also opens an operational instance (a request, incident or release) in its kind's directory of a bundle whose Domain Profile declares kinds, when the user says "open a request for…", "new incident", "start release 2.3".
 ---
 
 # okf-init
@@ -61,7 +61,7 @@ uv run "<skills>/okf-standard/scripts/okf_init.py" --instance <Kind> --id <id> -
 - `<id>`: the instance's directory name, one path segment (`req-42`, `2026-11-incident-db`).
 - `--dirs`: the typed directories of the instance's `base/`; none by default, since an instance distills into few.
 
-The script writes `<holder>/<kind directory>/<id>/` with `index.md` (`okf_version`, `okf_profile`, `kind`, `state: open`, `parent: ../..`), `log.md`, `project.md`, `fragments/`, `base/` and `projections/`, then runs okf-index on the instance and on its holder, so the kind's `index.md` lists it. A kind the holder does not hold, an unknown or abstract kind, a holder that is no bundle or is closed or inside a closed instance (frozen, standard §2.2), or an id that is no single directory name (blank, with `/`, `.` or `..`, or naming a file of the kind's directory) exits 2 and writes nothing; say what the message names. Run `okf-lint` on the domain bundle afterwards. Closing an instance is `okf-distill`'s closing mode, not init.
+The script writes `<holder>/<kind directory>/<id>/` with `index.md` (`okf_version`, `okf_profile`, `kind`, `state: open`, `parent: ../..`), `log.md`, `project.md`, `fragments/`, `base/` and `projections/`, then runs okf-index on the instance and on its holder, so the kind's `index.md` lists it. A kind the holder does not hold, an unknown or abstract kind, a holder that is no bundle or is closed or inside a closed instance (frozen, standard §2.2), a holder that is or lies inside a domain bundle declaring `state: closed` (only an operational bundle has a state; `okf-lint` reports that key as `BAD_STATE`, so remove it from the domain bundle's `index.md` first), or an id that is no single directory name (blank, with `/`, `.` or `..`, or naming a file of the kind's directory) exits 2 and writes nothing; say what the message names. Run `okf-lint` on the domain bundle afterwards. Closing an instance is `okf-distill`'s closing mode, not init.
 
 ## Don't
 

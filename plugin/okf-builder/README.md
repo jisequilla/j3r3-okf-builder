@@ -7,7 +7,7 @@ A Claude Code / Cowork plugin that manages a project's knowledge as an **OKF bun
 | Skill | What it does |
 |---|---|
 | `okf-standard` | Knowledge of the standard and the `knowledge/3.0` profile; concept templates. |
-| `okf-init` | Creates the `knowledge/` structure in the current repo. |
+| `okf-init` | Creates the `knowledge/` structure in the current repo; also opens an operational instance (request, incident, release) in its kind's directory. |
 | `okf-capture` | Adds a concept (ADR, runbook, system, API, table, metric, term, policy…) with its template, log and index. |
 | `okf-fragment` | Captures a meeting, transcript, chat or slide deck as a knowledge fragment, recorded as it happened. |
 | `okf-distill` | Proposes what one fragment changes in the bundle (additions, confirmations, updates, refutations, conflicts) and applies only what the person approves; also closes an operational instance into its parent through `okf_close.py` (not in the Microsoft 365 package). |

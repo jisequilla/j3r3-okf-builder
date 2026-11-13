@@ -23,6 +23,9 @@ Usage:
   non-OKF directories. It writes no index.md there and lists neither ignored paths
   nor non-OKF directories; a nested bundle stays listed in its parent's index, and
   a directory holding only nested bundles (a kind directory) keeps its index.md.
+- A path with a hidden directory (a name starting with '.') never counts as content
+  and never gets an index.md; nor does anything below a non-OKF directory, which
+  counts as content of no ancestor. --dir into either exits 2 and writes nothing.
 - --check: writes nothing; exit 1 if any index.md would change.
 """
 from __future__ import annotations
@@ -124,10 +127,16 @@ def _rel(bundle: Path, p: Path) -> str:
     return p.resolve().relative_to(bundle.resolve()).as_posix()
 
 
+def hidden(rel: str) -> bool:
+    """A bundle-relative path with a segment whose name starts with '.'."""
+    return any(part.startswith(".") for part in rel.split("/"))
+
+
 def left_out(bundle: Path, sc: Scan, p: Path) -> str | None:
-    """Why lint's scan leaves p out of the bundle ('.okfignore', 'nested bundle', 'not OKF'), or None. What lies below
-    an ignored directory or a nested bundle is left out with it, a file with its non-OKF directory; a directory below a
-    non-OKF directory is judged on its own."""
+    """Why p is not part of the bundle ('.okfignore', 'nested bundle', 'hidden', 'not OKF', 'inside the non-OKF
+    directory <d>'), or None. What lies below an ignored directory or a nested bundle is left out with it, a file with
+    its non-OKF directory, and a directory with a hidden segment (lint's scan never walks into one); a directory below
+    a non-OKF directory, and every file in it, is left out with that directory too."""
     rel = _rel(bundle, p)
     if rel == ".":
         return None
@@ -136,18 +145,23 @@ def left_out(bundle: Path, sc: Scan, p: Path) -> str | None:
         return ".okfignore"
     if any(as_dir.startswith(n) for n in sc.nested):
         return "nested bundle"
+    if p.is_dir() and hidden(rel):
+        return "hidden"
     home = rel.rpartition("/")[0] + "/" if p.is_file() else as_dir
     if any(home == d for d, _ in sc.not_okf):
         return "not OKF"
+    above = [d for d, _ in sc.not_okf if home.startswith(d)]
+    if above:
+        return f"inside the non-OKF directory {above[0]}"
     return None
 
 
 def holds_content(bundle: Path, sc: Scan, d: Path) -> bool:
-    """d holds a .md below it that lint's scan does not leave out, or a nested bundle (a kind directory holds only its
-    instances)."""
+    """d holds a .md below it, outside every hidden directory, that is not left out (left_out), or a nested bundle (a
+    kind directory holds only its instances)."""
     rel = _rel(bundle, d)
     pre = "" if rel == "." else rel + "/"
-    return (any(left_out(bundle, sc, q) is None for q in d.rglob("*.md"))
+    return (any(left_out(bundle, sc, q) is None for q in d.rglob("*.md") if not hidden(_rel(bundle, q.parent)))
             or any(n.startswith(pre) for n in sc.nested))
 
 
@@ -497,6 +511,48 @@ def test_dir_into_excluded_path_exits_2(tmp_path, capsys):
         assert main([str(k), "--dir", d]) == 2
         assert capsys.readouterr().err == f"ERROR: {d}/ is not part of this bundle ({why}); okf-index does not write there.\n"
         assert _tree(k) == before
+
+
+def _hidden_and_vendor(tmp: Path) -> Path:
+    """H: a clean bundle, indexed, then a hidden directory under base/hid/ and an OKF Term below the non-OKF
+    base/x/vendor/."""
+    from okf_lint import _tree_bundle
+
+    k = _tree_bundle(tmp / "knowledge")
+    (k / "base" / "decisions").mkdir()
+    (k / "base" / "decisions" / "index.md").write_text("# decisions\n\n_(empty)_\n", encoding="utf-8")
+    assert main([str(k)]) == 0
+    for rel, text in (("base/hid/.cache/a.md", "plain\n"), ("base/x/vendor/README.md", "# readme\n"),
+                      ("base/x/vendor/deep/term.md", "---\ntype: Term\ntitle: Deep\ndescription: A term.\n"
+                                                     "generated: { by: human:test, at: 2026-11-13T09:00:00Z }\n---\n\n"
+                                                     "# Definition\n\nText.\n")):
+        (k / rel).parent.mkdir(parents=True, exist_ok=True)
+        (k / rel).write_text(text, encoding="utf-8")
+    return k
+
+
+def test_hidden_paths_and_what_lies_below_a_non_okf_directory_get_no_index(tmp_path, capsys):
+    k = _hidden_and_vendor(tmp_path)
+    base_index = (k / "base" / "index.md").read_bytes()
+    lint_before = _lint_view(k)
+    assert lint_before == ([], ["base/x/vendor/ is not OKF: 1 Markdown file without OKF frontmatter and no index.md, "
+                                "skipped"])
+    capsys.readouterr()
+    for extra in ([], ["--dir", "base/hid"], ["--dir", "base/x"]):
+        rc = main([str(k), *extra, "--check"])
+        assert (capsys.readouterr().out.splitlines(), rc) == (["0 index.md out of date"], 0), extra
+    before = _tree(k)
+    for d, why in (("base/hid/.cache", "hidden"), ("base/x/vendor/deep", "inside the non-OKF directory base/x/vendor/"),
+                   ("base/x/vendor", "not OKF")):
+        assert main([str(k), "--dir", d, "--check"]) == 2, d
+        assert capsys.readouterr().err == f"ERROR: {d}/ is not part of this bundle ({why}); okf-index does not write there.\n"
+        assert _tree(k) == before, d
+    assert main([str(k)]) == 0
+    assert capsys.readouterr().out.splitlines() == ["0 index.md regenerated"]
+    assert [p.relative_to(k).as_posix() for p in (k / "base").rglob("index.md")
+            if p.parent.name not in ("base", "decisions")] == []
+    assert (k / "base" / "index.md").read_bytes() == base_index
+    assert _lint_view(k) == lint_before
 
 
 def test_an_instance_indexed_as_its_own_bundle_keeps_its_root_frontmatter(tmp_path):
