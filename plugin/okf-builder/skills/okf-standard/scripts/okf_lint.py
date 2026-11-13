@@ -1450,8 +1450,8 @@ def check_bundle_kind(bundle: Path, fm: dict, prof: Resolved, tree: Tree | None,
                 rep.error("BAD_CLOSED_AT", "index.md", "a closed bundle declares closed_at, ISO 8601 with an offset")
             elif not is_iso(closed_at):
                 rep.error("BAD_CLOSED_AT", "index.md", f"closed_at '{closed_at}' is not ISO 8601 with an offset")
-            questions = [d.rel for d in docs if canonical_type(prof, (d.frontmatter or {}).get("type")) == "Open Question"
-                         and (d.frontmatter or {}).get("question_status") == "open"]
+            questions = [d.rel for d in docs if (fm_q := resolve_aliases(prof, d.frontmatter or {})).get("type")
+                         == "Open Question" and fm_q.get("question_status") == "open"]
             for q in questions:
                 rep.error("CLOSED_LOOSE_END", q, "a closed bundle holds an open question: answer or drop it, or carry it "
                           "up into the parent with a link back (standard §2.2)")
@@ -4428,7 +4428,7 @@ def test_each_breach_of_rule_16_names_the_instance(tmp_path):
     closed = "kind: Request\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n"
     carried = {"conflict-log.md": conflict.replace("| open |", "| carried |"),
                "base/questions/why.md": question.replace("question_status: open", "question_status: carried\n"
-                                                         "carried_to: base/questions/why.md"),
+                                                         "carried_to: ../../base/questions/why.md"),
                "fragments/d.md": _fragment("distilled"), "fragments/c.md": _fragment("conflict")}
     k = _domain(tmp_path, {
         "requests/unknown": "kind: Ticket\nstate: open\nparent: ../..\n",
@@ -4488,6 +4488,36 @@ def test_a_pending_fragment_in_a_closed_instance_is_read_through_the_value_alias
     _tree_bundle(k / "requests/req-1", closed, extra={"fragments/f.md": _fragment("", "ingerido: false")})
     _list_instances(k / "requests")
     assert _rule16(lint(k)[0]) == [("CLOSED_LOOSE_END", "requests/req-1/fragments/f.md")]
+
+
+def _closed_with_question(root: Path, aliases: str, fields: str, typ: str = "Open Question") -> Path:
+    """A domain bundle with the given aliases and a closed Request requests/req-1 holding one question at
+    base/questions/why.md whose question_status line is the fields given."""
+    closed = "kind: Request\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n"
+    question = (f"---\ntype: {typ}\ntitle: Q\ndescription: Q.\nowner: human:x\n{fields}asked_in: /fragments/x.md\n"
+                + _TGEN + "---\n\n# Question\n\nWhy?\n")
+    k = _tree_bundle(root / "knowledge", kind_dirs=("requests",), profile=_KINDS_PROFILE + aliases)
+    _tree_bundle(k / "requests/req-1", closed, extra={"base/questions/why.md": question})
+    _list_instances(k / "requests")
+    return k
+
+
+def test_an_open_question_in_a_closed_instance_is_read_through_the_aliases(tmp_path):
+    loose = [("CLOSED_LOOSE_END", "requests/req-1/base/questions/why.md")]
+    field = "aliases:\n  fields: { estado: question_status }\n"
+    value = ("aliases:\n  values:\n    - { from: { abierta: true }, to: { question_status: open } }\n"
+             "    - { from: { abierta: false }, to: { question_status: dropped } }\n")
+    typed = "aliases:\n  types: { Pregunta: Open Question }\n"
+    assert _rule16(lint(_closed_with_question(tmp_path / "plain", "", "question_status: open\n"))[0]) == loose
+    assert _rule16(lint(_closed_with_question(tmp_path / "type", typed, "question_status: open\n", "Pregunta"))[0]) \
+        == loose
+    assert _rule16(lint(_closed_with_question(tmp_path / "field", field, "estado: open\n"))[0]) == loose
+    assert _rule16(lint(_closed_with_question(tmp_path / "value", value, "abierta: true\n"))[0]) == loose
+    rep = lint(_closed_with_question(tmp_path / "carried", field,
+                                     "estado: carried\ncarried_to: ../../base/questions/why.md\n"))[0]
+    assert _rule16(rep) == [] and rep.items == [], rep.items
+    rep = lint(_closed_with_question(tmp_path / "dropped", value, "abierta: false\n"))[0]
+    assert _rule16(rep) == [] and rep.items == [], rep.items
 
 
 def test_a_domain_bundle_declares_no_state_parent_or_closed_at(tmp_path):

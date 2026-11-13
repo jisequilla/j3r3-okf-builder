@@ -782,6 +782,17 @@ def test_closed_edits_compare_instants_across_offsets(tmp_path):
         _LATER.format("2026-11-10T09:30:00-02:00", "2026-11-10T10:00:00+00:00")]
 
 
+def test_the_reserved_files_of_a_closed_instance_are_no_finding(tmp_path):
+    later = "2026-11-10T11:00:00Z"
+    gen = f"generated: {{ by: human:test, at: {later} }}\n"
+    k = _tree(tmp_path, {"requests/r": (_CLOSED, {"base/x.md": later})})
+    r = k / "requests" / "r"
+    (r / "index.md").write_text(_ROOT.format(f"kind: Request\n{_CLOSED}parent: ../..\n{gen}"), encoding="utf-8")
+    (r / "log.md").write_text(f"---\n{gen}---\n\n# Bundle history\n", encoding="utf-8")
+    (r / "base" / "index.md").write_text(f"---\n{gen}---\n\n# base\n", encoding="utf-8")
+    assert [(f["code"], f["path"]) for f in _closed_edits(k)] == [("EDITED_AFTER_CLOSE", "requests/r/base/x.md")]
+
+
 def test_only_a_closed_instance_is_read(tmp_path):
     later = "2026-11-10T11:00:00Z"
     for i, keys in enumerate(("state: open\n", "state: in-review\n",

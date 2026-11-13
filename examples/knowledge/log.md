@@ -8,7 +8,7 @@
 
 ## 2026-11-08
 * **Creation**: the instances [req-0001](/requests/req-0001/index.md), a Request about a refund status webhook, and [req-0002](/requests/req-0002/index.md), a Request about a refund dispute export, created with okf-init in `requests/`.
-* **Creation**: the kind Request, an operational bundle in `requests/` with the extra state `in-review`, declared in the [Domain Profile of Demo Payments](/base/profile.md).
+* **Update**: [Domain Profile of Demo Payments](/base/profile.md) declares the kind Request, an operational bundle in `requests/` with the extra state `in-review`.
 
 ## 2026-11-06
 * **Creation**: the projection `projections/onboarding-brief/`, canonical and composed: a short on-call brief for a new engineer of Demo Payments, composed from [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md), the [Payments consumer lag alert](/base/runbooks/consumer-lag-alert.md) and the [Payments dead-letter replay](/base/runbooks/payments-dead-letter-replay.md) with the okf-projection skill; its ref hashes written by `okf_projection.py --record-hashes onboarding-brief`. It is not a concept: okf-lint skips it and `okf_projection.py` checks it.
