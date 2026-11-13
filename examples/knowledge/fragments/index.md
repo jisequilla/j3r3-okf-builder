@@ -9,6 +9,7 @@
 # Knowledge Fragment
 
 * [2026-11-02 · Payments sync: refund events on the Kafka bus](2026-11-02-refund-events-review.md) - A short fictional platform meeting on moving refund events to Kafka, which left open how long refund events must be kept. _(draft)_
+* [2026-11-10 · Closing of Request req-0002](2026-11-10-closing-req-0002.md) - The approved change set that closes Request req-0002 into Demo Payments, one decision per concept of its base. _(draft)_
 
 # Payments Meeting
 

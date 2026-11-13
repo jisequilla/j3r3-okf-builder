@@ -3,7 +3,8 @@
 # requires-python = ">=3.9"
 # dependencies = ["pyyaml"]
 # ///
-"""okf_audit.py — The git facts of okf-review's audit mode, and the findings earlier audits accepted as is.
+"""okf_audit.py — The git facts of okf-review's audit mode, the concepts edited after their instance closed, and the
+findings earlier audits accepted as is.
 
 Usage:
     uv run okf_audit.py [path/to/bundle] [--since REF] [--json]
@@ -25,6 +26,10 @@ Usage:
   names the old path and is a **Deprecation** or says it was deprecated, removed, deleted, retired or
   superseded. A rename is recorded by such an entry naming both the old and the new path. Audit entries never
   record anything. Otherwise it is a finding: DELETED_UNRECORDED or RENAMED_UNRECORDED.
+- Looks inside every instance of the bundle, at any depth, with or without --since and inside or outside git:
+  EDITED_AFTER_CLOSE for each concept of a closed instance (state: closed, closed_at an ISO 8601 date-time) whose
+  generated.at is a later instant than that instance's own closed_at (standard §2.2, ADR-0039 decision 9). index.md
+  and log.md are not concepts; every other document of the instance is. The git facts still leave nested bundles out.
 - Reads log.md for earlier audits at the same reference point (an `**Update**: Audit since ...
   (reference `<key>`)` entry, the key the full SHA when the reference resolved, else the reference as
   typed, else `none`) and returns the findings they accepted as is, so the audit leaves them out; an item it
@@ -56,8 +61,12 @@ from okf_common import (  # noqa: E402
     parse_yaml,
     reserved_path,
     scan_bundle,
+    root_frontmatter,
     split_frontmatter,
+    to_dt,
 )
+from okf_lint import kind_instances  # noqa: E402
+from okf_profile import load_profile  # noqa: E402
 
 READ_ONLY_GIT = ("log", "diff", "rev-parse", "show", "ls-files", "hash-object")
 # -M alone detects renames, whatever diff.renames the user's config sets; no colour codes in the output
@@ -288,6 +297,35 @@ def earlier_accepted(entries: list[tuple[str, str]], key: str) -> tuple[int, lis
     return audits, accepted, notices
 
 
+def edited_after_close(bundle: Path) -> list[dict]:
+    """EDITED_AFTER_CLOSE for every concept of a closed instance, at any depth, whose generated.at is later than its
+    own instance's closed_at. Instances are found as lint finds them (kind_instances), with the domain bundle's
+    Domain Profile at every depth. Reads no git."""
+    domain = load_profile(bundle)
+    out: list[dict] = []
+
+    def walk(here: Path, prefix: str) -> None:
+        for _, _, rels in kind_instances(here, root_frontmatter(here), domain, domain, scan_bundle(here)):
+            for rel in rels:
+                sub = here / rel.rstrip("/")
+                fm = root_frontmatter(sub)
+                closed = to_dt(fm.get("closed_at")) if fm.get("state") == "closed" else None
+                for d in scan_bundle(sub).docs if closed is not None else []:
+                    gen = (d.frontmatter or {}).get("generated")
+                    at = to_dt(gen.get("at")) if isinstance(gen, dict) and d.path.name not in RESERVED else None
+                    if at is not None and at > closed:
+                        out.append({"code": "EDITED_AFTER_CLOSE", "level": "WARN", "path": prefix + rel + d.rel,
+                                    "instance": prefix + rel,
+                                    "message": f"edited after its instance closed: generated.at {at.isoformat()} is "
+                                               f"later than closed_at {closed.isoformat()}; a closed instance is "
+                                               "frozen: restore the concept as it was when it closed, or carry the "
+                                               "change into the parent"})
+                walk(sub, prefix + rel)
+
+    walk(bundle, "")
+    return out
+
+
 def audit(bundle: Path, since: str | None) -> dict:
     report = {"bundle": str(bundle), "git": in_git(bundle), "reference": None, "reference_key": since or "none",
               "notices": [], "changes": [], "findings": [], "earlier_audits": 0, "accepted_as_is": []}
@@ -323,6 +361,7 @@ def audit(bundle: Path, since: str | None) -> dict:
                                       + (f"; untracked files of the same name, other content: {', '.join(others)}"
                                          if others else "")}
             report["findings"].append(finding)
+    report["findings"] += edited_after_close(bundle)
     report["earlier_audits"], report["accepted_as_is"], notices = earlier_accepted(
         log_entries(disk_log(bundle)), report["reference_key"])
     report["notices"] += notices
@@ -330,7 +369,8 @@ def audit(bundle: Path, since: str | None) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Git facts for okf-review's audit mode (read-only).")
+    ap = argparse.ArgumentParser(description="Git facts and closed-instance edits for okf-review's audit mode "
+                                             "(read-only).")
     ap.add_argument("bundle", nargs="?")
     ap.add_argument("--since", help="reference point: a commit, a tag or a date")
     ap.add_argument("--json", action="store_true")
@@ -357,7 +397,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{c['change']:8} {c['path']}" + (f" -> {c['to']}" if "to" in c else "") + f"  [{state}]")
     for f in report["findings"]:
         print(f"WARN {f['code']} {f['path']}: {f['message']}")
-    print(f"{len(report['findings'])} git findings; {report['earlier_audits']} earlier audits at reference "
+    closed = sum(f["code"] == "EDITED_AFTER_CLOSE" for f in report["findings"])
+    print(f"{len(report['findings'])} findings ({len(report['findings']) - closed} git facts, {closed} edited after "
+          f"close); {report['earlier_audits']} earlier audits at reference "
           f"{report['reference_key']}, {len(report['accepted_as_is'])} findings accepted as is")
     return 0
 
@@ -668,6 +710,119 @@ def test_the_audit_writes_nothing_to_the_object_store_or_the_index(tmp_path):
     index = (tmp_path / ".git" / "index").read_bytes()
     audit(k, first)
     assert _g(tmp_path, "count-objects", "-v") == objects and (tmp_path / ".git" / "index").read_bytes() == index
+
+
+# --- concepts edited after their instance closed (standard §2.2, ADR-0039 decision 9) ---
+_KINDS = ("---\ntype: Domain Profile\ntitle: DP\ndescription: DP.\nstatus: draft\nkinds:\n"
+          "  Request: { extends: Operational Bundle, description: A request, directory: requests/, states: [in-review] }\n"
+          "  Release: { extends: Operational Bundle, description: A release, directory: releases/, holds: [Request] }\n"
+          "generated: { by: human:test, at: 2026-11-01T00:00:00Z }\n---\n\n# What this bundle holds\n\nText.\n")
+_ROOT = '---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\n{}---\n\n# Root\n'
+_CLOSED = "state: closed\nclosed_at: 2026-11-10T10:00:00+00:00\n"
+_LATER = ("edited after its instance closed: generated.at {} is later than closed_at {}; a closed instance is frozen: "
+          "restore the concept as it was when it closed, or carry the change into the parent")
+
+
+def _doc(at: str | None, type_: str = "Term") -> str:
+    gen = f"generated: {{ by: human:test, at: {at} }}\n" if at is not None else ""
+    return f"---\ntype: {type_}\ntitle: X\ndescription: X.\nstatus: draft\n{gen}---\n\n# Definition\n\nX.\n"
+
+
+def _tree_files(instances: dict, kinds: bool = True) -> dict:
+    """The files of a domain bundle (bundle path → text) holding instances {path: (root index keys, {doc: at})}; the
+    kind is the instance's directory (requests/ Request, releases/ Release)."""
+    files = {"index.md": _ROOT.format(""), "log.md": "# Bundle history\n"}
+    if kinds:
+        files["base/profile.md"] = _KINDS
+    for rel, (keys, docs) in instances.items():
+        kind = {"requests": "Request", "releases": "Release"}.get(rel.split("/")[-2], "Request")
+        files[f"{rel}/index.md"] = _ROOT.format(f"kind: {kind}\n{keys}parent: ../..\n")
+        files[f"{rel}/log.md"] = "# Bundle history\n"
+        for doc, at in docs.items():
+            files[f"{rel}/{doc}"] = _doc(at, "Project" if doc == "project.md" else "Term")
+    return files
+
+
+def _tree(tmp: Path, instances: dict, kinds: bool = True) -> Path:
+    k = tmp / "knowledge"
+    for rel, text in _tree_files(instances, kinds).items():
+        (k / rel).parent.mkdir(parents=True, exist_ok=True)
+        (k / rel).write_text(text, encoding="utf-8")
+    return k
+
+
+def _closed_edits(k: Path) -> list[dict]:
+    return [f for f in audit(k, None)["findings"] if f["code"] == "EDITED_AFTER_CLOSE"]
+
+
+def _one(tmp: Path, keys: str, at: str | None) -> list[dict]:
+    return _closed_edits(_tree(tmp, {"requests/r": (keys, {"base/x.md": at})}))
+
+
+def test_a_concept_edited_after_its_instance_closed_is_a_finding(tmp_path):
+    assert _one(tmp_path / "a", _CLOSED, "2026-11-10T11:00:00Z") == [
+        {"code": "EDITED_AFTER_CLOSE", "level": "WARN", "path": "requests/r/base/x.md", "instance": "requests/r/",
+         "message": _LATER.format("2026-11-10T11:00:00+00:00", "2026-11-10T10:00:00+00:00")}]
+    later = "2026-11-10T11:00:00Z"
+    k = _tree(tmp_path / "b", {"requests/r": (_CLOSED, {"project.md": later, "fragments/f.md": later,
+                                                         "base/x.md": later})})
+    assert _codes({"findings": _closed_edits(k)}) == [
+        ("EDITED_AFTER_CLOSE", "requests/r/project.md"), ("EDITED_AFTER_CLOSE", "requests/r/base/x.md"),
+        ("EDITED_AFTER_CLOSE", "requests/r/fragments/f.md")]
+
+
+def test_an_edit_at_or_before_closed_at_is_no_finding(tmp_path):
+    assert _one(tmp_path / "equal", _CLOSED, "2026-11-10T10:00:00Z") == []
+    assert _one(tmp_path / "earlier", _CLOSED, "2026-11-10T09:59:59Z") == []
+
+
+def test_closed_edits_compare_instants_across_offsets(tmp_path):
+    assert _one(tmp_path / "same", _CLOSED, "2026-11-10T12:00:00+02:00") == []
+    assert [f["message"] for f in _one(tmp_path / "later", _CLOSED, "2026-11-10T09:30:00-02:00")] == [
+        _LATER.format("2026-11-10T09:30:00-02:00", "2026-11-10T10:00:00+00:00")]
+
+
+def test_only_a_closed_instance_is_read(tmp_path):
+    later = "2026-11-10T11:00:00Z"
+    for i, keys in enumerate(("state: open\n", "state: in-review\n",
+                              "state: open\nclosed_at: 2026-11-10T10:00:00+00:00\n",
+                              "state: closed\n", "state: closed\nclosed_at: 2026-11-10\n")):
+        assert _one(tmp_path / f"s{i}", keys, later) == [], keys
+    assert _one(tmp_path / "nogen", _CLOSED, None) == []
+    assert _one(tmp_path / "noniso", _CLOSED, "yesterday") == []
+    no_kinds = _tree(tmp_path / "nokinds", {"requests/r": (_CLOSED, {"base/x.md": later})}, kinds=False)
+    outside = _tree(tmp_path / "outside", {"requests/r": (_CLOSED, {"base/x.md": later}),
+                                           "elsewhere/r": (_CLOSED, {"base/x.md": later})})
+    (outside / "requests" / "r" / "base" / "x.md").write_text(_doc("2026-11-10T09:00:00Z"), encoding="utf-8")
+    for k in (no_kinds, outside):
+        r = audit(k, None)
+        assert r["findings"] == [] and r["notices"] == ["the bundle is not in a git repository: git facts skipped"]
+
+
+def test_nested_instances_are_read_against_their_own_closed_at(tmp_path):
+    def nested(tmp: Path, at: str) -> list[dict]:
+        return _closed_edits(_tree(tmp, {"releases/rel": (_CLOSED, {}),
+                                         "releases/rel/requests/req": ("state: closed\nclosed_at: 2026-11-10T12:00:00Z\n",
+                                                                       {"base/x.md": at})}))
+    assert nested(tmp_path / "before", "2026-11-10T11:00:00Z") == []
+    assert [(f["path"], f["instance"]) for f in nested(tmp_path / "after", "2026-11-10T13:00:00Z")] == [
+        ("releases/rel/requests/req/base/x.md", "releases/rel/requests/req/")]
+
+
+def test_closed_edits_need_no_git_or_reference(tmp_path, capsys):
+    instances = {"requests/r": (_CLOSED, {"base/x.md": "2026-11-10T11:00:00Z"})}
+    k = _tree(tmp_path / "plain", instances)
+    r = audit(k, None)
+    assert _codes(r) == [("EDITED_AFTER_CLOSE", "requests/r/base/x.md")]
+    assert r["notices"] == ["the bundle is not in a git repository: git facts skipped"]
+    assert main([str(k)]) == 0
+    assert capsys.readouterr().out.rstrip("\n").split("\n")[-1] == (
+        "1 findings (0 git facts, 1 edited after close); 0 earlier audits at reference none, 0 findings accepted as is")
+    k, first = _repo(tmp_path / "repo", extra=_tree_files(instances))
+    (k / "base" / "domain" / "alpha.md").unlink()
+    _commit(tmp_path / "repo", "drop alpha")
+    assert _codes(audit(k, first)) == [("DELETED_UNRECORDED", "base/domain/alpha.md"),
+                                       ("EDITED_AFTER_CLOSE", "requests/r/base/x.md")]
 
 
 if __name__ == "__main__":

@@ -1,5 +1,15 @@
 # Bundle history
 
+## 2026-11-10
+* **Update**: [req-0002](/requests/req-0002/index.md) closed into this bundle by its closing fragment, [Closing of Request req-0002](/fragments/2026-11-10-closing-req-0002.md), approved by human:ana, with `okf_close.py`: its Dispute export promoted, its export columns kept in the instance, its Export cadence carried up.
+* **Creation**: [Cadence of the refund dispute export](/base/questions/dispute-export-cadence.md), carried up from req-0002 by its closing fragment, owned by human:lucia, approved by human:ana.
+* **Creation**: [Refund dispute export](/base/domain/refund-dispute-export.md), promoted from req-0002 by its closing fragment, approved by human:ana.
+* **Creation**: [Closing of Request req-0002](/fragments/2026-11-10-closing-req-0002.md), the closing fragment of [req-0002](/requests/req-0002/index.md), its change set approved by human:ana.
+
+## 2026-11-08
+* **Creation**: the instances [req-0001](/requests/req-0001/index.md), a Request about a refund status webhook, and [req-0002](/requests/req-0002/index.md), a Request about a refund dispute export, created with okf-init in `requests/`.
+* **Creation**: the kind Request, an operational bundle in `requests/` with the extra state `in-review`, declared in the [Domain Profile of Demo Payments](/base/profile.md).
+
 ## 2026-11-06
 * **Creation**: the projection `projections/onboarding-brief/`, canonical and composed: a short on-call brief for a new engineer of Demo Payments, composed from [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md), the [Payments consumer lag alert](/base/runbooks/consumer-lag-alert.md) and the [Payments dead-letter replay](/base/runbooks/payments-dead-letter-replay.md) with the okf-projection skill; its ref hashes written by `okf_projection.py --record-hashes onboarding-brief`. It is not a concept: okf-lint skips it and `okf_projection.py` checks it.
 

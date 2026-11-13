@@ -2,7 +2,7 @@
 
 # Domain Profile
 
-* [Domain Profile of Demo Payments](profile.md) - The taxonomy of the demo payments bundle, on top of the built-in Domain Profile; one local type for payments meetings, one family for open questions, one rule, two mapped questions and the bundle's local names. _(draft)_
+* [Domain Profile of Demo Payments](profile.md) - The taxonomy of the demo payments bundle, on top of the built-in Domain Profile; one local type for payments meetings, one operational kind, Request, one family for open questions, one rule, two mapped questions and the bundle's local names. _(draft)_
 
 # Subdirectories
 

@@ -1,7 +1,7 @@
 ---
 type: Domain Profile
 title: Domain Profile of Demo Payments
-description: The taxonomy of the demo payments bundle, on top of the built-in Domain Profile; one local type for payments meetings, one family for open questions, one rule, two mapped questions and the bundle's local names.
+description: The taxonomy of the demo payments bundle, on top of the built-in Domain Profile; one local type for payments meetings, one operational kind, Request, one family for open questions, one rule, two mapped questions and the bundle's local names.
 tags: [profile, taxonomy]
 status: draft
 extends: []
@@ -13,6 +13,8 @@ types:
       team: { type: string, level: warn, note: The team that held the meeting }
       kind: { type: enum, values: [weekly-sync, follow-up], note: Which of the team's meetings it was }
       decisions_taken: { type: integer, level: warn, note: How many decisions the meeting took }
+kinds:
+  Request: { extends: Operational Bundle, description: A change request the payments team works on, directory: requests/, states: [in-review] }
 families:
   /base/questions/:
     types: [Open Question]
@@ -34,7 +36,7 @@ aliases:
   values:
     - { from: { ingerido: true }, to: { distillation_status: distilled } }
     - { from: { ingerido: false }, to: { distillation_status: pending } }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T22:32:48Z }
+generated: { by: okf-builder/example, at: 2026-11-08T09:00:00Z }
 sources:
   - { id: refund-review, resource: /fragments/2026-11-02-refund-events-review.md, title: "Payments sync: refund events on the Kafka bus" }
   - { id: dispute-window, resource: /fragments/2026-11-02-finance-dispute-window.md, title: "Finance chat: the refund dispute window" }
@@ -57,6 +59,12 @@ The payments team meets every week, and what a reader of a fragment wants first 
 - Rule `distilled-payments-meeting-names-team`: once a meeting is distilled, its concepts are traced back to it by team, so a distilled meeting names its team.
 
 `Reunión de pagos` is a local name for `Payments Meeting`.
+
+# Kinds
+
+## Request
+
+A change request the payments team works on is an operational bundle of its own, an instance in `requests/<id>/` with its own layers and log, so what one request learns while it is open stays apart from the lasting knowledge of `base/` (standard §2.2)[^domain-profile]. Besides `open` and `closed`, a Request may be `in-review`. When it closes, its closing fragment in `fragments/` sorts each of its concepts: promoted into `base/`, opened as a conflict, or kept in the instance.
 
 # Local names
 
