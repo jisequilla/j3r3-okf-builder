@@ -76,7 +76,7 @@ from okf_common import (  # noqa: E402
     split_frontmatter,
     walk_bundle,
 )
-from okf_index import index_targets, regenerate  # noqa: E402
+from okf_index import index_targets, kind_dirs, regenerate  # noqa: E402
 from okf_profile import DOMAIN_BUNDLE  # noqa: E402
 
 DROP_ON_DOWNGRADE = ["verified", "status", "stale_after", "usage_window"]
@@ -492,7 +492,8 @@ def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
         for rel, text in rewritten.items():
             (bundle / move.new(rel)).write_text(text, encoding="utf-8")
         set_root_key(bundle / "index.md", "okf_profile", target)
-        regenerate(bundle, [bundle, *index_targets(bundle, bundle / BASE_DIR)])
+        kept = [bundle / d for d in kind_dirs(bundle, scan_bundle(bundle)) if "/" not in d and (bundle / d).is_dir()]
+        regenerate(bundle, [bundle, *index_targets(bundle, bundle / BASE_DIR), *kept])
         append_log(bundle / "log.md", "", 0, entry=(
             f"* **Migration**: Bundle migrated to profile {target} ({len(dirs)} directories and {len(files)} "
             f"root concepts moved under base/; links rewritten in {len(rewritten)} files) with okf-migrate."))
@@ -1063,6 +1064,37 @@ def test_profile_moves_a_directory_that_holds_an_instance_beside_a_document(tmp_
     assert not (k / "decisions").exists()
     assert {r: t for r, t in _tree(k).items() if r.startswith("base/decisions/req-9/")} == {
         "base/" + r: t for r, t in before.items()}
+
+
+_REQ_PROFILE = ("---\ntype: Domain Profile\ntitle: DP\ndescription: DP.\n" + _GEN
+                + "kinds:\n  Request: { extends: Operational Bundle, description: A request, directory: requests/ }\n"
+                "---\n\n# What this bundle holds\n\nText.\n")
+
+
+def test_profile_regenerates_the_index_of_a_kind_directory_it_keeps(tmp_path, capsys):
+    from okf_index import main as index_main
+
+    k = _bundle_20(tmp_path / "b")
+    (k / "profile.md").write_text(_REQ_PROFILE, encoding="utf-8")
+    inst = k / "requests" / "r1"
+    (inst / "decisions").mkdir(parents=True)
+    (inst / "index.md").write_text('---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\nkind: Request\n'
+                                   "state: open\nparent: ../..\n---\n\n# Notes\n\nKept by hand.\n", encoding="utf-8")
+    (inst / "decisions" / "index.md").write_text("# decisions\n\n_(empty)_\n", encoding="utf-8")
+    (k / "requests" / "index.md").write_text("# requests\n\n* [r1](r1/index.md) - by hand.\n", encoding="utf-8")
+    before = {r: t for r, t in _tree(k).items() if r.startswith("requests/r1/")}
+    lines = _profile_lines(k, capsys)
+    assert "move profile.md → base/profile.md" in lines and (k / "requests").is_dir()
+    assert {r: t for r, t in _tree(k).items() if r.startswith("requests/r1/")} == before
+    fresh = tmp_path / "fresh"
+    shutil.copytree(k, fresh)
+    regenerate(fresh, [fresh / "requests"])
+    got = (k / "requests" / "index.md").read_text(encoding="utf-8")
+    assert got == (fresh / "requests" / "index.md").read_text(encoding="utf-8")
+    assert "A request" in got and "* [r1](r1/index.md) _(state: open)_" in got
+    capsys.readouterr()
+    assert index_main([str(k), "--dir", "requests", "--check"]) == 0
+    assert capsys.readouterr().out.strip().splitlines()[-1] == "0 index.md out of date"
 
 
 def test_version_step_leaves_a_nested_bundle_inside_a_layer_directory(tmp_path, capsys):
