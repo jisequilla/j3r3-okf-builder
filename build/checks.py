@@ -352,10 +352,22 @@ def obsidian_setup(tmp: Path) -> None:
 def dogfood(tmp: Path) -> None:
     """dogfood state of examples/knowledge: only its 3 known warnings; every fragment is a Knowledge Fragment
     with a distillation_status, aliases resolved; the mapped question Runbook.owner has exactly one gap; its one
-    projection, onboarding-brief, has no findings"""
-    codes = sorted(f["code"] for f in json.loads(uv(S / "okf_lint.py", EX, "--json"))["findings"])
+    projection, onboarding-brief, has no findings; its two Request instances, req-0001 open and req-0002 closed,
+    with the traces of the closing in the parent; the audit finds nothing, and an edit planted after closed_at is
+    its one EDITED_AFTER_CLOSE; req-0002 reopened on a copy and closed again by okf_close.py gives the example
+    byte for byte; okf-review names EDITED_AFTER_CLOSE"""
+    report = json.loads(uv(S / "okf_lint.py", EX, "--json"))
+    codes = sorted(f["code"] for f in report["findings"])
     expect(codes == ["BROKEN_LINK", "STALE", "VERIFIED_STALE"], codes)
     print("lint codes", codes)
+    instances = [{"path": "requests/req-0001/", "kind": "Request", "state": "open", "concepts": 1, "errors": 0,
+                  "warnings": 0},
+                 {"path": "requests/req-0002/", "kind": "Request", "state": "closed", "concepts": 5, "errors": 0,
+                  "warnings": 0}]
+    expect(report["instances"] == instances, report["instances"])
+    outside = [f for f in report["findings"] if f["code"] == "LINK_OUTSIDE" and f["path"].startswith("requests/")]
+    expect(not outside, f"an instance links outside itself: {outside}")
+    print("instances", [(i["path"], i["state"]) for i in report["instances"]], "with no LINK_OUTSIDE")
 
     sys.path.insert(0, str(ROOT / S))
     import okf_common as c
@@ -373,6 +385,7 @@ def dogfood(tmp: Path) -> None:
     bad = [rel for rel, fm in fragments
            if not p.is_a(profile, str(fm.get("type")), "Knowledge Fragment") or "distillation_status" not in fm]
     expect(not bad, "not read as a Knowledge Fragment with a distillation_status: " + ", ".join(bad))
+    expect(_EX_CLOSING in [rel for rel, _ in fragments], f"{_EX_CLOSING} not read as a fragment")
     runbooks = [(rel, fm) for rel, fm in docs if p.is_a(profile, str(fm.get("type")), "Runbook")]
     gap = [rel for rel, fm in runbooks if fm.get("owner") in (None, "", [], {})]
     expect(gap == ["base/runbooks/consumer-lag-alert.md"], gap)
@@ -386,6 +399,116 @@ def dogfood(tmp: Path) -> None:
     left = {k: report[k] for k in ("not_checked", "to_recompute", "frozen") if report[k]}
     expect(not left, left)
     print("projections", slugs, "with no findings")
+
+    _closing_traces(bundle)
+    _closed_edits(tmp)
+    _close_round_trip(tmp)
+    expect("EDITED_AFTER_CLOSE" in text(PLUGIN / "skills" / "okf-review" / "SKILL.md"),
+           "okf-review does not name EDITED_AFTER_CLOSE")
+    print("okf-review names EDITED_AFTER_CLOSE")
+
+
+_EX_REQ = "requests/req-0002"
+_EX_CLOSING = "fragments/2026-11-10-closing-req-0002.md"
+_EX_QUESTION = f"{_EX_REQ}/base/questions/export-cadence.md"
+_EX_CLOSE = ("--apply", "--fragment", "/" + _EX_CLOSING, "--by", "human:ana", "--actor", "okf-builder/example",
+             "--carry", "base/questions/export-cadence.md=base/questions/dispute-export-cadence.md",
+             "--at", "2026-11-10T10:05:00+00:00")
+# the instance question's generated before okf_close.py carried it, which the round trip restores
+_EX_QUESTION_GENERATED = "generated: { by: okf-builder/example, at: 2026-11-09T11:00:00Z }"
+
+
+def _ledger(path: Path) -> list[tuple[str, list[str]]]:
+    """The (Kind, Concept links) of each row of a fragment's # Distillation ledger."""
+    body = path.read_text(encoding="utf-8").split("# Distillation", 1)[1]
+    rows = [[c.strip() for c in line.strip().strip("|").split("|")] for line in body.splitlines()
+            if line.startswith("|")][2:]
+    return [(r[1], re.findall(r"\]\((/[^)\s]+)\)", r[3])) for r in rows]
+
+
+def _closing_traces(bundle: Path) -> None:
+    """ADR-0039's traces of req-0002's closing, which lint cannot see: the ledger links each instance concept, each
+    promoted parent concept cites its instance concept, and each carried question lands on an open parent question
+    asked in it."""
+    inst = bundle / _EX_REQ
+    ledger = _ledger(bundle / _EX_CLOSING)
+    linked = {link for _, links in ledger for link in links if link.startswith(f"/{_EX_REQ}/")}
+    concepts = {"/" + p.relative_to(bundle).as_posix() for p in (inst / "base").rglob("*.md") if p.name != "index.md"}
+    expect(linked == concepts, f"the closing ledger links {sorted(linked)}, the instance holds {sorted(concepts)}")
+    for kind, links in ledger:
+        if kind != "promote":
+            continue
+        mine = [x for x in links if x.startswith(f"/{_EX_REQ}/")]
+        parents = [x for x in links if not x.startswith(f"/{_EX_REQ}/")]
+        expect(len(mine) == 1 and len(parents) == 1, f"promote row links {links}")
+        target = bundle / parents[0].lstrip("/")
+        expect(target.is_file(), f"promote row's parent concept {parents[0]} does not exist")
+        cites = [s.get("resource") for s in _frontmatter(target).get("sources") or [] if isinstance(s, dict)]
+        expect(mine[0] in cites, f"{parents[0]} does not cite {mine[0]} in its sources: {cites}")
+    carried = [p for p in sorted((inst / "base").rglob("*.md"))
+               if p.name != "index.md" and _frontmatter(p).get("question_status") == "carried"]
+    expect(carried, "no carried question in the instance")
+    for q in carried:
+        to = _frontmatter(q).get("carried_to")
+        target = (inst / str(to)).resolve() if to else None
+        expect(target is not None and target.is_file(), f"{q.relative_to(bundle)}: carried_to {to} does not resolve")
+        tfm = _frontmatter(target)
+        from_parent = "/" + q.relative_to(bundle).as_posix()
+        expect(tfm.get("type") == "Open Question" and tfm.get("question_status") == "open"
+               and tfm.get("asked_in") == from_parent,
+               f"{to}: not an open Open Question asked in {from_parent}: {tfm.get('question_status')}, "
+               f"{tfm.get('asked_in')}")
+    print("closing traces:", len(ledger), "ledger rows link the instance's", len(concepts), "concepts;",
+          len(carried), "carried question lands on an open parent question")
+
+
+def _closed_edits(tmp: Path) -> None:
+    """The audit finds nothing on the example; an edit after closed_at, planted on a copy, is its one finding."""
+    findings = json.loads(uv(S / "okf_audit.py", EX, "--json"))["findings"]
+    expect(findings == [], findings)
+    copy = tmp / "dogfood-edited" / "knowledge"
+    shutil.copytree(ROOT / EX, copy)
+    term = copy / _EX_REQ / "base" / "domain" / "req-0002-export-columns.md"
+    old = term.read_text(encoding="utf-8")
+    new = old.replace("at: 2026-11-09T11:00:00Z }", "at: 2026-11-10T16:00:00Z }")
+    expect(new != old, f"{term.name}: generated.at not found")
+    term.write_text(new, encoding="utf-8")
+    findings = json.loads(uv(S / "okf_audit.py", copy, "--json"))["findings"]
+    expected = [{"code": "EDITED_AFTER_CLOSE", "level": "WARN",
+                 "path": "requests/req-0002/base/domain/req-0002-export-columns.md", "instance": "requests/req-0002/",
+                 "message": "edited after its instance closed: generated.at 2026-11-10T16:00:00+00:00 is later than "
+                            "closed_at 2026-11-10T10:05:00+00:00; a closed instance is frozen: restore the concept as "
+                            "it was when it closed, or carry the change into the parent"}]
+    expect(findings == expected, json.dumps(findings, indent=2))
+    print("audit: no finding on the example; the planted edit after closed_at is its one EDITED_AFTER_CLOSE")
+
+
+def _close_round_trip(tmp: Path) -> None:
+    """req-0002 reopened on a copy and closed again with okf_close.py gives the committed example byte for byte; the
+    committed instance is ALREADY_CLOSED."""
+    for inst in ("requests/req-0001", _EX_REQ):
+        summary = last_line(uv(S / "okf_index.py", EX / inst, "--check", ok=(0, 1)))
+        expect(summary == "0 index.md out of date", f"{inst}: {summary}")
+    copy = tmp / "dogfood-reopened" / "knowledge"
+    shutil.copytree(ROOT / EX, copy)
+    reopen = {f"{_EX_REQ}/index.md": [(r"^state: closed\n(closed_at: .*\n)?", "state: open\n")],
+              _EX_QUESTION: [(r"^question_status: carried\n(carried_to: .*\n)?", "question_status: open\n"),
+                             (r"^generated: .*$", _EX_QUESTION_GENERATED)]}
+    for rel, subs in reopen.items():
+        path = copy / rel
+        new = path.read_text(encoding="utf-8")
+        for pattern, repl in subs:
+            new, n = re.subn(pattern, repl, new, count=1, flags=re.M)
+            expect(n == 1, f"{rel}: {pattern} not found")
+        path.write_text(new, encoding="utf-8")
+    out = uv(S / "okf_close.py", copy / _EX_REQ, *_EX_CLOSE, ok=(0, 1))
+    expect(out.rstrip().endswith("then run okf_lint.py on the parent"), f"okf_close.py --apply failed:\n{out}")
+    run("diff", "-r", copy, ROOT / EX)
+    report = json.loads(uv(S / "okf_close.py", EX / _EX_REQ, "--json", ok=(1,)))
+    blockers = [{"code": "ALREADY_CLOSED", "path": "index.md",
+                 "message": "it is already closed (closed_at 2026-11-10 10:05:00+00:00)"}]
+    expect(report["blockers"] == blockers, report["blockers"])
+    print("req-0002 reopened and closed again by okf_close.py is the example byte for byte; it is ALREADY_CLOSED")
 
 
 _CLOSE_APPLY = ("--apply", "--fragment", "/fragments/2026-11-09-closing-req-0042.md",

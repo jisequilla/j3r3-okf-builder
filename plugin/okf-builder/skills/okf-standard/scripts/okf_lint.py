@@ -2661,6 +2661,8 @@ def test_examples_knowledge_lints_with_its_profile_and_its_three_known_warnings(
         ("WARN", "BROKEN_LINK", "base/decisions/ADR-0001-adopt-kafka.md"),
         ("WARN", "STALE", "base/runbooks/consumer-lag-alert.md"),
         ("WARN", "VERIFIED_STALE", "base/decisions/ADR-0001-adopt-kafka.md")]  # rewritten by the 3.0 migration
+    assert [(i["path"], i["kind"], i["state"]) for i in rep.instances] == [
+        ("requests/req-0001/", "Request", "open"), ("requests/req-0002/", "Request", "closed")]
     prof = load_profile(bundle)
     assert prof.has_own and any(t.get("extends") for t in prof.types.values() if t["source"] == OWN_REL)
     assert prof.families and prof.rules[-1]["source"] == OWN_REL and prof.aliases["types"]
