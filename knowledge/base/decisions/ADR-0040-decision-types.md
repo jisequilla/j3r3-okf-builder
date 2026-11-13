@@ -8,7 +8,7 @@ adr_id: ADR-0040
 decision_status: accepted
 supersedes:
 superseded_by:
-generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-13T19:39:03Z }
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-13T19:59:06Z }
 sources:
   - { id: fragment, resource: /fragments/2026-11-13-decision-types-beyond-adr.md, title: "2026-11-13 · Not every decision is an Architecture Decision, and how the standard and this repo should type decisions" }
   - { id: answers, resource: /fragments/2026-11-13-decision-types-identity-and-existing-files.md, title: "2026-11-13 · Decision types, the owner's answers on where a kind's folder and prefix are declared and on moving the 29 existing ADRs" }
@@ -22,7 +22,7 @@ sources:
 
 The standard has one type for a decision, `Architecture Decision`, in `base/decisions/` with an `adr_id` and the file name `ADR-NNNN-slug.md`[^standard]. This bundle records every decision there, as [ADR-0008](/base/decisions/ADR-0008-dogfooding.md) says: "the project's decisions are ADRs"[^adr-0008].
 
-The repository's owner asked whether every decision is an ADR, after a discussion with a friend whose conclusion was that the name is wrong and the shape is right[^fragment]. Sorting this bundle's 39 decisions by what each one decides, from its title and description, gives[^fragment]:
+The name is wrong for most of what the type holds, while its shape is right. Sorting this bundle's 39 decisions by what each one decides, from its title and description, gives[^fragment]:
 
 | What the decision is about | Count | ADRs |
 |---|---|---|
@@ -32,11 +32,15 @@ The repository's owner asked whether every decision is an ADR, after a discussio
 
 Only the ten about the plugin are architecture decisions. The other 29 share the shape of one (context, alternatives, consequences, a body that is superseded and never edited) and not its subject.
 
-The gap is wider outside this repository. The standard covers domain bundles and operational bundles such as a request, an incident or a release ([ADR-0039](/base/decisions/ADR-0039-closing-operational-bundles.md))[^adr-0039], and the owner noted that in an operational bundle not every decision is an ADR[^fragment]. Today a bundle that wants another kind of decision with the fields and the rules of one declares a local type that extends `Architecture Decision`, which says that a product decision is a kind of architecture decision[^fragment]; a local type that extends nothing gets none of them.
+One type for every decision does not scale. The standard covers domain bundles and the operational bundles they hold, such as a request, an incident or a release ([ADR-0039](/base/decisions/ADR-0039-closing-operational-bundles.md))[^adr-0039]. Each of those units of work produces decisions of its own (a request is approved or rejected, an incident ends in a rollback), and they are not about architecture[^fragment]: the more instances a bundle holds, the more of its decisions carry a name that says the wrong thing. Today a bundle that wants another kind of decision with the fields and the rules of one declares a local type that extends `Architecture Decision`, which says that a product decision is a kind of architecture decision[^fragment]; a local type that extends nothing gets none of them.
 
 Which kinds of decision exist differs by organization: the three found here are this repository's, and another team would have product, commercial or governance decisions. The standard already treats work that way: it ships only the abstract kind `Operational Bundle` and leaves the kinds to each bundle's Domain Profile[^adr-0039].
 
-Asked in structured questions, the owner chose an abstract `Decision` type over a built-in catalogue of kinds and over one type with a kind field; three types for this repository and no others until one is needed; a folder, a prefix and a sequence per kind, declared both where the type is declared and in its template; and to move and renumber every existing decision that is not an architecture decision[^fragment][^answers]. Asked for the layout when approving this decision, the owner chose the one where the folders mirror the types: plain decisions in `base/decisions/` and each kind in a subfolder, architecture decisions included.
+Three more forces shape how a kind of decision is named and filed[^fragment][^answers]:
+
+- **The file name is what people cite.** A decision is referred to by its identifier in other concepts, in logs and in pull requests, so one prefix for every kind repeats the wrong name in each citation, and one shared sequence ties the numbering of a kind to decisions that have nothing to do with it.
+- **Two naming schemes side by side cost every reader.** If the existing decisions kept their names and only new ones took the new scheme, a reader would need to know when a decision was written to know what its name means, and this repository's catalogue, the first example of the standard in use, would show the old scheme for most of its content.
+- **The folders are how a person and an agent find decisions.** With every decision under one folder and each kind in a subfolder of it, the tree shows which types are decisions, and a new kind is one more subfolder, with no special place for architecture.
 
 # Decision
 
@@ -74,12 +78,12 @@ Staying as architecture decisions, in `base/decisions/architecture/`: ADR-0006, 
 | Alternative | Pros | Cons | Reason rejected |
 |---|---|---|---|
 | An abstract `Decision`; kinds as local types; a folder, prefix and sequence per kind | The name says what a decision is about; open to product and business decisions without changing the standard; follows the operational kinds | A move of 40 files in this repository and a re-verification of each; old numbers live on in records that cannot be edited | Chosen |
-| A built-in catalogue of decision kinds | Every bundle shares the same names | The kinds differ by organization; the standard would guess them before anyone needs them | The owner: no kind until it is needed |
+| A built-in catalogue of decision kinds | Every bundle shares the same names | The kinds differ by organization; the standard would guess them before anyone needs them | A kind is added when a bundle needs it, not before |
 | One `Decision` type with a kind field, replacing `Architecture Decision` | One type, one folder | Breaks every bundle that has an ADR; a kind cannot carry fields or rules of its own | Breaking, and less than a type |
 | Keep `Architecture Decision` for every decision | Nothing to build | 29 of 39 decisions here carry a name that is wrong for them; an operational bundle's decisions have no fitting home | The problem this decision answers |
-| One shared sequence and the `ADR-NNNN` name for every kind | Every existing link and citation stays valid; no move | The file name keeps saying ADR for what is not one | The owner chose a folder, prefix and sequence per kind |
-| Retype the existing decisions and leave them where they are | No link is rewritten | Two schemes side by side: old decisions named one way, new ones another | The owner chose to move and renumber all of them |
-| Kinds in subfolders, architecture decisions left in `base/decisions/` | No bundle has anything to move | The folder of one subtype is the parent's folder, so the tree does not mirror the types | The owner chose the mirrored layout |
+| One shared sequence and the `ADR-NNNN` name for every kind | Every existing link and citation stays valid; no move | The file name keeps saying ADR for what is not one | The file name is what people cite, so every citation would repeat the wrong name |
+| Retype the existing decisions and leave them where they are | No link is rewritten | Two schemes side by side: old decisions named one way, new ones another | A reader would need a decision's date to know what its name means |
+| Kinds in subfolders, architecture decisions left in `base/decisions/` | No bundle has anything to move | The folder of one subtype is the parent's folder, so the tree does not mirror the types | Architecture would keep a special place, and the tree would not show which types are decisions |
 
 # Consequences
 
