@@ -15,4 +15,4 @@ okf_profile: "knowledge/3.0"
 
 * [base](base/index.md) - The project's knowledge, in typed directories.
 * [fragments](fragments/index.md) - Records of events, distilled into the base.
-* [requests](requests/index.md) - Each Request of this bundle, as a bundle of its own.
+* [requests](requests/index.md) - A change request the refunds team works on

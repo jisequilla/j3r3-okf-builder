@@ -430,7 +430,11 @@ def closing(tmp: Path) -> None:
     """closing of the fixture's open Request with okf_close.py: its report exact; each planted defect or a pending
     fragment fails --apply with its failures and no file changed; --apply then closes it, lint --strict finding
     nothing, the question and the conflict row carried; every concept a promote row links in the parent is a draft
-    with no verified"""
+    with no verified; the fixture's index.md files are what okf_index.py would write"""
+    for bundle in (CLOSING, CLOSING / "requests" / "req-0042"):
+        summary = last_line(uv(S / "okf_index.py", bundle, "--check", ok=(0, 1)))
+        expect(summary == "0 index.md out of date", f"{bundle}: {summary}")
+        print(bundle, summary)
     close = S / "okf_close.py"
     k = tmp / "closing" / "knowledge"
     shutil.copytree(ROOT / CLOSING, k)
