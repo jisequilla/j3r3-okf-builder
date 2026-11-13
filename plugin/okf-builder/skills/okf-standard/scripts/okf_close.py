@@ -32,8 +32,13 @@ Usage:
   the instance root, generated), each carried conflict row (State carried, Resolution naming the parent's row and
   Conflict Log path in code, Decided --by) with the Conflict Log's generated, each instance fragment in conflict whose
   conflicts are now all carried or closed (distillation_status: distilled, its ledger Outcome `carried up: C-NNN
-  (`<path>`)`), the instance's root index.md (state: closed and closed_at, other keys untouched), then regenerates the
-  indexes of the instance and of the parent. --at (default now, computed once) is closed_at and every generated.at.
+  (`<path>`)`, generated), the instance's root index.md (state: closed and closed_at, other keys untouched), then
+  regenerates the indexes of the instance and of the parent. --at (default now, computed once) is closed_at and every
+  generated.at. Each file is written whole or not at all (a temporary file beside it, then a rename), keeping its mode.
+- Exit 3: the checks passed but the closing is written only in part. An OSError stopped the writes (an ERROR line names
+  the files written and the one not written, and nothing after it is written), or the indexes of the instance or of
+  the parent were not regenerated (an ERROR line per bundle, with the okf_index.py command to run). Finish by hand
+  what it names; never run --apply again, since its checks no longer hold on a half-closed instance.
 - --carry: `<instance item>=<parent item>`, a question as `base/questions/<q>.md` or `/base/questions/<q>.md` (both
   read alike) to its parent bundle path, or a conflict as `C-001=C-002`.
 - --dry-run: the checks and the list of writes, with nothing written.
@@ -45,7 +50,9 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -409,7 +416,6 @@ def plan_closing(inst: Bundle, parent: Bundle | None, fragment: str, carries: di
 
     fragment_writes: dict = {}
     if carried_ids:
-        after = {r.id: ("carried" if r.id in carried_ids else r.state) for r in rows}
         for d in inst.docs:
             fm = inst.fm_of(d)
             if not (d.rel.startswith(FRAGMENTS_DIR + "/") and _is_fragment(fm, inst.prof)
@@ -417,14 +423,14 @@ def plan_closing(inst: Bundle, parent: Bundle | None, fragment: str, carries: di
                 continue
             mine = [r for r in rows if any(resolve_link(inst.root, log, m.group(2)) == d.path.resolve()
                                            for m in LINK_RE.finditer(r.get("source")))]
-            if not any(r.id in carried_ids for r in mine) or any(after[r.id] in OPEN_CONFLICT for r in mine):
+            if not any(r.id in carried_ids for r in mine):
                 continue
             text = d.path.read_text(encoding="utf-8")
             raw, _ = split_frontmatter(text)
             if not re.search(r"^distillation_status\s*:", raw or "", re.M):
                 plan.fail(4, d.rel, "its distillation_status is written under a local name: release it by hand")
                 continue
-            text = set_keys(text, {"distillation_status": "distilled"})
+            text = set_keys(text, {"distillation_status": "distilled", "generated": gen})
             lines, start = text.split("\n"), body_start(text)
             for row in read_ledger("\n".join(lines[start:])).rows or []:
                 cells = table_cells(lines[start + row.line]) or []
@@ -446,6 +452,36 @@ def plan_closing(inst: Bundle, parent: Bundle | None, fragment: str, carries: di
     return plan
 
 
+def write_atomic(path: Path, text: str) -> None:
+    """Writes text to path whole or not at all: a temporary file in its directory, given path's mode, then renamed
+    over it; on any failure the temporary file is removed and the error raised."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix="." + path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        if path.exists():
+            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def regenerate_indexes(*roots: Path) -> list[tuple[Path, str]]:
+    """Runs okf_index.py on each bundle, even after one fails; (bundle, reason) for each that failed."""
+    from okf_index import main as index_main  # noqa: E402
+
+    failed = []
+    for root in roots:
+        try:
+            code = index_main([str(root)])
+            if code:
+                failed.append((root, f"exit {code}"))
+        except OSError as e:
+            failed.append((root, f"{type(e).__name__}: {e}"))
+    return failed
+
+
 def apply(args) -> int:
     inst = load_bundle(Path(args.instance).resolve())
     proot = parent_root(inst)
@@ -462,17 +498,27 @@ def apply(args) -> int:
         print(f"{len(plan.failures)} failed check{'s' if len(plan.failures) != 1 else ''}: nothing written")
         return 1
     verb = "WOULD WRITE" if args.dry_run else "WROTE"
+    written: list[str] = []
     for path, text in plan.writes.items():
+        rel = os.path.relpath(path, inst.root)
         if not args.dry_run:
-            path.write_text(text, encoding="utf-8")
-        print(f"{verb} {os.path.relpath(path, inst.root)}")
+            try:
+                write_atomic(path, text)
+            except OSError as e:
+                print(f"ERROR: the closing is written only in part: wrote {', '.join(written) or 'nothing'}; {rel} "
+                      f"not written ({e}): finish it by hand or restore the written files", file=sys.stderr)
+                return 3
+            written.append(rel)
+        print(f"{verb} {rel}")
     if args.dry_run:
         print("WOULD REGENERATE the indexes of the instance and of its parent")
         return 0
-    from okf_index import main as index_main  # noqa: E402
-
-    index_main([str(inst.root)])
-    index_main([str(parent.root)])
+    failed = regenerate_indexes(inst.root, parent.root)
+    for root, reason in failed:
+        print(f"ERROR: the closing was written, but the indexes of {root} were not regenerated ({reason}): run "
+              f"okf_index.py {root}", file=sys.stderr)
+    if failed:
+        return 3
     print(f"closed {args.instance} at {args.at}: write the Closing entry in its log.md, the Update entry in the "
           "parent's, then run okf_lint.py on the parent")
     return 0
@@ -559,7 +605,8 @@ def _fixture(tmp_path: Path) -> Path:
     src = next((p / "examples" / "fixtures" / "closing-instance" / "knowledge" for p in Path(__file__).resolve().parents
                 if (p / "examples" / "fixtures" / "closing-instance" / "knowledge" / "index.md").is_file()), None)
     if src is None:
-        pytest.skip("examples/fixtures/closing-instance not beside this script")
+        pytest.fail(f"examples/fixtures/closing-instance/knowledge not found in any directory above "
+                    f"{Path(__file__).resolve().parent}")
     shutil.copytree(src, tmp_path / "knowledge")
     return tmp_path / "knowledge"
 
@@ -871,7 +918,161 @@ def test_a_fragment_with_a_conflict_still_open_blocks_and_is_not_rewritten(tmp_p
         _edit(k / _REQ / "conflict-log.md", "| sources disagree | | open | — |\n",
               "| sources disagree | | open | — |\n| C-002 | [Scoping call](/fragments/2026-11-05-scoping-call.md) | "
               "a second one | sources disagree | | open | — |\n")
-    assert _failed_apply(tmp_path, capsys, plant) == [(4, "C-002")]
+    assert _failures(tmp_path, capsys, plant) == [
+        (4, "C-002", "an open conflict with no --carry: resolve or dismiss it in the instance, or carry it up")]
+
+
+def test_a_conflict_log_without_a_resolution_column_fails_check_4(tmp_path, capsys):
+    def plant(k):
+        path = k / _REQ / "conflict-log.md"
+        lines = path.read_text(encoding="utf-8").split("\n")
+        for i, line in enumerate(lines):
+            cells = table_cells(line)
+            if cells is not None:
+                lines[i] = row_line(cells[:4] + cells[5:])
+        path.write_text("\n".join(lines), encoding="utf-8")
+    assert _failures(tmp_path, capsys, plant) == [
+        (4, "C-001", "the instance's Conflict Log has no Resolution, State or Decided column")]
+
+
+def test_an_aliased_distillation_status_is_released_by_hand(tmp_path, capsys):
+    def plant(k):
+        _edit(k / PROFILE_REL, "kinds:\n", "aliases:\n  fields:\n    estado: distillation_status\nkinds:\n")
+        _edit(k / _REQ / "fragments/2026-11-05-scoping-call.md", "distillation_status: conflict\n", "estado: conflict\n")
+    assert _failures(tmp_path, capsys, plant) == [
+        (4, "fragments/2026-11-05-scoping-call.md",
+         "its distillation_status is written under a local name: release it by hand")]
+
+
+def test_a_question_carried_to_a_parent_concept_not_an_open_question_fails_check_4(tmp_path, capsys):
+    def plant(k):
+        _edit(k / _QUESTION, "type: Open Question\n", "type: Term\n")
+    assert _failures(tmp_path, capsys, plant) == [
+        (4, "/" + _QUESTION, f"carried to /{_QUESTION}, which is no open Open Question of the parent")]
+
+
+def test_a_fragment_in_conflict_with_no_carried_row_is_not_released(tmp_path):
+    k = _fixture(tmp_path)
+    inst = k / _REQ
+    other = inst / "fragments" / "2026-11-06-other.md"
+    other.write_text((inst / "fragments" / "2026-11-05-scoping-call.md").read_text(encoding="utf-8")
+                     .replace("title: Scoping call of req-0042", "title: Other call of req-0042"), encoding="utf-8")
+    _edit(inst / "conflict-log.md", "| sources disagree | | open | — |\n",
+          "| sources disagree | | open | — |\n| C-002 | [Other call](/fragments/2026-11-06-other.md) | x | "
+          "sources disagree | settled | resolved | human:ana |\n")
+    before = other.read_bytes()
+    assert main([str(inst), *_APPLY]) == 0
+    assert other.read_bytes() == before
+
+
+def test_a_released_fragment_gets_its_generated(tmp_path):
+    k = _fixture(tmp_path)
+    frag = k / _REQ / "fragments" / "2026-11-05-scoping-call.md"
+    expected = split_frontmatter(frag.read_text(encoding="utf-8"))[0].split("\n")
+    expected = ["distillation_status: distilled" if x == "distillation_status: conflict" else
+                "generated: { by: okf-builder/test, at: 2026-11-09T17:00:00Z }" if x.startswith("generated:") else x
+                for x in expected]
+    assert main([str(k / _REQ), *_APPLY]) == 0
+    assert split_frontmatter(frag.read_text(encoding="utf-8"))[0].split("\n") == expected
+
+
+def _index_main(monkeypatch, fail):
+    """okf_index.main with fail(bundle) run first for each bundle: its return value, if not None, replaces the run."""
+    import okf_index
+
+    real = okf_index.main
+
+    def fake(argv):
+        got = fail(Path(argv[0]))
+        return real(argv) if got is None else got
+    monkeypatch.setattr(okf_index, "main", fake)
+
+
+def test_a_failed_index_regeneration_of_the_instance_exits_3(tmp_path, capsys, monkeypatch):
+    k = _fixture(tmp_path)
+    inst = (k / _REQ).resolve()
+    _index_main(monkeypatch, lambda b: 1 if b == inst else None)
+    assert main([str(k / _REQ), *_APPLY]) == 3
+    out = capsys.readouterr()
+    assert out.err.splitlines() == [f"ERROR: the closing was written, but the indexes of {inst} were not regenerated "
+                                    f"(exit 1): run okf_index.py {inst}"]
+    assert "closed " not in out.out
+    assert (k / "requests" / "index.md").read_text(encoding="utf-8").split("\n")[-2].endswith("_(state: closed)_")
+
+
+def test_a_failed_index_regeneration_of_both_bundles_exits_3(tmp_path, capsys, monkeypatch):
+    k = _fixture(tmp_path)
+
+    def fail(bundle):
+        raise PermissionError("planted")
+    _index_main(monkeypatch, fail)
+    assert main([str(k / _REQ), *_APPLY]) == 3
+    out = capsys.readouterr()
+    assert out.err.splitlines() == [
+        f"ERROR: the closing was written, but the indexes of {b} were not regenerated (PermissionError: planted): run "
+        f"okf_index.py {b}" for b in ((k / _REQ).resolve(), k.resolve())]
+    assert "closed " not in out.out
+
+
+def test_a_read_only_index_exits_3_with_no_traceback(tmp_path, capsys):
+    k = _fixture(tmp_path)
+    idx = k / _REQ / "base" / "index.md"
+    _edit(idx, "* [runbooks](runbooks/index.md) - Operational and incident procedures.\n", "")
+    idx.chmod(0o444)
+    try:
+        assert main([str(k / _REQ), *_APPLY]) == 3
+    finally:
+        idx.chmod(0o644)
+    inst = (k / _REQ).resolve()
+    assert capsys.readouterr().err.splitlines() == [
+        f"ERROR: the closing was written, but the indexes of {inst} were not regenerated (PermissionError: [Errno 13] "
+        f"Permission denied: '{idx.resolve()}'): run okf_index.py {inst}"]
+
+
+def _files(root: Path) -> set:
+    return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+
+
+def test_each_write_renames_a_temporary_file_beside_its_destination(tmp_path, monkeypatch):
+    k = _fixture(tmp_path)
+    inst = load_bundle(k / _REQ)
+    plan = plan_closing(inst, load_bundle(parent_root(inst)), _FRAGMENT, parse_carries([_APPLY[4], _APPLY[6]]),
+                        "human:test", "okf-builder/test", "2026-11-09T17:00:00Z")
+    modes = {p: p.stat().st_mode for p in plan.writes}
+    before = _files(k)
+    real, calls = os.replace, []
+
+    def record(src, dst):
+        calls.append((Path(src), Path(dst)))
+        real(src, dst)
+    monkeypatch.setattr(os, "replace", record)
+    assert main([str(k / _REQ), *_APPLY]) == 0
+    assert [dst for _, dst in calls] == list(plan.writes)
+    assert all(src.parent == dst.parent for src, dst in calls)
+    assert _files(k) == before
+    assert {p: p.stat().st_mode for p in plan.writes} == modes
+
+
+def test_a_failed_write_leaves_no_partial_file_and_exits_3(tmp_path, capsys, monkeypatch):
+    k = _fixture(tmp_path)
+    log = k / _REQ / "conflict-log.md"
+    old_log = log.read_bytes()
+    before = _files(k)
+    real, calls = os.replace, []
+
+    def second_fails(src, dst):
+        calls.append(dst)
+        if len(calls) == 2:
+            raise OSError("planted")
+        real(src, dst)
+    monkeypatch.setattr(os, "replace", second_fails)
+    assert main([str(k / _REQ), *_APPLY]) == 3
+    assert capsys.readouterr().err.splitlines() == [
+        f"ERROR: the closing is written only in part: wrote {_QUESTION}; conflict-log.md not written (planted): "
+        "finish it by hand or restore the written files"]
+    assert "question_status: carried\n" in (k / _REQ / _QUESTION).read_text(encoding="utf-8")
+    assert log.read_bytes() == old_log
+    assert _files(k) == before
 
 
 def test_a_carry_naming_no_open_item_and_a_bad_carry(tmp_path, capsys):
