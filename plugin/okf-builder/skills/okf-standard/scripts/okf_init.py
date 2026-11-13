@@ -26,12 +26,16 @@ operational bundle of that kind, with no typed directory unless --dirs names som
 in the kind's directory of the --in bundle, whose root index.md declares okf_version,
 okf_profile, kind, state: open and parent: ../..; okf-index then runs on the new
 instance and on its holder. The kind must be one with a directory that the holder
-holds (every such kind for a domain bundle, the kinds its kind holds otherwise);
+holds (every such kind for a domain bundle, the kinds its kind holds otherwise),
+and neither the holder nor a bundle above it may be closed: a closed instance is
+frozen, and a domain bundle that declares state: closed is refused too, since only
+an operational bundle has a state (okf-lint reports that key as BAD_STATE);
 otherwise nothing is written and the exit code is 2.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import date
@@ -86,6 +90,16 @@ def render(name: str, **vars) -> str:
     for k, v in vars.items():
         text = text.replace("{{" + k + "}}", str(v))
     return text
+
+
+def yaml_scalar(value: str) -> str:
+    """value as a YAML scalar that reads back as the same string: plain when it already does and holds no newline,
+    double-quoted otherwise (a JSON string is a YAML double-quoted scalar)."""
+    try:
+        plain = "\n" not in value and parse_yaml(f"k: {value}") == {"k": value}
+    except Exception:
+        plain = False
+    return value if plain else json.dumps(value, ensure_ascii=False)
 
 
 def set_section(text: str, title: str, content: str) -> str:
@@ -150,7 +164,8 @@ class Refusal(Exception):
 
 def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
     """The directory of the new instance and the kind's declared id; Refusal when the id is no single directory name,
-    the holder is no bundle, it or a bundle above it (the domain bundle included) is closed (frozen, standard §2.2),
+    the holder is no bundle, it or an instance above it is closed (frozen, standard §2.2), it is or lies inside a
+    domain bundle that declares state: closed (only an operational bundle has a state; okf-lint reports BAD_STATE),
     the walk up to the domain bundle breaks (a bundle with no parent, a parent that is no bundle, more than 32
     levels), the kind is unknown, abstract or not held by the holder, or the id names a file of the kind's
     directory."""
@@ -164,6 +179,10 @@ def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
         raise Refusal(f"--in {holder} is not a bundle (no index.md declaring okf_version)")
     domain, fm = holder, hfm
     for _ in range(32):
+        if fm.get("state") == "closed" and fm.get("kind") in (None, "Domain Bundle"):
+            where = "is" if domain == holder else f"is inside {domain},"
+            raise Refusal(f"--in {holder} {where} a domain bundle that declares state: closed; only an operational "
+                          "bundle has a state (standard §2.2): remove it from its index.md first")
         if fm.get("state") == "closed":
             where = "is closed" if domain == holder else f"is inside {domain}, which is closed"
             raise Refusal(f"--in {holder} {where}: a closed instance is frozen and nothing in it is edited "
@@ -245,8 +264,9 @@ def main(argv=None) -> int:
     now = now_iso()
     log = []
 
-    project = render("project.md", title=args.title, one_sentence_description=args.description,
-                     repo_url=args.repo_url, tags=args.tags, actor=args.actor, now=now)
+    project = render("project.md", title=yaml_scalar(args.title),
+                     one_sentence_description=yaml_scalar(args.description), repo_url=args.repo_url,
+                     tags=args.tags, actor=args.actor, now=now)
     project = set_section(project, "Purpose", (args.purpose or args.description).strip())
     log.append(write(k / "project.md", prune_unfilled(prune_map(project, dirs)), args.force))
 
@@ -554,6 +574,64 @@ def test_instance_over_an_existing_one_skips_its_files(tmp_path):
     edited = project.read_text(encoding="utf-8")
     assert main(["--instance", "Request", "--id", "r1", "--in", str(k), *_INST]) == 0
     assert project.read_text(encoding="utf-8") == edited
+
+
+_QUOTED_PAIRS = [("Refunds: phase 2", "D"), ("Refunds #2", "Ship it # now"), ("2026", "yes"), ("[draft] plan", "a: b"),
+                 ("Refund: order 42", "Buyer #7 asked"), ("T", "D")]
+
+
+def _title_and_description(k: Path) -> tuple:
+    raw, _ = split_frontmatter((k / "project.md").read_text(encoding="utf-8"))
+    fm = parse_yaml(raw)
+    return fm.get("title"), fm.get("description")
+
+
+def test_title_and_description_read_back_as_given_in_project_md(tmp_path):
+    for i, pair in enumerate(_QUOTED_PAIRS):
+        args = ["--title", pair[0], "--description", pair[1], "--actor", "human:test"]
+        for v in ("0.2", "0.1"):
+            root = tmp_path / str(i) / v
+            assert main(["--root", str(root), *args, "--okf-version", v, "--dirs", "decisions"]) == 0
+            k = root / "knowledge"
+            assert _title_and_description(k) == pair, (pair, v)
+            assert [c for c in _codes(k) if c[0] == "ERROR" or c[1] == "BAD_YAML"] == [], (pair, v)
+        k = _kinds_domain(tmp_path / str(i) / "inst")
+        assert main(["--instance", "Request", "--id", "r1", "--in", str(k), *args]) == 0
+        assert _title_and_description(k / "requests" / "r1") == pair, pair
+        codes = _codes(k)
+        assert [c for c in codes if c[0] == "ERROR" or c[1] == "BAD_YAML"] == [], pair
+        if pair == ("Refund: order 42", "Buyer #7 asked"):
+            assert codes == []
+    lines = (tmp_path / "5" / "0.2" / "knowledge" / "project.md").read_text(encoding="utf-8").split("\n")
+    assert "title: T" in lines and "description: D" in lines
+
+
+def test_yaml_scalar_quotes_only_what_would_not_read_back():
+    assert [yaml_scalar(v) for v in ("T", "Refund for order 42", "2026", "yes", "a: b", "x\ny", "")] == \
+        ["T", "Refund for order 42", '"2026"', '"yes"', '"a: b"', '"x\\ny"', '""']
+
+
+def _closed_domain(tmp_path):
+    k = _kinds_domain(tmp_path)
+    assert main(["--instance", "Release", "--id", "v1", "--in", str(k), *_INST]) == 0
+    idx = k / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("---\n", "---\nstate: closed\n", 1), encoding="utf-8")
+    return k
+
+
+def test_instance_refuses_a_domain_bundle_that_declares_state_closed(tmp_path, capsys):
+    k = _closed_domain(tmp_path)
+    expected = {"": f"okf-init: --in {k} is a domain bundle that declares state: closed; only an operational bundle "
+                    "has a state (standard §2.2): remove it from its index.md first",
+                "releases/v1": f"okf-init: --in {k / 'releases' / 'v1'} is inside {k}, a domain bundle that declares "
+                               "state: closed; only an operational bundle has a state (standard §2.2): remove it from "
+                               "its index.md first"}
+    for rel, line in expected.items():
+        before = _files(k)
+        capsys.readouterr()
+        assert main(["--instance", "Request", "--id", "r9", "--in", str(k / rel) if rel else str(k), *_INST]) == 2
+        assert _files(k) == before, rel
+        assert capsys.readouterr().err == line + "\n", rel
 
 
 def test_knowledge_map_links_only_the_directories_created(tmp_path):
