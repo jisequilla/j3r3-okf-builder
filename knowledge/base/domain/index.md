@@ -3,6 +3,7 @@
 # Terms
 
 * [Actor](actor.md) - Identifier of who produced or verified content: human:<id>, process:<id> or <agent>/<version>.
+* [Attestation](attestation.md) - The check, by deterministic code over the receipt of a run, that a number was produced by its sanctioned computation; okf-builder records and shape-checks an Attested Computation and runs nothing. _(draft)_
 * [Bundle](bundle.md) - Directory of markdown with frontmatter that is the distribution unit of OKF knowledge; in the profile, a repo's knowledge/.
 * [Concept](concept.md) - A non-reserved .md file inside a bundle; its path without .md is its identity.
 * [Profile knowledge/2.0](knowledge-profile.md) - This project's set of rules on top of OKF: directories, types, required generated, required index/log/project.
