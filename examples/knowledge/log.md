@@ -1,5 +1,12 @@
 # Bundle history
 
+## 2026-11-14
+* **Migration**: 1 decision moved, each to the directory of its type, links rewritten in 6 files, with okf-migrate --move-decisions: `base/decisions/ADR-0001-adopt-kafka.md` → `base/decisions/architecture/ADR-0001-adopt-kafka.md`.
+
+## 2026-11-12
+* **Creation**: [DEC-0001: The payments team owns the refund dispute export](/base/decisions/DEC-0001-payments-owns-dispute-export.md), a plain Decision distilled from that call: who answers for the export is not about how a system is built, so it is not an Architecture Decision.
+* **Creation**: [Payments-finance call: who owns the refund dispute export](/fragments/2026-11-12-dispute-export-ownership.md), a fictional call captured as a Knowledge Fragment and distilled.
+
 ## 2026-11-10
 * **Update**: [req-0002](/requests/req-0002/index.md) closed into this bundle by its closing fragment, [Closing of Request req-0002](/fragments/2026-11-10-closing-req-0002.md), approved by human:ana, with `okf_close.py`: its Dispute export promoted, its export columns kept in the instance, its Export cadence carried up.
 * **Creation**: [Cadence of the refund dispute export](/base/questions/dispute-export-cadence.md), carried up from req-0002 by its closing fragment, owned by human:lucia, approved by human:ana.
@@ -11,10 +18,10 @@
 * **Update**: [Domain Profile of Demo Payments](/base/profile.md) declares the kind Request, an operational bundle in `requests/` with the extra state `in-review`.
 
 ## 2026-11-06
-* **Creation**: the projection `projections/onboarding-brief/`, canonical and composed: a short on-call brief for a new engineer of Demo Payments, composed from [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md), the [Payments consumer lag alert](/base/runbooks/consumer-lag-alert.md) and the [Payments dead-letter replay](/base/runbooks/payments-dead-letter-replay.md) with the okf-projection skill; its ref hashes written by `okf_projection.py --record-hashes onboarding-brief`. It is not a concept: okf-lint skips it and `okf_projection.py` checks it.
+* **Creation**: the projection `projections/onboarding-brief/`, canonical and composed: a short on-call brief for a new engineer of Demo Payments, composed from [ADR-0001](/base/decisions/architecture/ADR-0001-adopt-kafka.md), the [Payments consumer lag alert](/base/runbooks/consumer-lag-alert.md) and the [Payments dead-letter replay](/base/runbooks/payments-dead-letter-replay.md) with the okf-projection skill; its ref hashes written by `okf_projection.py --record-hashes onboarding-brief`. It is not a concept: okf-lint skips it and `okf_projection.py` checks it.
 
 ## 2026-11-04
-* **Update**: [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md) cites the [payments sync on refund events](/fragments/2026-11-02-refund-events-review.md), which confirms Kafka as the event bus; the fragment's ledger gains that row, so every part of its record has one, and its action item's Concept is `tracker`, like the one of the [finance chat asking for the dispute window](/fragments/2026-10-28-finance-dispute-window-ask.md), whose complete ledger now covers it (no FRAGMENT_UNCITED).
+* **Update**: [ADR-0001](/base/decisions/architecture/ADR-0001-adopt-kafka.md) cites the [payments sync on refund events](/fragments/2026-11-02-refund-events-review.md), which confirms Kafka as the event bus; the fragment's ledger gains that row, so every part of its record has one, and its action item's Concept is `tracker`, like the one of the [finance chat asking for the dispute window](/fragments/2026-10-28-finance-dispute-window-ask.md), whose complete ledger now covers it (no FRAGMENT_UNCITED).
 * **Creation**: [Platform chat: the retention of the refunds topic](/fragments/2026-11-03-refund-topic-retention-chat.md), a fictional chat captured as a Fragmento (ingerido: false) from a text export kept beside it, `fragments/2026-11-03-refund-topic-retention-chat.txt`, named with its SHA-256 in `material` so lint checks that the source was not altered after capture.
 * **Update**: [Demo Payments](/project.md) is written the way okf_init now writes a project.md: Purpose holds the description, and the sections and rows nobody filled (Scope, Team and ownership, the empty Key links rows) are removed instead of kept as placeholders (SECTION_EMPTY).
 

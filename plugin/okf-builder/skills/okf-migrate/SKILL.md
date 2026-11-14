@@ -37,18 +37,32 @@ uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --profile knowled
 
 # Both at once: the profile step runs first, then the version step walks its result
 uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --profile knowledge/3.0 --to 0.2 --actor <actor>
+
+# Each decision to the directory of its type (knowledge/3.0 only; a step of its own)
+uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --move-decisions --dry-run
+uv run "<skills>/okf-standard/scripts/okf_migrate.py" <bundle> --move-decisions
 ```
 
-At least one of `--to` and `--profile` is required. `--profile knowledge/3.0`:
+At least one of `--to` and `--profile` is required, or `--move-decisions` on its own: it combines with neither, nor with `--file` or `--out` (see *Move the decisions* below). `--profile knowledge/3.0`:
 
 - **Moves** under `base/` every non-hidden root directory except `fragments/` and `projections/` (the typed directories and any the project added), and every root `.md` other than `index.md`, `log.md`, `project.md` and the Conflict Log.
-- **Rewrites** links in every `.md` (reserved files included), `sources[].resource` and the ADR fields `supersedes` / `superseded_by`: a bundle path into a moved path (`/decisions/x.md` → `/base/decisions/x.md`), and a relative path whose target ends up on the other side of the move. Any other path (`/standard/...`, a repo-relative resource) is left as it is.
+- **Rewrites** links in every `.md` (reserved files included), `sources[].resource` and the decision fields `supersedes` / `superseded_by`: a bundle path into a moved path (`/decisions/x.md` → `/base/decisions/x.md`), and a relative path whose target ends up on the other side of the move. Any other path (`/standard/...`, a repo-relative resource) is left as it is.
 - **Leaves alone** what `okf-lint` leaves out of the bundle, in both steps: the paths `.okfignore` matches and every nested bundle (an operational instance included) stay byte-identical. At the root they stay where they are, and a root directory stays at the root only when it holds operational instances (nested bundles whose root `index.md` declares a `kind`) and no other document besides its `index.md` (a kind's directory of instances); a root directory that holds only ignored paths or nested bundles without `kind` moves under `base/` with them. Inside a directory that moves they move with it, unedited, and each `.okfignore` entry anchored under that directory follows them (`decisions/drafts/` → `base/decisions/drafts/`; an entry with no leading directory, such as `*.tmp` or `drafts/`, is kept). An anchored entry whose first segment is a glob that matches a moved directory (`*/drafts/`) is kept as written and the step prints a `NOTICE .okfignore entry '…' starts with a glob` line for it, since it no longer matches the moved paths: fix it by hand. A nested bundle is migrated on its own: `okf_migrate.py <its directory>`.
 - **Regenerates** the root `index.md`, `base/index.md` and every index below `base/` (`# Notes` kept), sets `okf_profile: "knowledge/3.0"` in the root `index.md` and adds a `**Migration**` entry to `log.md`.
 
 Propose it whenever a skill or `okf-lint` finds a knowledge/2.0 bundle, and run it only after the person confirms; until then, every skill writes in the 2.0 layout.
 
 Choosing `--actor` for 0.1→0.2: if you know who wrote the concepts (e.g. Google's agent), `reference_agent/<model>`; if people wrote them, `human:<id>` only if the user confirms it; when in doubt, `process:okf-migrate` (the default, and honest: nobody knows).
+
+## Move the decisions
+
+`--move-decisions` moves each decision of a knowledge/3.0 bundle to the directory of its type (standard §9). It is opt-in: the usual directory of a type is a default, not a rule, and a bundle whose decisions stay where they are still passes lint. **Never run it unasked.** Offer it when a knowledge/3.0 bundle has decisions outside the directory of their type (Architecture Decisions directly in `base/decisions/`, as bundles written before `base/decisions/architecture/` have them), show the `--dry-run` list of moves and of files whose links would change, and run it only after the person confirms.
+
+- **Moves** decisions only: each concept whose type, with the aliases of the Domain Profile in force resolved, is `Decision` or extends it, and whose file is not directly in the directory in force of its type (the one the type declares, else that of the nearest type it extends that declares one). The file keeps its name. A decision already there is left alone, so a second run moves nothing.
+- **Rewrites** what points to a moved decision: the target of every inline link (`[text](target)`, images included), the `resource` of every `sources` entry and every path field (`supersedes`, `superseded_by` and any other field a type declares as a path). Inside a fragment's `# Record` only the target of the link changes; a file it rewrites keeps every other byte, so no `generated.at` changes. A reference-style definition (`[ref]: target`), a path inside a YAML comment and text CommonMark does not read as an inline link stay as written: update them by hand.
+- **Never touches** a path `.okfignore` matches, `.okfignore` itself or a nested bundle, an operational instance included: it prints a `NOTICE` naming the nested bundles, and the step is run on each one's own directory. It does not edit `projections/` either and says so on a `NOTICE` line: a projection whose `refs` name a moved decision reports `PROJ_REF_MISSING` until it is refreshed with the `okf-projection` skill.
+- **Regenerates** the `index.md` of each directory a decision left or entered and of the directories above them, and adds one `**Migration**` entry to `log.md` naming both paths of each decision.
+- **Stops** before writing anything when a new path is already taken, and refuses a closed bundle and a bundle that is not knowledge/3.0.
 
 ## What is lost when going down to 0.1 (without `--keep-extensions`)
 

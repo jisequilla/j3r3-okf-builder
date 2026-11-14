@@ -691,6 +691,8 @@ def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None,
 # step with the templates, so lint needs no template beside it (the M365 okf-lint skill carries none).
 TEMPLATE_SECTIONS = {
     "Project": ("project.md", ("# Purpose", "# Scope", "# Team and ownership", "# Key links", "# Knowledge map")),
+    "Decision": ("decision.md", ("# Context", "# Decision", "# Alternatives considered", "# Consequences",
+                                 "# Related")),
     "Architecture Decision": ("adr.md", ("# Context", "# Decision", "# Alternatives considered", "# Consequences",
                                          "# Related")),
     "API": ("api.md", ("# Contract", "# Main operations", "# Authentication and authorization", "# Examples",
@@ -2682,9 +2684,9 @@ def test_examples_knowledge_lints_with_its_profile_and_its_three_known_warnings(
         pytest.skip("examples/knowledge with its base/profile.md not beside this script")
     rep, _, _ = lint(bundle)
     assert [(i["level"], i["code"], i["path"]) for i in rep.items] == [
-        ("WARN", "BROKEN_LINK", "base/decisions/ADR-0001-adopt-kafka.md"),
+        ("WARN", "BROKEN_LINK", "base/decisions/architecture/ADR-0001-adopt-kafka.md"),
         ("WARN", "STALE", "base/runbooks/consumer-lag-alert.md"),
-        ("WARN", "VERIFIED_STALE", "base/decisions/ADR-0001-adopt-kafka.md")]  # rewritten by the 3.0 migration
+        ("WARN", "VERIFIED_STALE", "base/decisions/architecture/ADR-0001-adopt-kafka.md")]  # rewritten by the 3.0 migration
     assert [(i["path"], i["kind"], i["state"]) for i in rep.instances] == [
         ("requests/req-0001/", "Request", "open"), ("requests/req-0002/", "Request", "closed")]
     prof = load_profile(bundle)
@@ -2706,7 +2708,7 @@ _TEMPLATE_FILL = {"actor": "okf-builder/test", "now": "2026-11-02T12:00:00Z", "i
                   "YYYY-MM-DD": "2999-01-01", "date": "2026-11-02", "occurred_at": "2026-11-02",
                   "participants": "human:ann", "owner": "ann", "team": "payments", "nnnn": "0002",
                   "fragment_file": "2026-11-02-demo.md"}
-_TEMPLATE_FILE = {"Project": "project.md", "Conflict Log": "conflict-log.md",
+_TEMPLATE_FILE = {"Project": "project.md", "Conflict Log": "conflict-log.md", "Decision": "DEC-0002-demo.md",
                   "Architecture Decision": "ADR-0002-demo.md", "Knowledge Fragment": "2026-11-02-demo.md"}
 
 
@@ -3710,13 +3712,45 @@ def test_section_empty_reads_project_md_and_a_local_type_as_the_type_it_extends(
         assert lint(k)[0].items == [], t
 
 
+def _empty_consequences(tmp_path, rel: str, t: str, types: str = "") -> list[tuple]:
+    """The SECTION_EMPTY findings of a decision of type t whose '# Consequences' holds nothing, whole."""
+    body = ("# Context\n\nText.\n\n# Decision\n\nText.\n\n# Alternatives considered\n\n| Alternative | Reason rejected |\n"
+            "|---|---|\n| Other | Cost |\n\n# Consequences\n\n# Related\n\nText.\n")
+    k = _tree_bundle(tmp_path / "knowledge", profile="types:\n" + types if types else None,
+                     extra={rel: f"---\ntype: {t}\ntitle: D\ndescription: D.\n{_TGEN}---\n\n{body}"})
+    return [(i["level"], i["code"], i["path"], i["line"], i["message"]) for i in lint(k)[0].items
+            if i["code"] == "SECTION_EMPTY"]
+
+
+def _empty_consequences_of(rel: str, template: str) -> list[tuple]:
+    return [("WARN", "SECTION_EMPTY", rel, 22, f"section '# Consequences' (line 22) of the {template} template is "
+             "empty or holds only placeholder text: fill it, or remove it until its content is known")]
+
+
+def test_section_empty_names_decision_md_for_a_plain_decision(tmp_path):
+    rel = "base/decisions/DEC-0001-how-we-work.md"
+    assert _empty_consequences(tmp_path, rel, "Decision") == _empty_consequences_of(rel, "decision.md")
+
+
+def test_section_empty_names_decision_md_for_a_local_type_that_extends_decision(tmp_path):
+    rel = "base/decisions/standard/SDR-0001-format.md"
+    assert _empty_consequences(tmp_path, rel, "Standard Decision", _SDR_TYPE) == _empty_consequences_of(rel, "decision.md")
+
+
+def test_section_empty_names_adr_md_for_an_architecture_decision_and_a_local_type_that_extends_it(tmp_path):
+    rel = "base/decisions/architecture/ADR-0001-use-kafka.md"
+    assert _empty_consequences(tmp_path / "adr", rel, "Architecture Decision") == _empty_consequences_of(rel, "adr.md")
+    types = "  Product ADR: { extends: Architecture Decision, description: A product decision }\n"
+    assert _empty_consequences(tmp_path / "local", rel, "Product ADR", types) == _empty_consequences_of(rel, "adr.md")
+
+
 def test_each_concept_template_left_unfilled_fires_section_empty(tmp_path):
     """Each template's sections, as okf-capture copies them before filling them in, hold only placeholder text but
     for the tables, code and fixed text the template writes as content (listed here); a {{...}} inside a line of
     fixed text (api.md's Contract, reference.md's footnote, domain-profile.md's field list) is content too."""
     from okf_common import split_frontmatter
 
-    content = {"adr.md": {"# Alternatives considered"}, "api.md": {"# Contract", "# Main operations", "# Examples"},
+    content = {"adr.md": {"# Alternatives considered"}, "decision.md": {"# Alternatives considered"}, "api.md": {"# Contract", "# Main operations", "# Examples"},
                "domain-profile.md": {"# Types", "## Client Meeting"},
                "reference.md": {"# Summary", "# Key points for this project"},
                "architecture-view.md": {"# View", "# Elements"}, "computation.md": {"# Computation"},

@@ -27,7 +27,7 @@ knowledge/
   fragments/
   base/
     profile.md
-    architecture/  decisions/  domain/  systems/  apis/  data/
+    architecture/  decisions/ (architecture/)  domain/  systems/  apis/  data/
     metrics/  computations/  runbooks/  playbooks/  policies/  references/
     questions/
   projections/
@@ -41,7 +41,8 @@ The root holds only `index.md`, `log.md`, `project.md`, `conflict-log.md` (creat
 |---|---|---|
 | Project | root | `<skills>/okf-standard/templates/project.md` |
 | Architecture View | base/architecture/ | `<skills>/okf-standard/templates/architecture-view.md` |
-| Architecture Decision | base/decisions/ (`ADR-NNNN-slug.md`) | `<skills>/okf-standard/templates/adr.md` |
+| Decision | base/decisions/ (`DEC-NNNN-slug.md`) | `<skills>/okf-standard/templates/decision.md` |
+| Architecture Decision | base/decisions/architecture/ (`ADR-NNNN-slug.md`) | `<skills>/okf-standard/templates/adr.md` |
 | Term / Glossary | base/domain/ | `<skills>/okf-standard/templates/term.md` |
 | System | base/systems/ | `<skills>/okf-standard/templates/system.md` |
 | API | base/apis/ | `<skills>/okf-standard/templates/api.md` |

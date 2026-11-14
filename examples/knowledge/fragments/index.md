@@ -10,6 +10,7 @@
 
 * [2026-11-02 · Payments sync: refund events on the Kafka bus](2026-11-02-refund-events-review.md) - A short fictional platform meeting on moving refund events to Kafka, which left open how long refund events must be kept. _(draft)_
 * [2026-11-10 · Closing of Request req-0002](2026-11-10-closing-req-0002.md) - The approved change set that closes Request req-0002 into Demo Payments, one decision per concept of its base. _(draft)_
+* [2026-11-12 · Payments-finance call: who owns the refund dispute export](2026-11-12-dispute-export-ownership.md) - A short fictional call in which payments and finance decided that the payments team owns the refund dispute export and that finance asks for a change to it with a Request. _(draft)_
 
 # Payments Meeting
 

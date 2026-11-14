@@ -10,7 +10,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-02T22:32:48Z }
 
 # Trigger
 
-Messages on the `payments.dlq` topic after a consumer failure. The bus is the one of [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md).
+Messages on the `payments.dlq` topic after a consumer failure. The bus is the one of [ADR-0001](/base/decisions/architecture/ADR-0001-adopt-kafka.md).
 
 # Diagnosis
 

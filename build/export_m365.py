@@ -67,6 +67,8 @@ NEEDS = {
 # A script only one skill ships: another skill that names it points to that skill's copy, so the script adds no
 # companion file to it (okf-distill already carries the 20 the limit allows)
 SCRIPT_HOMES = {"okf_projection.py": "okf-projection"}
+# A template only one skill ships, for the same reason: another skill that names it points to that skill's copy
+TEMPLATE_HOMES = {"decision.md": "okf-capture"}
 MAX_COMPANIONS = 20
 # The built-in Domain Profile goes inside each exported okf_profile.py, so it adds no companion file
 BUILTIN_PROFILE = PLUGIN / "skills" / "okf-standard" / "profiles" / "knowledge-3.0.md"
@@ -124,12 +126,17 @@ def strip_closing(text: str) -> str:
     return text
 
 
+def templates_of(skill: str) -> list[str]:
+    """The templates the skill's M365 copy carries: those it needs, less the ones another skill is the home of."""
+    return [name for name in NEEDS[skill]["templates"] or [] if TEMPLATE_HOMES.get(name, skill) == skill]
+
+
 def ships(skill: str) -> list[str]:
     """What the skill's M365 copy carries besides SKILL.md, as prose fragments."""
     parts = []
     if NEEDS[skill]["scripts"]:
         parts.append("scripts in `scripts/`")
-    if NEEDS[skill]["templates"]:
+    if templates_of(skill):
         parts.append("templates in `templates/`")
     return parts
 
@@ -148,7 +155,10 @@ def rewrite(text: str, skill: str) -> str:
             text = text.replace(f"<skills>/okf-standard/scripts/{script}", f"({home} skill) scripts/{script}")
     # Each M365 skill is self-contained: <skills>/okf-standard/scripts → the skill's own scripts/
     text = text.replace("<skills>/okf-standard/scripts/", "scripts/")
-    if NEEDS[skill]["templates"]:
+    for template, home in TEMPLATE_HOMES.items():
+        if template not in templates_of(skill):
+            text = text.replace(f"<skills>/okf-standard/templates/{template}", f"({home} skill) templates/{template}")
+    if templates_of(skill):
         text = text.replace("<skills>/okf-standard/templates/", "templates/")
     else:
         text = text.replace("<skills>/okf-standard/templates/", "(template carried by the skill that writes that type) templates/")
@@ -206,9 +216,9 @@ def build_skill(skill_src: Path, dst: Path, author: str) -> int:
             shutil.copy2(SCRIPTS / s, dst / "scripts" / s)
             if s == "okf_profile.py":
                 inline_builtin(dst / "scripts" / s)
-    if need["templates"]:
+    if templates_of(skill):
         (dst / "templates").mkdir(exist_ok=True)
-        for name in need["templates"]:
+        for name in templates_of(skill):
             shutil.copy2(TEMPLATES / name, dst / "templates" / name)
     for md in dst.rglob("*.md"):
         md.write_text(rewrite(md.read_text(encoding="utf-8"), skill), encoding="utf-8")

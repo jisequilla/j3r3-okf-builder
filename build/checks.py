@@ -110,6 +110,33 @@ def init_02(tmp: Path) -> None:
     expect(not (k / "decisions").exists(), "init created decisions/ outside base/")
 
 
+def decision_template(tmp: Path) -> None:
+    """templates/decision.md filled in as DEC-0001 of a fresh bundle: its frontmatter whole, lint --strict with no
+    finding, and listed under # Decisions of base/decisions/index.md"""
+    k = tmp / "decision-template" / "knowledge"
+    uv(S / "okf_init.py", "--root", k.parent, *INIT)
+    fill = {"nnnn": "0001", "title": "How we work", "one_sentence_description": "The team works in pairs.",
+            "tags": "team", "actor": "human:test", "now": "2026-11-14T00:00:00Z"}
+    filled = re.sub(r"\{\{(.*?)\}\}", lambda m: fill.get(m.group(1), "Text."), text(REF / "templates" / "decision.md"))
+    rel = "base/decisions/DEC-0001-how-we-work.md"
+    (k / rel).write_text(filled.replace(": ...", ": none."), encoding="utf-8")
+    fm = yaml.safe_load(filled.split("---\n")[1])
+    fm["generated"]["at"] = str(fm["generated"]["at"])
+    want = {"type": "Decision", "title": "DEC-0001: How we work", "description": "The team works in pairs.",
+            "tags": ["decision", "team"], "status": "draft", "decision_id": "DEC-0001", "decision_status": "proposed",
+            "supersedes": None, "superseded_by": None,
+            "generated": {"by": "human:test", "at": "2026-11-14 00:00:00+00:00"}, "sources": []}
+    expect(fm == want, f"decision.md filled in gives the frontmatter {fm}")
+    uv(S / "okf_index.py", k)
+    report = json.loads(uv(S / "okf_lint.py", k, "--strict", "--json", ok=(0, 1)))
+    expect(report["findings"] == [], json.dumps(report["findings"], indent=2))
+    index = (k / "base" / "decisions" / "index.md").read_text(encoding="utf-8")
+    listed = ("# Decisions\n\n* [DEC-0001: How we work](DEC-0001-how-we-work.md) - The team works in pairs. "
+              "_(draft)_\n")
+    expect(listed in index, f"base/decisions/index.md does not list the decision under # Decisions:\n{index}")
+    print("decision.md filled in: decision_id DEC-0001, lint --strict finds nothing, listed under # Decisions")
+
+
 def init_01(tmp: Path) -> None:
     """init 0.1, then lint --strict"""
     root = tmp / "init-0.1"
@@ -147,7 +174,8 @@ def profile_migration(tmp: Path) -> None:
 
 
 def m365(tmp: Path) -> None:
-    """M365 export: within the companion limit, each exported skill self-contained, its okf_migrate.py migrating
+    """M365 export: within the companion limit, okf-capture carrying decision.md and okf-distill pointing to that
+    copy, each exported skill self-contained, its okf_migrate.py migrating
     the knowledge/2.0 fixture, its okf_projection.py checking the example bundle's projection, its okf-init
     shipping a running okf_obsidian.py and its okf-lint reporting the fragment and question codes"""
     run("python3", "build/export_m365.py")
@@ -176,6 +204,15 @@ def m365(tmp: Path) -> None:
     expect("(okf-projection skill) scripts/okf_projection.py" in text(M365 / "okf-distill" / "SKILL.md")
            and not (ROOT / M365 / "okf-distill" / "scripts" / "okf_projection.py").exists(),
            "okf-distill: does not point to okf-projection's okf_projection.py")
+    companions = {skill: len([f for f in (ROOT / M365 / skill).rglob("*") if f.is_file() and f.name != "SKILL.md"])
+                  for skill in ("okf-capture", "okf-distill")}
+    expect("`templates/decision.md`" in text(M365 / "okf-capture" / "SKILL.md")
+           and (ROOT / M365 / "okf-capture" / "templates" / "decision.md").is_file(),
+           "okf-capture: names decision.md but does not ship it")
+    expect("`(okf-capture skill) templates/decision.md`" in text(M365 / "okf-distill" / "SKILL.md")
+           and not (ROOT / M365 / "okf-distill" / "templates" / "decision.md").exists(),
+           "okf-distill: does not point to okf-capture's decision.md")
+    print("companion files", companions, "; okf-capture ships decision.md and okf-distill points to it")
     projection = M365 / "okf-projection" / "scripts" / "okf_projection.py"
     expect((ROOT / projection).is_file(), "okf-projection: does not ship okf_projection.py")
     report = json.loads(uv(projection, EX, "--json"))
@@ -626,7 +663,7 @@ def closing(tmp: Path) -> None:
     print("promoted concepts are drafts with no verified:", ", ".join(promoted))
 
 
-STEPS = {"unit": unit, "init-0.2": init_02, "init-0.1": init_01, "google-fixtures": google_fixtures,
+STEPS = {"unit": unit, "init-0.2": init_02, "decision-template": decision_template, "init-0.1": init_01, "google-fixtures": google_fixtures,
          "migration": migration, "profile-migration": profile_migration, "m365": m365, "copilot": copilot,
          "builtin-profile": builtin_profile, "copies": copies, "m365-agent": m365_agent, "bundles": bundles, "index": index,
          "workflows": workflows, "obsidian-setup": obsidian_setup, "dogfood": dogfood,
