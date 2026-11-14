@@ -76,7 +76,7 @@ from okf_common import (  # noqa: E402
 )
 from okf_lint import Report, _is_fragment, find_tree, kind_of, profile_structure, read_ledger  # noqa: E402
 from okf_migrate import blocks_to_raw, fm_blocks, get_block  # noqa: E402
-from okf_profile import Resolved, canonical_type, resolve_aliases  # noqa: E402
+from okf_profile import Resolved, concept_type, resolve_aliases  # noqa: E402
 
 OPEN_CONFLICT = ("open", "proposed")
 CLOSING_KINDS = ("promote", "conflict", "stays")
@@ -99,7 +99,7 @@ class Bundle:
         return resolve_aliases(self.prof, d.frontmatter or {})
 
     def type_of(self, d: Doc) -> str | None:
-        return canonical_type(self.prof, (d.frontmatter or {}).get("type"))
+        return concept_type(self.prof, d.frontmatter)
 
     def conflict_log(self) -> Doc | None:
         return next((d for d in self.docs if not d.is_reserved and self.type_of(d) == "Conflict Log"), None)
@@ -1092,6 +1092,22 @@ def test_bad_arguments_exit_2(tmp_path, capsys):
         with pytest.raises(SystemExit) as e:
             main([str(k / _REQ), *argv])
         assert e.value.code == 2
+
+
+def test_the_type_of_a_concept_is_read_with_every_alias_resolved(tmp_path, capsys):
+    """The instance's Conflict Log written `tipo: Conflict Log` is found, and the report gives a concept typed
+    `tipo: Term`, or by a value alias, the declared name of its type."""
+    k = _fixture(tmp_path)
+    inst = k / _REQ
+    _edit(k / PROFILE_REL, "kinds:\n",
+          "aliases:\n  fields: { tipo: type }\n  values: [{ from: { clase: guia }, to: { type: Runbook } }]\nkinds:\n")
+    _edit(inst / "conflict-log.md", "\ntype: Conflict Log\n", "\ntipo: Conflict Log\n")
+    _edit(inst / "base/domain/dual-approval.md", "\ntype: Term\n", "\ntipo: Term\n")
+    _edit(inst / "base/runbooks/refund-retry.md", "\ntype: Runbook\n", "\nclase: guia\n")
+    assert load_bundle(inst).conflict_log().rel == "conflict-log.md"
+    code, rep = _report(capsys, inst)
+    assert code == 0 and rep["concepts"] == _EXPECTED_CONCEPTS
+    assert [c["id"] for c in rep["conflicts"]] == ["C-001"]
 
 
 if __name__ == "__main__":

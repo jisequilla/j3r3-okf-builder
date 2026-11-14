@@ -105,7 +105,7 @@ from okf_common import (  # noqa: E402
     walk_bundle,
 )
 from okf_profile import (BUILTIN, DOMAIN_BUNDLE, DOMAIN_PROFILE, IGNORED_20_NOTICE, OWN_REL, PROFILE_KEYS,  # noqa: E402
-                         SPEC_KEYS, Resolved, _lvl, alias_keys, ancestors, bundle_path, canonical_kind, canonical_type,
+                         SPEC_KEYS, Resolved, _lvl, alias_keys, ancestors, bundle_path, canonical_kind, concept_type,
                          concept_force, families_at, format_in_force, ignored_in_20, in_force, is_a, kind_in_force,
                          load_profile, misplaced, operational_kinds, prefix_in_force, resolve_aliases)
 
@@ -672,7 +672,7 @@ def check_layers(docs: list[Doc], rep: Report, prof: Resolved | None = None,
     for d in docs:
         parts = d.rel.split("/")
         if len(parts) == 1:
-            t = canonical_type(prof, (d.frontmatter or {}).get("type"))
+            t = concept_type(prof, d.frontmatter)
             if d.is_reserved or (d.rel == "project.md" and t == "Project") or t == "Conflict Log":
                 continue
             rep.error("PROFILE_OUTSIDE_LAYER", d.rel,
@@ -774,7 +774,7 @@ def _citing(d: Doc, layered: bool, prof: Resolved | None) -> bool:
     a log.md or a fragment."""
     if d.is_reserved or d.rel.startswith(FRAGMENTS_DIR + "/"):
         return False
-    if canonical_type(prof, (d.frontmatter or {}).get("type")) == "Conflict Log":
+    if concept_type(prof, d.frontmatter) == "Conflict Log":
         return True
     return d.rel.startswith(BASE_DIR + "/") if layered else d.rel != "project.md"
 
@@ -1259,13 +1259,13 @@ def mask_secrets(text: str) -> str:
 
 
 def _validator_paths(v: dict, docs: list[Doc], prof: Resolved) -> list[str]:
-    """The concepts a validator covers, as paths from the bundle root: those whose type (an alias resolved) is
+    """The concepts a validator covers, as paths from the bundle root: those whose type (every alias resolved) is
     or extends one of its types, or that a family it names covers; every concept when it names neither."""
     out = []
     for d in docs:
         if d.is_reserved or not d.frontmatter:
             continue
-        t = str(canonical_type(prof, d.frontmatter.get("type")))
+        t = str(concept_type(prof, d.frontmatter))
         by_type = any(is_a(prof, t, x) for x in v.get("types") or [])
         by_family = any(("/" + d.rel).startswith(f if f.endswith("/") else f + "/") for f in v.get("families") or [])
         if by_type or by_family or not (v.get("types") or v.get("families")):
@@ -1482,7 +1482,7 @@ def check_bundle_kind(bundle: Path, fm: dict, prof: Resolved, tree: Tree | None,
                 rep.error("CLOSED_LOOSE_END", q, "a closed bundle holds an open question: answer or drop it, or carry it "
                           "up into the parent with a link back (standard §2.2)")
             for d in docs:
-                if canonical_type(prof, (d.frontmatter or {}).get("type")) == "Conflict Log":
+                if concept_type(prof, d.frontmatter) == "Conflict Log":
                     n = _open_conflicts(d)
                     if n:
                         rep.error("CLOSED_LOOSE_END", d.rel, f"a closed bundle holds {n} open or proposed conflict"
@@ -1623,9 +1623,9 @@ def lint(bundle: Path, profile: bool = True, version: str = "auto",
             rep.error("PROFILE_NO_PROJECT", "project.md", "knowledge/project.md with type: Project is missing (profile §7.4)")
         else:
             d = by_path.get(proj.resolve())
-            if d and d.frontmatter and canonical_type(prof, d.frontmatter.get("type")) != "Project":
+            if d and d.frontmatter and concept_type(prof, d.frontmatter) != "Project":
                 rep.error("PROFILE_PROJECT_TYPE", "project.md", "project.md must have type: Project")
-        typed = [(d, canonical_type(prof, d.frontmatter.get("type"))) for d in docs if d.frontmatter and not d.is_reserved]
+        typed = [(d, concept_type(prof, d.frontmatter)) for d in docs if d.frontmatter and not d.is_reserved]
         types = [t for _, t in typed]
         if types.count("Project") > 1:
             rep.error("PROFILE_MANY_PROJECTS", "project.md", "more than one concept has type: Project")
@@ -4778,6 +4778,103 @@ def test_without_a_30_domain_profile_in_force_every_name_keeps_the_one_rule(tmp_
     assert _name_findings(k) == [("WARN", "NAME_KEBAB", rel, _KEBAB_MSG) for rel in (
         "base/decisions/DEC-0001-how-we-work.md", "base/decisions/standard/Bad_Name.md",
         "base/decisions/standard/SDR-0001-format.md")]
+
+
+# --- every check that asks for a concept's type reads it with the aliases resolved (concept_type) ---
+_TIPO_KEY = "aliases:\n  fields: { tipo: type }\n"
+_OPEN_ROW = "| C-1 | [M](/fragments/2026-10-31-meeting.md) | D | fact | | open | |\n"
+
+
+def _as_tipo(text: str, line: str = "tipo: ") -> str:
+    """The concept with its `type:` key written as the local key `tipo:`, or its whole type line replaced by `line`."""
+    assert "\ntype: " in text
+    head, _, rest = text.partition("\ntype: ")
+    return head + "\n" + (line + rest if line.endswith(": ") else line + rest.partition("\n")[2])
+
+
+def _tipo_bundle(tmp_path: Path, keys: str = _TIPO_KEY, log: str = "tipo: ") -> Path:
+    """A clean knowledge/3.0 bundle whose Domain Profile gives the type key the local name `tipo`, with project.md
+    written `tipo: Project` and the Conflict Log at the root typed by the line given."""
+    k = _profiled(tmp_path, keys)
+    _write(k, "project.md", _as_tipo((k / "project.md").read_text(encoding="utf-8")))
+    _write(k, "conflict-log.md", _as_tipo(_CONFLICT_LOG, log))
+    return k
+
+
+def _of(rep: Report, code: str) -> list:
+    return [(i["level"], i["path"], i["message"]) for i in rep.items if i["code"] == code]
+
+
+def test_the_project_and_the_conflict_log_typed_under_a_local_key_name_may_live_at_the_root(tmp_path):
+    k = _tipo_bundle(tmp_path / "key")
+    assert "\ntipo: Project\n" in (k / "project.md").read_text(encoding="utf-8")
+    assert "\ntipo: Conflict Log\n" in (k / "conflict-log.md").read_text(encoding="utf-8")
+    assert _of(lint(k)[0], "PROFILE_OUTSIDE_LAYER") == []
+    # a value alias that gives the type is read the same
+    value = "aliases:\n  fields: { tipo: type }\n  values: [{ from: { clase: conflictos }, to: { type: Conflict Log } }]\n"
+    k = _tipo_bundle(tmp_path / "value", value, "clase: conflictos\n")
+    assert "type" not in (k / "conflict-log.md").read_text(encoding="utf-8").partition("\n---\n")[0]
+    assert _of(lint(k)[0], "PROFILE_OUTSIDE_LAYER") == []
+    # another type at the root is still outside the layers
+    _write(k, "refund.md", _as_tipo(_term()))
+    assert _of(lint(k)[0], "PROFILE_OUTSIDE_LAYER") == [
+        ("ERROR", "refund.md", "profile knowledge/3.0: a concept at the root must live in base/ or fragments/")]
+
+
+def test_project_md_typed_under_a_local_key_name_is_the_project(tmp_path):
+    k = _tipo_bundle(tmp_path)
+    assert _of(lint(k)[0], "PROFILE_PROJECT_TYPE") == []
+    _write(k, "project.md", (k / "project.md").read_text(encoding="utf-8").replace("tipo: Project", "tipo: Term"))
+    assert _of(lint(k)[0], "PROFILE_PROJECT_TYPE") == [("ERROR", "project.md", "project.md must have type: Project")]
+
+
+def test_two_projects_typed_under_a_local_key_name_are_counted(tmp_path):
+    k = _with_term(_tipo_bundle(tmp_path), _as_tipo(_term(t="Project")))
+    assert _of(lint(k)[0], "PROFILE_MANY_PROJECTS") == [
+        ("ERROR", "project.md", "more than one concept has type: Project")]
+
+
+def test_two_conflict_logs_typed_under_a_local_key_name_are_counted(tmp_path):
+    """The bundle that passed lint --strict before the type was read: two Conflict Logs under base/, both written
+    `tipo: Conflict Log`, and none at the root."""
+    k = _profiled(tmp_path, _TIPO_KEY)
+    (k / "conflict-log.md").unlink()
+    index = k / "index.md"
+    index.write_text(index.read_text(encoding="utf-8").replace("* [Conflicts](conflict-log.md) - Conflicts.\n", ""),
+                     encoding="utf-8")
+    for rel in ("base/conflict-log-a.md", "base/conflict-log-b.md"):
+        _with_term(k, _as_tipo(_CONFLICT_LOG), rel)
+    assert [(i["level"], i["code"], i["path"], i["message"]) for i in lint(k)[0].items] == [
+        ("ERROR", "PROFILE_MANY_CONFLICT_LOGS", "conflict-log.md",
+         "more than one concept has type: Conflict Log (base/conflict-log-a.md, base/conflict-log-b.md)")]
+
+
+def test_fragment_uncited_counts_a_conflict_log_typed_under_a_local_key_name(tmp_path):
+    k = _distilled_bundle(tmp_path)
+    _with_term(k, _domain_profile(_TIPO_KEY), "base/profile.md")
+    assert [p for _, p, _ in _of(lint(k)[0], "FRAGMENT_UNCITED")] == [_FRAGMENT]
+    _write(k, "conflict-log.md", _as_tipo(_CONFLICT_LOG) + _OPEN_ROW)
+    rep = lint(k)[0]
+    assert _of(rep, "FRAGMENT_UNCITED") == []
+    assert [i["code"] for i in rep.items] == ["FRAGMENT_NO_LEDGER"], rep.items  # cited, but no ledger
+
+
+def test_a_type_scoped_validator_covers_a_concept_typed_under_a_local_key_name(tmp_path):
+    keys = _TIPO_KEY + "validator:\n  - { name: fragments, types: [Knowledge Fragment], command: \"sh check.sh\" }\n"
+    k = _profiled(tmp_path, keys, _as_tipo(_concept("Knowledge Fragment", _FRAGMENT_FIELDS)),
+                  extra={"base/questions/q.md": _concept("Open Question", _QUESTION_FIELDS)})
+    (k / "check.sh").write_text('printf "%s\\n" "$@" > ran.txt\n', encoding="utf-8")
+    assert lint(k, validators=True)[0].items == []
+    assert (k / "ran.txt").read_text(encoding="utf-8").splitlines() == [_FRAGMENT]
+
+
+def test_an_open_conflict_of_a_closed_instance_is_found_in_a_conflict_log_typed_under_a_local_key_name(tmp_path):
+    closed = "kind: Request\nstate: closed\nparent: ../..\nclosed_at: 2026-11-10T09:00:00Z\n"
+    k = _tree_bundle(tmp_path / "knowledge", kind_dirs=("requests",), profile=_KINDS_PROFILE + _TIPO_KEY)
+    _tree_bundle(k / "requests/req-1", closed, extra={
+        "conflict-log.md": _as_tipo(_CONFLICT_LOG) + "| C-1 | x | D | fact | | open | |\n"})
+    _list_instances(k / "requests")
+    assert _rule16(lint(k)[0]) == [("CLOSED_LOOSE_END", "requests/req-1/conflict-log.md")]
 
 
 if __name__ == "__main__":
