@@ -107,7 +107,7 @@ from okf_common import (  # noqa: E402
 from okf_profile import (BUILTIN, DOMAIN_BUNDLE, DOMAIN_PROFILE, IGNORED_20_NOTICE, OWN_REL, PROFILE_KEYS,  # noqa: E402
                          SPEC_KEYS, Resolved, _lvl, alias_keys, ancestors, bundle_path, canonical_kind, canonical_type,
                          concept_force, families_at, format_in_force, ignored_in_20, in_force, is_a, kind_in_force,
-                         load_profile, misplaced, operational_kinds, resolve_aliases)
+                         load_profile, misplaced, operational_kinds, prefix_in_force, resolve_aliases)
 
 
 OUTDATED_NOTICE = f"profile {PROFILE_20} is outdated: run okf_migrate.py --profile {PROFILE_30}"
@@ -242,6 +242,26 @@ def check_log(doc: Doc, rep: Report) -> None:
         rep.warn("LOG_ORDER", doc.rel, "log dates must go from newest to oldest")
 
 
+PLAIN_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*\.md$")
+PREFIXED_NAME_RE = re.compile(r"^([A-Z]{2,5})-\d{4}-[a-z0-9]+(-[a-z0-9]+)*\.md$")
+
+
+def name_problem(name: str, prefix: str | None) -> str | None:
+    """What is wrong with a concept's file name, None when it passes (profile §2). prefix: the one its type has in
+    force under knowledge/3.0, None for a type that is not a Decision and for any other profile; without one, the
+    name is kebab-case with an optional ADR-NNNN-. With one, the name is plain kebab-case or <prefix>-NNNN-<kebab>."""
+    if prefix is None:
+        return None if KEBAB_RE.match(name) else "file name is not ASCII kebab-case (profile §2)"
+    if PLAIN_NAME_RE.match(name):
+        return None
+    m = PREFIXED_NAME_RE.match(name)
+    if not m:
+        return "file name is not ASCII kebab-case (profile §2)"
+    if m.group(1) == prefix:
+        return None
+    return f"file name starts with {m.group(1)}-, not the prefix {prefix} its type declares (§4.1)"
+
+
 def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datetime, version: str = "0.2",
                   pname: str = PROFILE_20, prof: Resolved | None = None, forces: dict | None = None) -> None:
     """One concept: the spec-level checks, then, when prof is given, the Domain Profile in force for its type
@@ -368,8 +388,12 @@ def check_concept(doc: Doc, bundle: Path, rep: Report, profile: bool, now: datet
         finally:
             rep.scope = None
 
-    if profile and not KEBAB_RE.match(doc.path.name):
-        rep.warn("NAME_KEBAB", doc.rel, "file name is not ASCII kebab-case (profile §2)")
+    if profile:
+        prefix = (prefix_in_force(prof, str(t)) if prof is not None and pname == PROFILE_30 and t is not None
+                  and str(t).strip() else None)
+        problem = name_problem(doc.path.name, prefix)
+        if problem:
+            rep.warn("NAME_KEBAB", doc.rel, problem)
 
     for link in extract_links(doc.body):
         target = resolve_link(bundle, doc, link)
@@ -4587,6 +4611,98 @@ def test_what_an_instance_ignores_is_reported_with_its_path(tmp_path):
     (k / "requests/req-1/drafts").mkdir()
     (k / "requests/req-1/drafts/x.md").write_text("plain\n", encoding="utf-8")
     assert lint(k)[0].ignored == ["requests/req-1/drafts/"]
+
+
+_SDR_TYPE = ("  Standard Decision: { extends: Decision, description: A decision about the standard, "
+             "directory: /base/decisions/standard/, prefix: SDR }\n")
+_KEBAB_MSG = "file name is not ASCII kebab-case (profile §2)"
+
+
+def _decision(t: str) -> str:
+    return f"---\ntype: {t}\ntitle: D\ndescription: D.\n{_TGEN}---\n\n# Context\n\nText.\n"
+
+
+def _decisions_bundle(tmp_path: Path, concepts: dict, types: str = _SDR_TYPE, aliases: str = "") -> Path:
+    """Bundle D of okf-056: a knowledge/3.0 bundle whose Domain Profile declares Standard Decision (prefix SDR),
+    plus the concepts given as {path: type}."""
+    return _tree_bundle(tmp_path / "knowledge", profile="types:\n" + types + aliases,
+                        extra={rel: _decision(t) for rel, t in concepts.items()})
+
+
+def _name_findings(k: Path, **kw) -> list:
+    return sorted((i["level"], i["code"], i["path"], i["message"]) for i in lint(k, **kw)[0].items
+                  if i["code"] == "NAME_KEBAB")
+
+
+_D = {"base/decisions/DEC-0001-how-we-work.md": "Decision",
+      "base/decisions/architecture/ADR-0001-use-kafka.md": "Architecture Decision",
+      "base/decisions/standard/SDR-0001-format.md": "Standard Decision"}
+
+
+def test_a_decision_named_with_the_prefix_its_type_declares_passes(tmp_path):
+    assert _name_findings(_decisions_bundle(tmp_path, _D)) == []
+
+
+def test_a_decision_named_with_the_prefix_of_another_type_is_reported(tmp_path):
+    k = _decisions_bundle(tmp_path, {**_D, "base/decisions/SDR-0002-x.md": "Decision"})
+    assert _name_findings(k) == [("WARN", "NAME_KEBAB", "base/decisions/SDR-0002-x.md",
+                          "file name starts with SDR-, not the prefix DEC its type declares (§4.1)")]
+
+
+def test_a_decision_of_a_type_with_its_own_prefix_named_adr_is_reported(tmp_path):
+    k = _decisions_bundle(tmp_path, {**_D, "base/decisions/standard/ADR-0003-x.md": "Standard Decision",
+                                     "base/decisions/ADR-0007-x.md": "Decision"})
+    assert _name_findings(k) == [
+        ("WARN", "NAME_KEBAB", "base/decisions/ADR-0007-x.md",
+         "file name starts with ADR-, not the prefix DEC its type declares (§4.1)"),
+        ("WARN", "NAME_KEBAB", "base/decisions/standard/ADR-0003-x.md",
+         "file name starts with ADR-, not the prefix SDR its type declares (§4.1)")]
+
+
+def test_a_decision_named_in_plain_kebab_case_passes(tmp_path):
+    k = _decisions_bundle(tmp_path, {"base/decisions/how-we-decide.md": "Decision",
+                                     "base/decisions/architecture/adopt-kafka.md": "Architecture Decision"})
+    assert _name_findings(k) == []
+
+
+def test_a_type_that_extends_a_decision_type_inherits_its_prefix(tmp_path):
+    types = _SDR_TYPE + "  Product ADR: { extends: Architecture Decision, description: A product decision }\n"
+    k = _decisions_bundle(tmp_path, {"base/decisions/architecture/ADR-0004-x.md": "Product ADR",
+                                     "base/decisions/architecture/DEC-0004-x.md": "Product ADR"}, types=types)
+    assert _name_findings(k) == [("WARN", "NAME_KEBAB", "base/decisions/architecture/DEC-0004-x.md",
+                          "file name starts with DEC-, not the prefix ADR its type declares (§4.1)")]
+
+
+def test_a_concept_that_is_not_a_decision_keeps_the_adr_prefix_and_no_other(tmp_path):
+    k = _decisions_bundle(tmp_path, {"base/systems/ADR-0005-x.md": "System", "base/systems/SDR-0005-x.md": "System",
+                                     "base/systems/billing.md": "System", "base/systems/ADR-0006-y.md": "Nonsuch"})
+    assert _name_findings(k) == [("WARN", "NAME_KEBAB", "base/systems/SDR-0005-x.md", _KEBAB_MSG)]
+
+
+def test_a_decision_name_that_is_neither_plain_nor_prefix_and_four_digits_is_not_kebab_case(tmp_path):
+    names = ("DEC-1-x.md", "DEC-00001-x.md", "Dec-0001-x.md")
+    k = _decisions_bundle(tmp_path, {f"base/decisions/{n}": "Decision" for n in names})
+    assert _name_findings(k) == sorted(("WARN", "NAME_KEBAB", f"base/decisions/{n}", _KEBAB_MSG) for n in names)
+
+
+def test_an_aliased_decision_type_has_the_prefix_of_the_type_it_names(tmp_path):
+    k = _decisions_bundle(tmp_path, {"base/decisions/DEC-0006-x.md": "Decisión",
+                                     "base/decisions/SDR-0006-x.md": "Decisión"},
+                          aliases="aliases:\n  types:\n    Decisión: Decision\n")
+    assert _name_findings(k) == [("WARN", "NAME_KEBAB", "base/decisions/SDR-0006-x.md",
+                          "file name starts with SDR-, not the prefix DEC its type declares (§4.1)")]
+
+
+def test_without_a_30_domain_profile_in_force_every_name_keeps_the_one_rule(tmp_path):
+    concepts = {**_D, "base/decisions/ADR-0007-x.md": "Decision", "base/decisions/standard/Bad_Name.md": "Decision"}
+    k = _decisions_bundle(tmp_path, concepts)
+    assert _name_findings(k, profile=False) == []  # --no-profile: the name is not checked at all
+    index = k / "index.md"
+    index.write_text(index.read_text(encoding="utf-8").replace(PROFILE_30, PROFILE_20), encoding="utf-8")
+    assert _name_findings(k, profile=False) == []
+    assert _name_findings(k) == [("WARN", "NAME_KEBAB", rel, _KEBAB_MSG) for rel in (
+        "base/decisions/DEC-0001-how-we-work.md", "base/decisions/standard/Bad_Name.md",
+        "base/decisions/standard/SDR-0001-format.md")]
 
 
 if __name__ == "__main__":
