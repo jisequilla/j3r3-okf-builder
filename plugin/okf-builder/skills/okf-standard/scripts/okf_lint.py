@@ -83,7 +83,6 @@ from okf_common import (  # noqa: E402
     detect_version,
     KEBAB_RE,
     LAYER_DIRS,
-    LINK_RE,
     PROFILE_20,
     PROFILE_30,
     VALID_STATUS,
@@ -93,6 +92,8 @@ from okf_common import (  # noqa: E402
     content_lines,
     declared_profile,
     extract_links,
+    link_spans,
+    link_target,
     find_bundle,
     is_iso,
     is_iso_date_or_datetime,
@@ -848,22 +849,37 @@ def concept_cell(cell: str, bundle: Path, doc: Doc) -> str:
     m = _NO_CONCEPT_RE.fullmatch(c)
     if m:
         return "ok" if m.group(1).strip() else "gap"
-    if not LINK_RE.search(c) or not _LINK_SEP_RE.fullmatch(LINK_RE.sub("", c)):
+    spans = link_spans(c)
+    if not spans or not _LINK_SEP_RE.fullmatch(_unlinked(c, lambda span: "")):
         return "gap"
     root = bundle.resolve()
     broken = False
-    for lm in LINK_RE.finditer(c):
-        target = resolve_link(bundle, doc, lm.group(2))
+    for span in spans:
+        target = resolve_link(bundle, doc, link_target(c, span.target))
         if target is None or not target.is_relative_to(root):
             return "gap"
         broken = broken or not target.exists()
     return "broken" if broken else "ok"
 
 
+def _unlinked(text: str, keep) -> str:
+    """text with each of its links (link_spans) replaced by keep(span)."""
+    out, i = [], 0
+    for span in link_spans(text):
+        out += [text[i:span.start], keep(span)]
+        i = span.end
+    return "".join(out) + text[i:]
+
+
+def _as_text(text: str) -> str:
+    """text with each link, image and linked image replaced by its text, a link inside that text included."""
+    return _unlinked(text, lambda span: _as_text(text[span.text_start:span.text_end]))
+
+
 def _plain(text: str) -> str:
     """Text as a reader names it: links as their text, without emphasis or code marks, lower case, single spaces,
     without trailing punctuation."""
-    t = LINK_RE.sub(lambda m: m.group(1), text)
+    t = _as_text(text)
     t = re.sub(r"[*_`]", "", t).lower()
     return re.sub(r"\s+", " ", t).strip().rstrip(".:;,").strip()
 
@@ -3554,6 +3570,27 @@ def test_a_ledger_link_that_does_not_resolve_is_only_a_broken_link_and_does_not_
     k = _ledger(_distilled_bundle(tmp_path), "| A refund | addition | applied | [Gone](/base/domain/gone.md) |\n")
     assert [(i["code"], i["path"]) for i in lint(k)[0].items] == [("BROKEN_LINK", _FRAGMENT),
                                                                  ("FRAGMENT_UNCITED", _FRAGMENT)]
+
+
+def test_lint_reads_every_inline_link_commonmark_defines_an_image_included(tmp_path):
+    k = _bundle_30(tmp_path)
+    (k / "base" / "img(1).png").write_bytes(b"")
+    forms = ("[a \\] b](/base/gone-1.md) ![i](/base/gone-2.png) [![i](/base/gone-3.png)](/base/gone-4.md) "
+             "[t](</base/gone 5.md> 'T') [n](/base/gone-6.md\n\"T\") ![ok](/base/img\\(1\\).png)\n\n"
+             "not links: \\[esc](/base/no-1.md) [cut](/base/no-2.md and [p](/base/no-3.md (a (b) c))\n")
+    f = k / _FRAGMENT
+    f.write_text(f.read_text(encoding="utf-8") + "\n" + forms, encoding="utf-8")
+    broken = [i["message"].rsplit(": ", 1)[1] for i in lint(k)[0].items if i["code"] == "BROKEN_LINK"]
+    assert broken == ["/base/gone-1.md", "/base/gone-2.png", "/base/gone-3.png", "/base/gone-4.md",
+                      "/base/gone 5.md", "/base/gone-6.md"]
+
+
+def test_a_ledger_cell_and_item_read_their_links_as_commonmark_defines_them(tmp_path):
+    rows = ("| A refund | addition | applied | [Refund \\] term](/base/domain/refund.md) |\n"
+            "| [Retention](/base/domain/refund.md 'T') | addition | applied | "
+            "[![i](https://example.com/i.png)](/base/domain/refund.md) |\n")
+    k = _ledger(_distilled_bundle(tmp_path), rows, record="## A refund\n\nText.\n\n## Retention\n\nText.\n")
+    assert lint(k)[0].items == []
 
 
 def test_a_ledger_link_must_be_a_bundle_link(tmp_path):

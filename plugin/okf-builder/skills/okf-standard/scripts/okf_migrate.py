@@ -367,7 +367,6 @@ def append_log(log_path: Path, to: str, n: int, entry: str | None = None) -> Non
 # --------------------------------------------------------------------------
 ROOT_KEEP = {"index.md", "log.md", "project.md"}
 EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:")
-MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)")
 RESOURCE_RE = re.compile(r"(\bresource\s*:\s*)([\"']?)([^\s\"',}\]]+)")
 PATH_KEYS = {"supersedes", "superseded_by"}
 SOURCE_KEYS = {"sources"}
@@ -467,7 +466,8 @@ def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
 
 
 def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
-    """Rewrite the body links, the sources[].resource and the PATH_KEYS values of one .md,
+    """Rewrite the target of each inline link of the body (okf_common.inline_links), the sources[].resource and
+    the PATH_KEYS values of one .md,
     keeping every other byte."""
     def sub(m: re.Match, group: int) -> str:
         new = move.target(m.group(group), doc_rel)
@@ -493,7 +493,11 @@ def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
                     value, hash_, comment = lines[i][start:].partition(" #")
                     lines[i] = lines[i][:start] + PATH_VALUE_RE.sub(lambda m: sub(m, 2), value) + hash_ + comment
             body_start = end + 1
-    body = MD_LINK_RE.sub(lambda m: sub(m, 2), "\n".join(lines[body_start:]))
+    body = "\n".join(lines[body_start:])
+    for link in reversed(inline_links(body)):
+        new = move.target(body[link.start:link.end], doc_rel)
+        if new is not None:
+            body = body[:link.start] + new + body[link.end:]
     return "\n".join([*lines[:body_start], body])
 
 
@@ -2377,12 +2381,12 @@ def test_inline_links_gives_the_exact_span_of_each_target_commonmark_defines():
 
 
 _PROFILE_FORMS = ("[q]({abs}decisions/ADR-0001-x.md \"a \\\" b\"), [n]({abs}decisions/ADR-0001-x.md\n\"T\"), "
-                  "[c]({rel}decisions/ADR-0001-x.md\n), [p]({abs}decisions/ADR-0001-x.md (a (b) c)), "
-                  "[s]({abs}decisions/ADR-0001-x.md 'X'),\n[cut]({abs}decisions/ADR-0001-x.md, "
-                  "![img]({rel}decisions/ADR-0001-x.md) and \\[esc]({abs}decisions/ADR-0001-x.md);\n"
-                  "left as written: [angle](</decisions/ADR-0001-x.md>), [[ADR-0001]](/decisions/ADR-0001-x.md), "
-                  "[a \\] b](/decisions/ADR-0001-x.md) and [![i](a.png)](/decisions/ADR-0001-x.md).\n")
-_PROFILE_FORMS_ADR = "[up]({up}project.md\n\"T\"), [in](ADR-0001-x.md 'X') and [angle](<../project.md>).\n"
+                  "[c]({rel}decisions/ADR-0001-x.md\n), [s]({abs}decisions/ADR-0001-x.md 'X'),\n![img]({rel}decisions/ADR-0001-x.md), "
+                  "[angle](<{abs}decisions/ADR-0001-x.md>), [[ADR-0001]]({abs}decisions/ADR-0001-x.md), "
+                  "[a \\] b]({abs}decisions/ADR-0001-x.md) and [![i](a.png)]({abs}decisions/ADR-0001-x.md);\n"
+                  "left as written: [cut](/decisions/ADR-0001-x.md, [p](/decisions/ADR-0001-x.md (a (b) c)) and "
+                  "\\[esc](/decisions/ADR-0001-x.md).\n")
+_PROFILE_FORMS_ADR = "[up]({up}project.md\n\"T\"), [in](ADR-0001-x.md 'X') and [angle](<{up}project.md>).\n"
 
 
 def _profile_forms(k: Path) -> dict[str, str]:
@@ -2395,10 +2399,10 @@ def _profile_forms(k: Path) -> dict[str, str]:
     return {rel: (k / rel).read_text(encoding="utf-8") for rel in (frag, "base/" + adr)}
 
 
-def test_profile_step_rewrites_the_links_main_rewrote_and_no_other(tmp_path):
-    """What okf_migrate.py of main 54ff9d0 writes for these links, byte for byte: the profile step keeps its own
-    reading of a link (MD_LINK_RE), which is not the one --move-decisions uses."""
-    assert MD_LINK_RE.pattern == r"(!?\[[^\]]*\]\()([^)\s]+)"
+def test_profile_step_rewrites_every_inline_link_commonmark_defines_and_no_other(tmp_path):
+    """The profile step reads a link as --move-decisions does (okf_common.inline_links): an angle-bracket target, a
+    link text holding brackets and a linked image are rewritten; a parenthesis never closed, a title in parentheses
+    that holds one and an escaped opening bracket are not links and stay as written."""
     keys = "occurred_at: 2026-10-31\norigin: Weekly\nparticipants: [human:alice]\ndistillation_status: pending\n"
     assert _profile_forms(_bundle_20(tmp_path)) == {
         "fragments/2026-10-31-f.md": _concept("Knowledge Fragment", "F", keys,

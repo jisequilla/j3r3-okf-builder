@@ -61,11 +61,11 @@ from okf_common import (  # noqa: E402
     ACTOR_RE,
     BASE_DIR,
     FRAGMENTS_DIR,
-    LINK_RE,
     PROFILE_REL,
     TABLE_SEP_RE,
     Doc,
     as_list,
+    extract_links,
     is_iso,
     now_iso,
     resolve_link,
@@ -323,7 +323,7 @@ def check_fragment(inst: Bundle, parent: Bundle, fragment: str, items: list[dict
         kind = re.sub(r"[*_`]", "", cells[1] if len(cells) > 1 else "").strip().lower()
         if kind not in CLOSING_KINDS:
             plan.fail(2, fragment, f"ledger row '{row.item}' has Kind '{kind}', not promote, conflict or stays")
-        targets = [resolve_link(parent.root, doc, m.group(2)) for m in LINK_RE.finditer(row.concept)]
+        targets = [resolve_link(parent.root, doc, t) for t in extract_links(row.concept)]
         mine = [bpath(parent.root, t) for t in targets if under(t, base)]
         got |= set(mine)
         if kind != "promote":
@@ -395,8 +395,8 @@ def plan_closing(inst: Bundle, parent: Bundle | None, fragment: str, carries: di
             continue
         used.add(r.id)
         pr = prows.get(target)
-        links = [resolve_link(parent.root, plog, m.group(2)) for cell in (pr.get("source"), pr.get("description"))
-                 for m in LINK_RE.finditer(cell)] if pr is not None else []
+        links = [resolve_link(parent.root, plog, t) for cell in (pr.get("source"), pr.get("description"))
+                 for t in extract_links(cell)] if pr is not None else []
         if pr is None or pr.state != "open":
             plan.fail(4, r.id, f"carried to {target}, which is no open row of the parent's Conflict Log")
         elif not any(under(t, inst.root) for t in links):
@@ -421,8 +421,8 @@ def plan_closing(inst: Bundle, parent: Bundle | None, fragment: str, carries: di
             if not (d.rel.startswith(FRAGMENTS_DIR + "/") and _is_fragment(fm, inst.prof)
                     and fm.get("distillation_status") == "conflict"):
                 continue
-            mine = [r for r in rows if any(resolve_link(inst.root, log, m.group(2)) == d.path.resolve()
-                                           for m in LINK_RE.finditer(r.get("source")))]
+            mine = [r for r in rows if any(resolve_link(inst.root, log, t) == d.path.resolve()
+                                           for t in extract_links(r.get("source")))]
             if not any(r.id in carried_ids for r in mine):
                 continue
             text = d.path.read_text(encoding="utf-8")
