@@ -6,8 +6,8 @@ tags: [runbook, release, m365, copilot]
 status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T10:56:14Z }
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:14Z }, { by: human:jisequilla, at: 2026-11-14T17:39:45Z }]
 ---
 
 # Steps
@@ -29,7 +29,7 @@ verified: { by: human:jisequilla, at: 2026-11-09T10:56:14Z }
 
 # Knowledge in M365
 
-M365 Copilot reads `knowledge/` from its one source ([ADR-0014](/base/decisions/ADR-0014-knowledge-repository-storage.md)):
+M365 Copilot reads `knowledge/` from its one source ([SDR-0008](/base/decisions/standard/SDR-0008-knowledge-repository-storage.md)):
 
 - Git source: connect the repository with the GitHub Cloud Knowledge connector, which indexes `.md` and keeps GitHub permissions. M365 only reads; changes go back by PR.
 - SharePoint source: add the library as a knowledge source of the agent. `.md` is not a documented SharePoint knowledge file type, so check in the tenant that Copilot answers from it.

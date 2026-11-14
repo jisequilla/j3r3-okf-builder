@@ -48,6 +48,6 @@ The concept's `generated.at` was 2026-11-13T19:59:06Z when the answer was applie
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| The first version, commit 0b203f6 | — | not confirmed | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
-| The second version, commit 4b9b97b | — | not confirmed | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
-| The third version, commit 9ca00b7 | — | verified | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
+| The first version, commit 0b203f6 | — | not confirmed | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
+| The second version, commit 4b9b97b | — | not confirmed | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
+| The third version, commit 9ca00b7 | — | verified | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |

@@ -6,11 +6,11 @@ resource: /.claude/workflows/okf-layer-ticket.js
 tags: [doctrine, agents, workflow, process]
 status: stable
 owner: human:jisequilla
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-11T18:21:33Z }
-verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:26Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }]
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
+verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:26Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-14T17:30:26Z }]
 sources:
-  - { id: adr-0009, resource: /base/decisions/ADR-0009-build-in-layers-and-tickets.md, title: "ADR-0009: Build multi-stage changes in layers and delegated tickets" }
-  - { id: adr-0028, resource: /base/decisions/ADR-0028-where-things-go.md, title: "ADR-0028: Where things go" }
+  - { id: adr-0009, resource: /base/decisions/DEC-0002-build-in-layers-and-tickets.md, title: "DEC-0002: Build multi-stage changes in layers and delegated tickets" }
+  - { id: adr-0028, resource: /base/decisions/DEC-0003-where-things-go.md, title: "DEC-0003: Where things go" }
   - { id: runbook, resource: /base/runbooks/build-in-layers.md, title: Build a change in layers }
   - { id: s-a1, resource: /fragments/2026-11-04-audit-build-session.md, title: "2026-11-04 session: A1 merged" }
   - { id: s-lost, resource: /fragments/2026-11-04-audit-build-session.md, title: "2026-11-04 session: Ticket files lost" }
@@ -55,14 +55,14 @@ A principle that becomes a decision is an ADR, which this doctrine then links; a
 
 * [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md)
 * [Build a change in layers](/base/runbooks/build-in-layers.md)
-* [ADR-0009: Build multi-stage changes in layers and delegated tickets](/base/decisions/ADR-0009-build-in-layers-and-tickets.md)
-* [ADR-0028: Where things go](/base/decisions/ADR-0028-where-things-go.md)
+* [DEC-0002: Build multi-stage changes in layers and delegated tickets](/base/decisions/DEC-0002-build-in-layers-and-tickets.md)
+* [DEC-0003: Where things go](/base/decisions/DEC-0003-where-things-go.md)
 * [2026-11-04 · Building the knowledge audit and v0.9.0 with agent workflows](/fragments/2026-11-04-audit-build-session.md)
 * [2026-11-06 · Building the Obsidian viewer setup (okf-ov8) with an agent workflow](/fragments/2026-11-06-obsidian-viewer-build.md)
 * [2026-11-10 · How two other repos build with agents, and what this repo takes from them](/fragments/2026-11-10-build-lessons-from-two-repos.md)
 
-[^adr-0009]: ADR-0009, Context and Decision.
-[^adr-0028]: ADR-0028, decisions 7 and 8.
+[^adr-0009]: DEC-0002, Context and Decision.
+[^adr-0028]: DEC-0003, decisions 7 and 8.
 [^runbook]: Build a change in layers, Warnings.
 [^s-a1]: The 2026-11-04 session, "A1 merged".
 [^s-lost]: The 2026-11-04 session, "Ticket files lost".

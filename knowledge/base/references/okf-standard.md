@@ -5,10 +5,10 @@ description: Normative document of the profile; its source is the okf-standard s
 resource: /plugin/okf-builder/skills/okf-standard/references/OKF-STANDARD.md
 tags: [reference, standard]
 status: stable
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T10:56:39Z }
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:39Z }, { by: human:jisequilla, at: 2026-11-14T17:34:05Z }]
 ---
 
 # Summary
 
-Defines the structure of `knowledge/`, frontmatter, type vocabulary, reserved files, lifecycle, conformance and consumption by agents. It is the document that [ADR-0001](/base/decisions/ADR-0001-adopt-google-okf.md) to [ADR-0004](/base/decisions/ADR-0004-dual-support-v01-v02.md) and [ADR-0025](/base/decisions/ADR-0025-verification-recorded-by-question.md) elaborate. Its source is the okf-standard skill; the root `standard/OKF-STANDARD.md` is generated from it by `just copies` and nobody edits it ([ADR-0028](/base/decisions/ADR-0028-where-things-go.md) decision 2).
+Defines the structure of `knowledge/`, frontmatter, type vocabulary, reserved files, lifecycle, conformance and consumption by agents. It is the document that [SDR-0001](/base/decisions/standard/SDR-0001-adopt-google-okf.md) to [SDR-0004](/base/decisions/standard/SDR-0004-dual-support-v01-v02.md) and [SDR-0018](/base/decisions/standard/SDR-0018-verification-recorded-by-question.md) elaborate. Its source is the okf-standard skill; the root `standard/OKF-STANDARD.md` is generated from it by `just copies` and nobody edits it ([DEC-0003](/base/decisions/DEC-0003-where-things-go.md) decision 2).

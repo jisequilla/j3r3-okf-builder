@@ -20,7 +20,7 @@ Give any agent the instructions to create, maintain, validate, query and migrate
 | Skill | Typical triggers | Uses |
 |---|---|---|
 | okf-standard | "what is OKF", "which type do I use", "0.1 vs 0.2" | references/, templates/ |
-| okf-init | "initialize OKF", "create knowledge", "open the knowledge in Obsidian" | okf_init.py, okf_lint.py, okf_obsidian.py ([ADR-0032](/base/decisions/ADR-0032-obsidian-viewer-setup.md)) |
+| okf-init | "initialize OKF", "create knowledge", "open the knowledge in Obsidian" | okf_init.py, okf_lint.py, okf_obsidian.py ([ADR-0032](/base/decisions/architecture/ADR-0032-obsidian-viewer-setup.md)) |
 | okf-capture | "document this decision", "create a runbook" | templates, okf_index.py, okf_lint.py, okf_migrate.py --file |
 | okf-fragment | "capture this meeting", "save this transcript" | templates/fragment.md, okf_index.py, okf_lint.py, okf_migrate.py --file |
 | okf-distill | "distill this fragment", "what does this meeting change" | concept templates, templates/conflict-log.md, okf_index.py, okf_lint.py, okf_migrate.py --file, okf_projection.py --json |
@@ -29,11 +29,11 @@ Give any agent the instructions to create, maintain, validate, query and migrate
 | okf-index | "regenerate indexes" | okf_index.py |
 | okf-ask | "why did we decide…?" | progressive reading of index.md |
 | okf-migrate | "migrate to 0.2", "export for 0.1" | okf_migrate.py |
-| okf-projection | "create a projection", "refresh the projections", "which projections are stale" | okf_projection.py ([ADR-0031](/base/decisions/ADR-0031-projection-tools-transient-exception.md)) |
+| okf-projection | "create a projection", "refresh the projections", "which projections are stale" | okf_projection.py ([ADR-0031](/base/decisions/architecture/ADR-0031-projection-tools-transient-exception.md)) |
 
 # Agent
 
-`agents/knowledge-architect.md` is the [knowledge architect](/base/roles/knowledge-architect.md) as a plugin agent. It preloads all 11 skills, has no `tools` field, and its body names no Claude tools, so `just m365` can turn it into the M365 declarative agent, which carries the subset of at most 8 skills chosen in `build/m365-agent.json` ([ADR-0017](/base/decisions/ADR-0017-agent-skills-per-platform.md)).
+`agents/knowledge-architect.md` is the [knowledge architect](/base/roles/knowledge-architect.md) as a plugin agent. It preloads all 11 skills, has no `tools` field, and its body names no Claude tools, so `just m365` can turn it into the M365 declarative agent, which carries the subset of at most 8 skills chosen in `build/m365-agent.json` ([ADR-0017](/base/decisions/architecture/ADR-0017-agent-skills-per-platform.md)).
 
 # Dependencies
 

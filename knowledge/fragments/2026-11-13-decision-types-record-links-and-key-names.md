@@ -11,7 +11,7 @@ distillation_status: distilled
 repository: { url: https://github.com/jisequilla/j3r3-okf-builder, commit: "acdb5ed1135b35ffa0fecb8c13db341c81845b2b" }
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-13T20:19:44Z }
 sources:
-  - { id: adr-0040, resource: /base/decisions/ADR-0040-decision-types.md, title: "ADR-0040: A decision is a Decision" }
+  - { id: adr-0040, resource: /base/decisions/standard/SDR-0025-decision-types.md, title: "ADR-0040: A decision is a Decision" }
 ---
 
 # Record
@@ -78,9 +78,9 @@ formerly: ADR-0033
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| The request and the measurements | Addition | applied | [ADR-0041](/base/decisions/ADR-0041-decision-types-record-links-and-keys.md) |
+| The request and the measurements | Addition | applied | [ADR-0041](/base/decisions/standard/SDR-0026-decision-types-record-links-and-keys.md) |
 | The proposed layers | — | not distilled | tracker |
-| The owner's answers | Addition | applied | [ADR-0041](/base/decisions/ADR-0041-decision-types-record-links-and-keys.md) |
-| The owner's answers | Refutation | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
+| The owner's answers | Addition | applied | [ADR-0041](/base/decisions/standard/SDR-0026-decision-types-record-links-and-keys.md) |
+| The owner's answers | Refutation | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
 
 [^adr-0040]: ADR-0040, decision 7, last sentence.

@@ -41,9 +41,9 @@ The prefixes `SDR` and `DEC` appear in the questions only as examples; the owner
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| The question on what "decision card" names | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
-| The question on whether the 29 existing files move | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
+| The question on what "decision card" names | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
+| The question on whether the 29 existing files move | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
 | The question on the uncommitted files | — | context | no concept (logistics of this session) |
-| The prefixes named only as examples | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
+| The prefixes named only as examples | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
 
 [^first]: The first fragment, section "What was left open".

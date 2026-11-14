@@ -42,10 +42,10 @@ sources:
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
 | What was compared | — | context | no concept (context of the comparison) |
-| Fragment type, fields, file name and sections | conflict with ADR-0012 | applied: new ADR supersedes it | [ADR-0015](/base/decisions/ADR-0015-fragment-format-and-conflict-log.md), [C-001](/conflict-log.md) |
-| One conflict register per bundle | conflict with ADR-0012 | applied | [ADR-0015](/base/decisions/ADR-0015-fragment-format-and-conflict-log.md), [C-002](/conflict-log.md) |
-| `okf-fragment`, `okf-distill`, `okf-review` as separate skills | conflict with ADR-0012 | applied | [ADR-0015](/base/decisions/ADR-0015-fragment-format-and-conflict-log.md), [C-003](/conflict-log.md) |
-| M365 agent leaves out `okf-migrate` | update of ADR-0013's skill list, within its 8-skill cap | applied | [ADR-0015](/base/decisions/ADR-0015-fragment-format-and-conflict-log.md) |
+| Fragment type, fields, file name and sections | conflict with ADR-0012 | applied: new ADR supersedes it | [ADR-0015](/base/decisions/standard/SDR-0009-fragment-format-and-conflict-log.md), [C-001](/conflict-log.md) |
+| One conflict register per bundle | conflict with ADR-0012 | applied | [ADR-0015](/base/decisions/standard/SDR-0009-fragment-format-and-conflict-log.md), [C-002](/conflict-log.md) |
+| `okf-fragment`, `okf-distill`, `okf-review` as separate skills | conflict with ADR-0012 | applied | [ADR-0015](/base/decisions/standard/SDR-0009-fragment-format-and-conflict-log.md), [C-003](/conflict-log.md) |
+| M365 agent leaves out `okf-migrate` | update of ADR-0013's skill list, within its 8-skill cap | applied | [ADR-0015](/base/decisions/standard/SDR-0009-fragment-format-and-conflict-log.md) |
 | KDD knowledge in its own monorepo; neutral repository names | addition | pending: outside this bundle's scope, tracked as work items | tracker |
 
 [^kdd-structure]: KDD bundle, directories, custom types and fields.

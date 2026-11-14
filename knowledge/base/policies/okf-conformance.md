@@ -6,15 +6,15 @@ tags: [policy, conformance]
 status: stable
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:36:30Z }
-verified: [{ by: human:jisequilla, at: 2026-11-07T08:43:17Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }, { by: human:jisequilla, at: 2026-11-08T21:39:09Z }, { by: human:jisequilla, at: 2026-11-09T10:56:31Z }]
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T08:43:17Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }, { by: human:jisequilla, at: 2026-11-08T21:39:09Z }, { by: human:jisequilla, at: 2026-11-09T10:56:31Z }, { by: human:jisequilla, at: 2026-11-14T16:26:32Z }]
 sources:
   - id: standard
     resource: /base/references/okf-standard.md
     title: OKF standard, profile knowledge/3.0
   - id: adr-0033
-    resource: /base/decisions/ADR-0033-verification-recorded-by-question-or-review-page.md
-    title: "ADR-0033: An agent writes a person's verification only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept and version"
+    resource: /base/decisions/standard/SDR-0022-verification-recorded-by-question-or-review-page.md
+    title: "SDR-0022: An agent writes a person's verification only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept and version"
 ---
 
 # Scope
@@ -37,4 +37,4 @@ sources:
 `just lint` (`okf_lint --strict` on `knowledge/` and `examples/knowledge`) after every change; `okf-capture` always finishes with lint.
 
 [^standard]: OKF standard, profile knowledge/3.0: §2, §4.1 and §7.
-[^adr-0033]: ADR-0033, decision 4.
+[^adr-0033]: SDR-0022, decision 4.

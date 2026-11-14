@@ -41,5 +41,5 @@ To how a kind directory's `index.md` lists its instances, with the options a sta
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
 | The drafting | — | context | no concept (measurements kept in the tickets of okf-4j8, okf-3vg.3, okf-3vg.5 and okf-3vg.6) |
-| The owner's answers | Addition | applied | [ADR-0039](/base/decisions/ADR-0039-closing-operational-bundles.md) |
-| The owner's answers | Deprecation | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
+| The owner's answers | Addition | applied | [ADR-0039](/base/decisions/standard/SDR-0024-closing-operational-bundles.md) |
+| The owner's answers | Deprecation | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |

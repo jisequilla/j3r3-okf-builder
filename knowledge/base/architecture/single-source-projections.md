@@ -40,4 +40,4 @@ flowchart LR
 
 # Related decisions
 
-* [ADR-0007](/base/decisions/ADR-0007-single-source-and-projections.md)
+* [ADR-0007](/base/decisions/architecture/ADR-0007-single-source-and-projections.md)

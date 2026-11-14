@@ -14,7 +14,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T01:20:04Z }
 
 # Record
 
-The round okf-lyg.12 was answered on a review page private to the owner, under [ADR-0033](/base/decisions/ADR-0033-verification-recorded-by-question-or-review-page.md) decision 4. The page was first built at commit `0df7cb6` (2026-11-09T00:38:10Z) and rebuilt at `a0d54f7` (2026-11-09T01:16:00Z), after the owner decided that only a change to the plugin raises its version and that the marketplace manifest keeps its own; the rebuild changed ADR-0036 and the agents policy. On 2026-11-09 in the agent session the owner said "ok i confirm this round on the claude artifact". The agent then read the stored answers and compared each one's `generated_at` with the concept's: three match and are applied; the agents policy's answer was given for `generated.at` 2026-11-09T00:34:52Z, while the policy is at 2026-11-09T01:15:20Z, so it is kept here and not applied.
+The round okf-lyg.12 was answered on a review page private to the owner, under [ADR-0033](/base/decisions/standard/SDR-0022-verification-recorded-by-question-or-review-page.md) decision 4. The page was first built at commit `0df7cb6` (2026-11-09T00:38:10Z) and rebuilt at `a0d54f7` (2026-11-09T01:16:00Z), after the owner decided that only a change to the plugin raises its version and that the marketplace manifest keeps its own; the rebuild changed ADR-0036 and the agents policy. On 2026-11-09 in the agent session the owner said "ok i confirm this round on the claude artifact". The agent then read the stored answers and compared each one's `generated_at` with the concept's: three match and are applied; the agents policy's answer was given for `generated.at` 2026-11-09T00:34:52Z, while the policy is at 2026-11-09T01:15:20Z, so it is kept here and not applied.
 
 The agent told the owner so; the owner answered the policy again on the page, for its current version, and said "i also confirmed the rule". The agent read that answer and applied it:
 
@@ -35,7 +35,7 @@ The stored answers, as the page's store held them when read (collection `answers
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| ADR-0034 | — | verified | [ADR-0034](/base/decisions/ADR-0034-organization-package.md) |
-| ADR-0035 | — | verified | [ADR-0035](/base/decisions/ADR-0035-just-build-runner.md) |
-| ADR-0036 | — | verified | [ADR-0036](/base/decisions/ADR-0036-release-please.md) |
+| ADR-0034 | — | verified | [ADR-0034](/base/decisions/architecture/ADR-0034-organization-package.md) |
+| ADR-0035 | — | verified | [ADR-0035](/base/decisions/DEC-0004-just-build-runner.md) |
+| ADR-0036 | — | verified | [ADR-0036](/base/decisions/DEC-0005-release-please.md) |
 | Rules for agents working in this repo | — | verified (second answer; the first was for an earlier version) | [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md) |

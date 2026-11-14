@@ -51,10 +51,10 @@ The agent answered that the draft distilled only a closing fragment, which loses
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| Two kinds of bundle, domain and operational, generic | addition | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
-| Kinds defined in the domain bundle's `base/`, instances next to the layers | addition | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
-| Root `index.md` holds `kind`, `state`, `parent`, `depends_on`; no `lifecycle`, no `okf.yaml` | addition | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
-| Nesting, distilling one level up, frozen or extracted | addition | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
-| Closing distills the instance's whole `base/` up; no loose ends at close | addition | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
-| Lint recurses; frozen checked by `okf-review` | addition | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
+| Two kinds of bundle, domain and operational, generic | addition | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
+| Kinds defined in the domain bundle's `base/`, instances next to the layers | addition | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
+| Root `index.md` holds `kind`, `state`, `parent`, `depends_on`; no `lifecycle`, no `okf.yaml` | addition | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
+| Nesting, distilling one level up, frozen or extracted | addition | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
+| Closing distills the instance's whole `base/` up; no loose ends at close | addition | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
+| Lint recurses; frozen checked by `okf-review` | addition | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
 | Repository-level manifest | — | pending: tracked as a work item (okf-e2k) | tracker |
