@@ -5,8 +5,10 @@ Requires PyYAML. The entry scripts declare it in PEP 723 metadata, so
 """
 from __future__ import annotations
 
+import bisect
 import os
 import re
+import string
 import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -387,6 +389,167 @@ def content_lines(lines: list[str]) -> list[str]:
 
 def extract_links(body: str) -> list[str]:
     return [m.group(2) for m in LINK_RE.finditer(body)]
+
+
+# --------------------------------------------------------------------------
+# Inline links as CommonMark defines them (okf_migrate.py --move-decisions; lint reads LINK_RE)
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class InlineLink:
+    start: int  # text[start:end] is the target as written, without the angle brackets of a <target>
+    end: int
+    image: bool  # ![text](target)
+
+
+_PUNCT = frozenset(string.punctuation)
+_BLANK_LINE_RE = re.compile(r"(?:\r\n|\n|\r(?!\n))[ \t]*(?=[\r\n])")
+
+
+def _escaped(text: str, i: int, limit: int) -> bool:
+    """text[i] is a backslash that escapes the ASCII punctuation character after it."""
+    return text[i] == "\\" and i + 1 < limit and text[i + 1] in _PUNCT
+
+
+def _after_code_span(text: str, i: int, limit: int) -> int:
+    """i is at a run of backticks: the index after the run of the same length that closes the code span, or after
+    the opening run when none closes it before limit."""
+    n = i
+    while n < limit and text[n] == "`":
+        n += 1
+    j = n
+    while True:
+        j = text.find("`", j, limit)
+        if j < 0:
+            return n
+        k = j
+        while k < limit and text[k] == "`":
+            k += 1
+        if k - j == n - i:
+            return k
+        j = k
+
+
+def _link_text_end(text: str, i: int, limit: int) -> int:
+    """i is just after the '[' of a link text: the index of the ']' that closes it, or -1. Brackets inside it are
+    balanced or escaped, and a code span is read whole."""
+    depth = 1
+    while i < limit:
+        c = text[i]
+        if _escaped(text, i, limit):
+            i += 2
+            continue
+        if c == "`":
+            i = _after_code_span(text, i, limit)
+            continue
+        if c == "[":
+            depth += 1
+        elif c == "]":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def _after_space(text: str, i: int, limit: int) -> int:
+    """The index after spaces, tabs and at most one line ending."""
+    while i < limit and text[i] in " \t":
+        i += 1
+    if i < limit and text[i] in "\r\n":
+        i += 2 if text.startswith("\r\n", i) else 1
+        while i < limit and text[i] in " \t":
+            i += 1
+    return i
+
+
+def _link_tail(text: str, i: int, limit: int) -> tuple[int, int, int] | None:
+    """i is just after the '(' that follows a link text: (target start, target end, index after the closing ')'),
+    or None when what follows is not a target, an optional title and a ')'."""
+    i = _after_space(text, i, limit)
+    if i < limit and text[i] == "<":
+        j = i + 1
+        while j < limit and text[j] not in "<>\r\n":
+            j += 2 if _escaped(text, j, limit) else 1
+        if j >= limit or text[j] != ">":
+            return None
+        start, end, i = i + 1, j, j + 1
+    else:
+        start, depth = i, 0
+        while i < limit:
+            c = text[i]
+            if _escaped(text, i, limit):
+                i += 2
+                continue
+            if c <= " " or c == "\x7f":
+                break
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                if depth == 0:
+                    break
+                depth -= 1
+            i += 1
+        if depth:
+            return None
+        end = i
+    j = _after_space(text, i, limit)
+    if i < j < limit and text[j] in "\"'(":
+        opener = text[j]
+        closer = ")" if opener == "(" else opener
+        k = j + 1
+        while k < limit and text[k] != closer:
+            if _escaped(text, k, limit):
+                k += 2
+                continue
+            if opener == "(" and text[k] == "(":
+                return None
+            k += 1
+        if k >= limit:
+            return None
+        j = _after_space(text, k + 1, limit)
+    return (start, end, j + 1) if j < limit and text[j] == ")" else None
+
+
+def inline_links(text: str) -> list[InlineLink]:
+    """The inline links and images of a Markdown text as CommonMark defines them, in the order of their targets:
+    `[text](target)`, `![text](target)` and a linked image `[![text](inner)](outer)`, which gives both targets. The
+    link text has its brackets balanced or escaped and reads a code span whole; the target is written plain (no
+    space, its parentheses balanced or escaped) or in angle brackets; a title follows in "...", '...' or (...),
+    with escapes; the title and the closing parenthesis may lie on the following line. A `[text](target` that is
+    never closed is not a link, nor is a link text or a title that crosses a blank line, an opening bracket that is
+    escaped, or a link whose text holds another link (the inner one is the link). A reference-style definition
+    (`[ref]: target`) is not an inline link. A link written inside a code span or a fenced code block is read as
+    one, as LINK_RE reads it: the text is not split into blocks."""
+    blanks = [m.start() for m in _BLANK_LINE_RE.finditer(text)]
+
+    def scan(i: int, end: int) -> list[InlineLink]:
+        found: list[InlineLink] = []
+        while i < end:
+            if _escaped(text, i, end):
+                i += 2
+                continue
+            image = text[i] == "!" and text.startswith("[", i + 1)
+            if text[i] != "[" and not image:
+                i += 1
+                continue
+            first = i + image + 1
+            k = bisect.bisect_left(blanks, first)
+            limit = min(end, blanks[k]) if k < len(blanks) else end
+            close = _link_text_end(text, first, limit)
+            tail = _link_tail(text, close + 2, limit) if close >= 0 and text.startswith("(", close + 1) else None
+            if tail is None or close + 1 >= limit:
+                i = first
+                continue
+            inner = scan(first, close)
+            if not image and any(not link.image for link in inner):
+                found += inner
+                i = close + 1
+                continue
+            found += [*inner, InlineLink(tail[0], tail[1], image)]
+            i = tail[2]
+        return found
+
+    return sorted(scan(0, len(text)), key=lambda link: link.start)
 
 
 def resolve_link(bundle: Path, doc: Doc, target: str) -> Path | None:

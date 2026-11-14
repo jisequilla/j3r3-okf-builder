@@ -660,6 +660,16 @@ def prefix_in_force(r: Resolved, t: str) -> str | None:
     return None
 
 
+def directory_in_force(r: Resolved, t: str) -> str | None:
+    """The directory of the concepts of type t: the one it declares, else that of the nearest type it extends that
+    declares one. None when neither t nor a type it extends declares one."""
+    for x in (t, *ancestors(r, t)):
+        d = (r.types.get(x) or {}).get("directory")
+        if d:
+            return d
+    return None
+
+
 def _check_prefixes(r: Resolved) -> None:
     """Only a type that is a Decision declares a prefix, and no two types declare the same one (PROFILE_INVALID)."""
     declared: dict = {}
@@ -1500,6 +1510,36 @@ def test_a_type_that_extends_architecture_decision_takes_the_adr_prefix(tmp_path
     r = _on_the_shipped_builtin(tmp_path, "types:\n  Product ADR: { extends: Architecture Decision, description: d }\n")
     assert r.findings == []
     assert prefix_in_force(r, "Product ADR") == "ADR" and prefix_in_force(r, "Term") is None
+
+
+_PRODUCT_ADR = "  Product ADR: { extends: Architecture Decision, description: d }\n"
+
+
+def test_a_type_that_declares_a_directory_has_it_in_force(tmp_path):
+    r = _on_the_shipped_builtin(tmp_path, _SDR)
+    assert r.findings == []
+    assert {t: directory_in_force(r, t) for t in ("Decision", "Architecture Decision", "Standard Decision", "Term")} == {
+        "Decision": "/base/decisions/", "Architecture Decision": "/base/decisions/architecture/",
+        "Standard Decision": "/base/decisions/standard/", "Term": "/base/domain/"}
+
+
+def test_a_type_without_a_directory_takes_the_one_of_the_nearest_type_it_extends_that_declares_one(tmp_path):
+    own = ("types:\n" + _PRODUCT_ADR + "  Product Rule: { extends: Product ADR, description: d }\n"
+           "  Team Decision: { extends: Decision, description: d, prefix: TD }\n"
+           "  Client Meeting: { extends: Knowledge Fragment, description: d }\n")
+    r = _on_the_shipped_builtin(tmp_path, own)
+    assert r.findings == []
+    assert {t: (r.types[t].get("directory"), directory_in_force(r, t)) for t in r.types if t not in STANDARD_TYPE_NAMES} == {
+        "Product ADR": (None, "/base/decisions/architecture/"), "Product Rule": (None, "/base/decisions/architecture/"),
+        "Team Decision": (None, "/base/decisions/"), "Client Meeting": (None, "/fragments/")}
+
+
+def test_a_type_with_no_directory_in_the_types_it_extends_has_none_in_force(tmp_path):
+    own = "types:\n  Note: { description: d }\n  Side Note: { extends: Note, description: d }\n"
+    r = _on_the_shipped_builtin(tmp_path, own)
+    assert r.findings == []
+    assert {t: directory_in_force(r, t) for t in ("Log", "Domain Profile", "Note", "Side Note", "No Such Type")} == {
+        "Log": None, "Domain Profile": None, "Note": None, "Side Note": None, "No Such Type": None}
 
 
 def test_a_prefix_that_is_not_2_to_5_capital_letters_is_invalid(tmp_path):
