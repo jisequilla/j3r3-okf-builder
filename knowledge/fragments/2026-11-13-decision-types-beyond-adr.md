@@ -11,7 +11,7 @@ distillation_status: distilled
 repository: { url: https://github.com/jisequilla/j3r3-okf-builder, commit: "4687f3b2894769cdd0dc062114745ca35359239a" }
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-13T19:17:33Z }
 sources:
-  - { id: adr-0028, resource: /base/decisions/ADR-0028-where-things-go.md, title: "ADR-0028: Where things go" }
+  - { id: adr-0028, resource: /base/decisions/DEC-0003-where-things-go.md, title: "ADR-0028: Where things go" }
   - { id: standard, resource: plugin/okf-builder/skills/okf-standard/references/OKF-STANDARD.md, title: "OKF standard, §2 (domain and operational bundles), §4 (type vocabulary) and §6 (lifecycle)" }
   - { id: obsidian-script, resource: plugin/okf-builder/skills/okf-standard/scripts/okf_obsidian.py, title: "okf_obsidian.py, the test that declares Product ADR as a local type extending Architecture Decision" }
 ---
@@ -119,12 +119,12 @@ While the agent was capturing this fragment the owner added:
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| The question | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
+| The question | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
 | The question | — | context | no concept (the claim about MADR's name was not checked) |
-| The name is wrong, not the shape | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
-| The 39 ADRs sorted by what each decides | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
-| The owner's conclusion | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
-| What was left open | Addition | applied | [ADR-0040](/base/decisions/ADR-0040-decision-types.md) |
+| The name is wrong, not the shape | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
+| The 39 ADRs sorted by what each decides | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
+| The owner's conclusion | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
+| What was left open | Addition | applied | [ADR-0040](/base/decisions/standard/SDR-0025-decision-types.md) |
 | What was left open | — | not distilled | tracker |
 
 [^adr-0028]: ADR-0028, Context, second paragraph.

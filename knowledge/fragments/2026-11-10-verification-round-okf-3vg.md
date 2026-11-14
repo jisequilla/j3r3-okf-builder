@@ -29,7 +29,7 @@ Each answer's `generated_at` equals the concept's `generated.at` when applied. A
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| ADR-0038 confirmed | — | verified | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
+| ADR-0038 confirmed | — | verified | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
 | Single-source architecture view confirmed | — | verified | [Single source and per-platform packages](/base/architecture/single-source-projections.md) |
 | Doctrine confirmed | — | verified | [Building with agents](/base/doctrine/building-with-agents.md) |
 | Domain Profile confirmed | — | verified | [Domain Profile](/base/profile.md) |

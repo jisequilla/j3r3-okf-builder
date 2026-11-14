@@ -28,4 +28,4 @@ The concept's `generated.at` was 2026-11-13T20:22:13Z when the answer was applie
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| ADR-0041 at commit 7481439 | — | verified | [ADR-0041](/base/decisions/ADR-0041-decision-types-record-links-and-keys.md) |
+| ADR-0041 at commit 7481439 | — | verified | [ADR-0041](/base/decisions/standard/SDR-0026-decision-types-record-links-and-keys.md) |

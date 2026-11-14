@@ -6,13 +6,13 @@ tags: [runbook, process, agents]
 status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-12T21:34:01Z }
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
 verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:18Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-12T21:41:17Z }]
 ---
 
 # Trigger
 
-A change that touches several layers (standard, scripts, skills, `knowledge/`) or more files than one session can review with care. Small fixes, debugging with an unknown cause and unsettled designs do not use this runbook: they are done inline or clarified with the owner first. The decision is in [ADR-0009](/base/decisions/ADR-0009-build-in-layers-and-tickets.md).
+A change that touches several layers (standard, scripts, skills, `knowledge/`) or more files than one session can review with care. Small fixes, debugging with an unknown cause and unsettled designs do not use this runbook: they are done inline or clarified with the owner first. The decision is in [DEC-0002](/base/decisions/DEC-0002-build-in-layers-and-tickets.md).
 
 # Steps
 
@@ -57,4 +57,4 @@ Each ticket is its own PR: revert the merge of the affected PR. If a layer alrea
 # Related
 
 * [Building with agents](/base/doctrine/building-with-agents.md)
-* [ADR-0009: Build multi-stage changes in layers and delegated tickets](/base/decisions/ADR-0009-build-in-layers-and-tickets.md)
+* [DEC-0002: Build multi-stage changes in layers and delegated tickets](/base/decisions/DEC-0002-build-in-layers-and-tickets.md)

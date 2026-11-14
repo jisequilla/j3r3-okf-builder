@@ -14,7 +14,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T05:26:38Z }
 
 # Record
 
-Ticket okf-lyg.2 asked for the OKF scripts as an installable package, so that a repository runs lint at a pinned version without copying the scripts ([ADR-0034](/base/decisions/ADR-0034-organization-package.md) decision 3). The agent spiked it on a copy of the okf-standard skill: a `pyproject.toml` in the skill, the scripts unchanged, `uvx --from <dir> okf-lint` linted this repository's `knowledge/` at 0 errors, loaded the built-in profile and exited 1 on the broken fixture. The owner asked what the package solves; the agent explained that it serves a repository whose CI runs lint without Claude or the plugin.
+Ticket okf-lyg.2 asked for the OKF scripts as an installable package, so that a repository runs lint at a pinned version without copying the scripts ([ADR-0034](/base/decisions/architecture/ADR-0034-organization-package.md) decision 3). The agent spiked it on a copy of the okf-standard skill: a `pyproject.toml` in the skill, the scripts unchanged, `uvx --from <dir> okf-lint` linted this repository's `knowledge/` at 0 errors, loaded the built-in profile and exited 1 on the broken fixture. The owner asked what the package solves; the agent explained that it serves a repository whose CI runs lint without Claude or the plugin.
 
 The owner answered, on 2026-11-09 (the organization's name replaced by "[the organization]", as this repository names no organization):
 
@@ -35,8 +35,8 @@ Then, to structured questions:
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
 | The spike of the installable scripts package | — | context | no concept (the design is kept in ticket okf-lyg.2) |
-| No repository needs lint outside Claude; the package deferred | conflict with ADR-0034 decision 3 | applied: new ADR supersedes it | [ADR-0037](/base/decisions/ADR-0037-organization-distributed-copy.md) |
-| The organization owns its copy, versions it and pulls releases when it chooses | conflict with ADR-0034 decision 2 | applied | [ADR-0037](/base/decisions/ADR-0037-organization-distributed-copy.md) |
-| Lint from the installed plugin, no `okf_tooling` pin | conflict with ADR-0034 decision 3 | applied | [ADR-0037](/base/decisions/ADR-0037-organization-distributed-copy.md) |
-| ADR-0034 decisions 1 (without the package) and 4 kept | update | applied: restated | [ADR-0037](/base/decisions/ADR-0037-organization-distributed-copy.md) |
+| No repository needs lint outside Claude; the package deferred | conflict with ADR-0034 decision 3 | applied: new ADR supersedes it | [ADR-0037](/base/decisions/architecture/ADR-0037-organization-distributed-copy.md) |
+| The organization owns its copy, versions it and pulls releases when it chooses | conflict with ADR-0034 decision 2 | applied | [ADR-0037](/base/decisions/architecture/ADR-0037-organization-distributed-copy.md) |
+| Lint from the installed plugin, no `okf_tooling` pin | conflict with ADR-0034 decision 3 | applied | [ADR-0037](/base/decisions/architecture/ADR-0037-organization-distributed-copy.md) |
+| ADR-0034 decisions 1 (without the package) and 4 kept | update | applied: restated | [ADR-0037](/base/decisions/architecture/ADR-0037-organization-distributed-copy.md) |
 | okf-lyg.2 deferred; the epic's tickets rewritten after the ADR | addition | pending: tracked as work items | tracker |

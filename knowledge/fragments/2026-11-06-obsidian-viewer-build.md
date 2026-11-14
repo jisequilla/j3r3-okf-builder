@@ -39,7 +39,7 @@ Both defects passed the builder's tests and both reviewers: the tests checked th
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
 | Provenance note (written by the agent from its own session) | — | context | no concept (provenance of the record) |
-| The bead predated the vocabulary | Confirmation | applied | [ADR-0032](/base/decisions/ADR-0032-obsidian-viewer-setup.md) |
+| The bead predated the vocabulary | Confirmation | applied | [ADR-0032](/base/decisions/architecture/ADR-0032-obsidian-viewer-setup.md) |
 | An unasked addition, then a question | Confirmation | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
 | The workflow run | Confirmation | applied | [Building with agents](/base/doctrine/building-with-agents.md) |
 | What the tests and reviewers passed | Addition | applied | [Building with agents](/base/doctrine/building-with-agents.md) |

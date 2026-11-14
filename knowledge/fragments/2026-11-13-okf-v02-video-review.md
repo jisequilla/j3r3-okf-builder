@@ -42,8 +42,8 @@ The owner asked:
 
 The agent read the standard, the `okf-ask` skill and the lint script, ran lint on `knowledge/`, and answered that the repo covers four of the five principles and goes further than the video on trust, while attestation is covered in shape only:
 
-- Provenance: `generated: { by, at }` is required on every concept, where the spec leaves it optional, with `sources[]`; fragments keep the event a concept was distilled from ([ADR-0012](/base/decisions/ADR-0012-knowledge-fragments-and-distillation.md)).
-- Trust: the same three tiers as the video, derived from `verified` and never stored ([Trust level](/base/domain/trust-level.md)); an agent writes `verified` with a `human:` actor only from that person's recorded answer naming the concept and its version ([ADR-0033](/base/decisions/ADR-0033-verification-recorded-by-question-or-review-page.md)).
+- Provenance: `generated: { by, at }` is required on every concept, where the spec leaves it optional, with `sources[]`; fragments keep the event a concept was distilled from ([ADR-0012](/base/decisions/standard/SDR-0007-knowledge-fragments-and-distillation.md)).
+- Trust: the same three tiers as the video, derived from `verified` and never stored ([Trust level](/base/domain/trust-level.md)); an agent writes `verified` with a `human:` actor only from that person's recorded answer naming the concept and its version ([ADR-0033](/base/decisions/standard/SDR-0022-verification-recorded-by-question-or-review-page.md)).
 - Freshness: `stale_after` is recommended for runbooks, metrics and policies; lint warns once it has passed and `okf-ask` warns when it answers from a stale concept.
 - Lifecycle: `draft` on creation, `stable` after review, `deprecated` never deleted and linked to its replacement.
 - Attestation: the type `Attested Computation` exists and lint checks its shape (`runtime`, a single `# Computation` block, `okf_lint.py` lines 341 to 350). Nothing runs or verifies a computation.
@@ -99,7 +99,7 @@ What the agent has: the routing table of `okf-distill` step 4, which sorts each 
 Where it is thin:
 
 - Metrics. The only instruction is one line of `okf-capture` (`SKILL.md` line 22: "metric X is computed…" → Metric + Attested Computation if there is sanctioned SQL/code), which `okf-distill` reaches only through "apply with the `okf-capture` rules"; its own routing table never names a metric. Nothing tells the agent to ask who owns a metric, whether a sanctioned computation exists and when it goes stale.
-- Which bundle. No step of `okf-fragment` or `okf-distill` asks whether a fragment belongs to the domain bundle or to an operational instance ([ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md), [ADR-0039](/base/decisions/ADR-0039-closing-operational-bundles.md)); the bundle is the one found upwards from the working directory.
+- Which bundle. No step of `okf-fragment` or `okf-distill` asks whether a fragment belongs to the domain bundle or to an operational instance ([ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md), [ADR-0039](/base/decisions/standard/SDR-0024-closing-operational-bundles.md)); the bundle is the one found upwards from the working directory.
 - Domain distribution is withheld from the agent on purpose: its definition says it does not define domains, the functional architect asks the business questions, and a person decides domains and bounded contexts.
 
 The agent listed what the architect asks today: the owner of an open question the record does not name, the choice between a proposed ADR and an open question, and the approval of each change-set item. It does not ask clarifying business questions; those go back to the functional architect as gaps.

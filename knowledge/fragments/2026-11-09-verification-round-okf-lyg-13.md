@@ -14,7 +14,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-09T10:58:34Z }
 
 # Record
 
-The round okf-lyg.13, ADR-0037 alone, was published on a review page private to the owner, under [ADR-0033](/base/decisions/ADR-0033-verification-recorded-by-question-or-review-page.md) decision 4, built at commit `be9f504` (2026-11-09T05:33:38Z). The page lists every concept of the bundle with its body and `generated.at`, and the owner answered nineteen concepts outside the round as well. On 2026-11-09 in the agent session the owner said "i have answerd some questions, not only this round, but some concepts as well". The agent read the stored answers and kept those given after the last one applied (2026-11-09T01:20:11Z): twenty, each `confirmed`, each for the concept's current `generated.at`, so all are applied. The conformance policy was already verified at that version; the answer is added to its list.
+The round okf-lyg.13, ADR-0037 alone, was published on a review page private to the owner, under [ADR-0033](/base/decisions/standard/SDR-0022-verification-recorded-by-question-or-review-page.md) decision 4, built at commit `be9f504` (2026-11-09T05:33:38Z). The page lists every concept of the bundle with its body and `generated.at`, and the owner answered nineteen concepts outside the round as well. On 2026-11-09 in the agent session the owner said "i have answerd some questions, not only this round, but some concepts as well". The agent read the stored answers and kept those given after the last one applied (2026-11-09T01:20:11Z): twenty, each `confirmed`, each for the concept's current `generated.at`, so all are applied. The conformance policy was already verified at that version; the answer is added to its list.
 
 The stored answers, as the page's store held them when read (collection `answers`, one document per line):
 
@@ -45,7 +45,7 @@ The stored answers, as the page's store held them when read (collection `answers
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| ADR-0037 confirmed (round okf-lyg.13) | verification | applied: `status: stable` | [ADR-0037](/base/decisions/ADR-0037-organization-distributed-copy.md) |
+| ADR-0037 confirmed (round okf-lyg.13) | verification | applied: `status: stable` | [ADR-0037](/base/decisions/architecture/ADR-0037-organization-distributed-copy.md) |
 | Seven domain terms confirmed | verification | applied: `status: stable` | [Actor](/base/domain/actor.md), [Bundle](/base/domain/bundle.md), [Concept](/base/domain/concept.md), [Knowledge profile](/base/domain/knowledge-profile.md), [Platform package](/base/domain/platform-package.md), [Projection](/base/domain/projection.md), [Trust level](/base/domain/trust-level.md) |
 | Three references confirmed | verification | applied: `status: stable` | [OKF compatibility](/base/references/okf-compatibility.md), [Google's OKF spec](/base/references/okf-spec-google.md), [OKF standard](/base/references/okf-standard.md) |
 | Four runbooks confirmed | verification | applied: `status: stable` | [Build in layers](/base/runbooks/build-in-layers.md), [Export platform packages](/base/runbooks/export-projections.md), [Publish a plugin version](/base/runbooks/release-version.md), [Update the upstream spec](/base/runbooks/update-upstream-spec.md) |

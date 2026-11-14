@@ -23,6 +23,7 @@ views:
         - or:
             - "type == \"Decision\""
             - "type == \"Architecture Decision\""
+            - "type == \"Standard Decision\""
     groupBy:
       property: decision_status
       direction: ASC

@@ -9,7 +9,7 @@ generated: { by: okf-builder/claude-opus-5-5, at: 2026-10-31T19:45:00Z }
 
 # How it is used
 
-A conflict comes out of distilling a fragment and is closed by a person ([ADR-0024](/base/decisions/ADR-0024-fragment-capture-field-backfill.md)); an outdated concept nobody disputes is a refutation and opens no conflict. States: `open` · `proposed` · `resolved` · `dismissed` (a misunderstanding).
+A conflict comes out of distilling a fragment and is closed by a person ([ADR-0024](/base/decisions/standard/SDR-0017-fragment-capture-field-backfill.md)); an outdated concept nobody disputes is a refutation and opens no conflict. States: `open` · `proposed` · `resolved` · `dismissed` (a misunderstanding).
 
 # Conflicts
 

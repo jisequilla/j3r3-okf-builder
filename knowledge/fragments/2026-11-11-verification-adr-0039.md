@@ -26,5 +26,5 @@ The answer's `generated_at` equals the concept's `generated.at` when applied. AD
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
-| ADR-0039 confirmed | — | verified | [ADR-0039](/base/decisions/ADR-0039-closing-operational-bundles.md) |
-| ADR-0039 confirmed | Deprecation | applied | [ADR-0038](/base/decisions/ADR-0038-domain-and-operational-bundles.md) |
+| ADR-0039 confirmed | — | verified | [ADR-0039](/base/decisions/standard/SDR-0024-closing-operational-bundles.md) |
+| ADR-0039 confirmed | Deprecation | applied | [ADR-0038](/base/decisions/standard/SDR-0023-domain-and-operational-bundles.md) |
