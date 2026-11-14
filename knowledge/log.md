@@ -1,5 +1,8 @@
 # Bundle history
 
+## 2026-11-14
+* **Update**: the standard, the built-in Domain Profile and `okf_profile.py` gain the type `Decision` (tracker item okf-056.1, first layer of [ADR-0041](/base/decisions/ADR-0041-decision-types-record-links-and-keys.md)): `Decision` has the usual directory `base/decisions/`, the prefix `DEC` and the fields `decision_id`, `formerly`, `decision_status`, `supersedes` and `superseded_by`; `Architecture Decision` extends it, with the usual directory `base/decisions/architecture/`, the prefix `ADR` and `adr_id`; a type that is a `Decision` declares its prefix in the type key `prefix`, 2 to 5 capital letters that no two types share, and `okf-lint --profiles --json` gives each type's prefix; the standard states how a decision is numbered and that a link inside a fragment's `# Record` has only its target rewritten when the concept it points to moves. No concept of this bundle changes: its decisions stay where they are until the later layers.
+
 ## 2026-11-13
 * **Verification**: [ADR-0041](/base/decisions/ADR-0041-decision-types-record-links-and-keys.md) verified by human:jisequilla at commit `7481439`, `generated.at` 2026-11-13T20:22:13Z, in answer to a structured question (ADR-0033), now `status: stable`; the question and the answer kept in [2026-11-13 · Verification of ADR-0041 in a structured question](/fragments/2026-11-13-verification-adr-0041.md).
 * **Creation**: [2026-11-13 · Verification of ADR-0041 in a structured question](/fragments/2026-11-13-verification-adr-0041.md): the structured question and the owner's answer, confirmed.

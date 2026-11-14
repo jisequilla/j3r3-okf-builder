@@ -6,7 +6,7 @@ tags: [adr, {{tags}}]
 status: draft
 adr_id: ADR-{{nnnn}}
 decision_status: proposed        # proposed | accepted | superseded | rejected
-supersedes:                       # /base/decisions/ADR-XXXX-....md
+supersedes:                       # /base/decisions/architecture/ADR-XXXX-....md
 superseded_by:
 generated: { by: {{actor}}, at: {{now}} }
 sources: []

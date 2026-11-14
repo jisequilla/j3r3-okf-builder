@@ -11,14 +11,23 @@ types:
   Architecture View:
     directory: /base/architecture/
     description: Context, containers, components, deployment, principles
-  Architecture Decision:
+  Decision:
     directory: /base/decisions/
-    description: An architecture decision record
+    prefix: DEC
+    description: A record of something decided, with its context, alternatives and consequences
     fields:
-      adr_id: { type: string, note: "ADR-NNNN, the prefix of the file name" }
+      decision_id: { type: string, note: "<PREFIX>-NNNN, the start of the file name" }
+      formerly: { type: string, note: The identifier the decision had before a move }
       decision_status: { type: enum, values: [proposed, accepted, superseded, rejected] }
       supersedes: { type: path, note: The decision this one replaces }
       superseded_by: { type: path, note: The decision that replaces this one }
+  Architecture Decision:
+    extends: Decision
+    directory: /base/decisions/architecture/
+    prefix: ADR
+    description: A decision about how a system is built (ADR)
+    fields:
+      adr_id: { type: string, note: "ADR-NNNN, the start of the file name: its name for decision_id" }
   Term:
     directory: /base/domain/
     description: A business term
@@ -104,7 +113,7 @@ kinds:
 rules:
   - { name: answered-question-names-its-answer, when: { type: Open Question, question_status: answered }, require: [answered_by], level: warn, code: QUESTION_NO_ANSWER }
   - { name: carried-question-names-its-target, when: { type: Open Question, question_status: carried }, require: [carried_to], level: warn, code: QUESTION_NO_CARRIED_TO }
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-11T21:34:17Z }
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T05:13:58Z }
 sources:
   - { id: types, resource: references/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }
   - { id: domain-profile, resource: references/OKF-STANDARD.md, title: "OKF standard §4.1: Domain Profile" }
@@ -151,10 +160,16 @@ No extra fields: the common keys of §3.1 and the body headings of their templat
 
 - `owner`: who answers for the contract, the table, the definition, the procedure or the rule, a team or a person, as a string[^types]. It is not an actor: an actor names who wrote or verified content (OKF spec v0.2 §7) and has no form for a team, so `team:payments` and `human:ann` are both owners[^spec-actor]. `Table` shares its directory with `Dataset`.
 
-## Architecture Decision
+## Decision, Architecture Decision
 
-- `adr_id`, `supersedes`, `superseded_by`: the identity of the decision and the decisions it replaces or that replace it[^types].
+`Decision` holds what every decision shares, and `Architecture Decision` extends it, so it inherits each field below and adds `adr_id`[^types]. A bundle declares its other kinds of decision as local types that extend `Decision`[^domain-profile].
+
+- `decision_id`: the identifier of the decision, `<PREFIX>-NNNN`, the start of its file name[^types].
+- `formerly`: the identifier the decision had before a move, so the old one can still be resolved[^types].
 - `decision_status`: `proposed`, `accepted`, `superseded` or `rejected`[^types].
+- `supersedes`, `superseded_by`: the decision it replaces and the one that replaces it, as bundle paths[^types].
+- `adr_id`: the name an Architecture Decision gives to `decision_id`, `ADR-NNNN`[^types].
+- `prefix`: `DEC` for `Decision` and `ADR` for `Architecture Decision`, the start of the file names of each[^types]. Only a type that is a `Decision` declares one, a type without one takes the prefix of the type it extends, and no two types declare the same[^domain-profile].
 
 ## System
 

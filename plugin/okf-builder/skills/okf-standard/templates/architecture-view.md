@@ -26,4 +26,4 @@ C4Context
 
 # Related decisions
 
-* {{Decision: a link to /base/decisions/ADR-<nnnn>-<slug>.md}}
+* {{Decision: a link to /base/decisions/architecture/ADR-<nnnn>-<slug>.md}}

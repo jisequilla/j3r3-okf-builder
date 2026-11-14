@@ -47,7 +47,9 @@ LEVELS = ("error", "warn")
 RANK = {"warn": 0, "error": 1}
 PROFILE_KEYS = ("extends", "types", "kinds", "families", "forbidden", "fixed", "by_type", "rules", "validator",
                 "questions", "aliases")
-TYPE_KEYS = {"extends", "description", "fields", "directory", "note"}
+TYPE_KEYS = {"extends", "description", "fields", "directory", "prefix", "note"}
+DECISION = "Decision"  # the type every decision type extends; only such a type declares a prefix (standard §4.1)
+PREFIX_RE = re.compile(r"^[A-Z]{2,5}$")
 KIND_KEYS = {"extends", "description", "directory", "states", "holds", "note"}
 OPERATIONAL = "Operational Bundle"  # the abstract kind every operational kind extends (standard §2.2, ADR-0039)
 DOMAIN_BUNDLE = "Domain Bundle"     # the kind a bundle without `kind` is; never declared under kinds
@@ -66,8 +68,8 @@ BUILTIN_LABEL = "<skills>/okf-standard/profiles/knowledge-3.0.md"
 # file an exported package inlines here (build/export_m365.py), and without either falls back to the names of §4
 BUILTIN_PATH = Path(__file__).resolve().parent.parent / "profiles" / "knowledge-3.0.md"
 BUILTIN_TEXT: str | None = None
-STANDARD_TYPE_NAMES = ("Project", "Architecture View", "Architecture Decision", "Term", "Glossary", "System", "API",
-                       "Dataset", "Table", "Metric", "Attested Computation", "Runbook", "Playbook", "Policy",
+STANDARD_TYPE_NAMES = ("Project", "Architecture View", DECISION, "Architecture Decision", "Term", "Glossary", "System",
+                       "API", "Dataset", "Table", "Metric", "Attested Computation", "Runbook", "Playbook", "Policy",
                        "Reference", "Knowledge Fragment", "Open Question", "Conflict Log", DOMAIN_PROFILE, "Log")
 URL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 COMMIT_RE = re.compile(r"^[0-9a-fA-F]{4,40}$")
@@ -224,6 +226,8 @@ def validate_schema(fm: dict) -> list[str]:
                     errs.append(f"types.{tid}: unknown key(s) {', '.join(extra)}")
                 if "extends" in t and not (isinstance(t["extends"], str) and t["extends"].strip()):
                     errs.append(f"types.{tid}.extends: the id of one type")
+                if "prefix" in t and not (isinstance(t["prefix"], str) and PREFIX_RE.fullmatch(t["prefix"])):
+                    errs.append(f"types.{tid}.prefix: 2 to 5 capital letters (SDR)")
                 _check_fields_map(t.get("fields"), f"types.{tid}.fields", errs)
     kinds = fm.get("kinds")
     if kinds is not None:
@@ -387,7 +391,7 @@ class Layer:
 class Resolved:
     """The Domain Profile of a bundle, composed from its layers."""
     sources: list[str] = field(default_factory=list)
-    types: dict = field(default_factory=dict)        # id → { extends, description, fields: {f: def}, source }
+    types: dict = field(default_factory=dict)        # id → { extends, description, directory, prefix, fields, source }
     kinds: dict = field(default_factory=dict)        # id → { extends, description, directory, states, holds, source }
     forbidden: dict = field(default_factory=dict)    # key → { reason, level, code, source }
     fixed: dict = field(default_factory=dict)        # key → { value, level, code, source }
@@ -567,7 +571,8 @@ def load_profile(bundle: Path, read_own: bool | None = None, builtin: Path | Non
             layers.append(Layer(BUILTIN, fm))
             r.builtin_file = True
     if domain is None and not r.builtin_file:
-        layers.append(Layer(BUILTIN, {"types": {n: {} for n in STANDARD_TYPE_NAMES}, "kinds": {OPERATIONAL: {}}}))
+        names = {n: {} for n in STANDARD_TYPE_NAMES} | {"Architecture Decision": {"extends": DECISION}}
+        layers.append(Layer(BUILTIN, {"types": names, "kinds": {OPERATIONAL: {}}}))
     own = bundle / OWN_REL
     if read_own and own.is_file():
         fm, err = _fm_of(own.read_text(encoding="utf-8"))
@@ -641,6 +646,30 @@ def ancestors(r: Resolved, t: str) -> list[str]:
 def is_a(r: Resolved, t: str, base: str) -> bool:
     """t is base or a type that extends it."""
     return t == base or base in ancestors(r, t)
+
+
+def prefix_in_force(r: Resolved, t: str) -> str | None:
+    """The prefix of the file names of type t: its own, else that of the nearest type it extends that declares one."""
+    for x in (t, *ancestors(r, t)):
+        p = (r.types.get(x) or {}).get("prefix")
+        if p:
+            return p
+    return None
+
+
+def _check_prefixes(r: Resolved) -> None:
+    """Only a type that is a Decision declares a prefix, and no two types declare the same one (PROFILE_INVALID)."""
+    declared: dict = {}
+    for tid, t in r.types.items():
+        p = t.get("prefix")
+        if not p:
+            continue
+        if not is_a(r, tid, DECISION):
+            r.add("PROFILE_INVALID", t["source"], f"type '{tid}' declares a prefix but is not a Decision")
+        elif p in declared:
+            r.add("PROFILE_INVALID", t["source"], f"types '{declared[p]}' and '{tid}' share the prefix {p}")
+        else:
+            declared[p] = tid
 
 
 def _subtypes(r: Resolved, t: str) -> list[str]:
@@ -797,6 +826,7 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
                 r.add("PROFILE_REDEFINED", t["source"],
                       f"type '{tid}' declares field '{fid}' again, inherited from '{inherited[fid]['declared_by']}' "
                       f"({inherited[fid]['source']})")
+    _check_prefixes(r)
     _check_kinds(r)
     all_fields = {f: t["source"] for t in r.types.values() for f in t["fields"]}
     for name, a in r.aliases["types"].items():
@@ -1159,7 +1189,8 @@ def in_force(r: Resolved, path: str = "/") -> dict:
         for f in fams:
             for key in ("required", "fixed", "forbidden"):
                 _raise_into(fi[key], f[key])
-        types[t] = {"source": r.types[t]["source"], "extends": r.types[t].get("extends"), **fi}
+        types[t] = {"source": r.types[t]["source"], "extends": r.types[t].get("extends"),
+                    "prefix": prefix_in_force(r, t), **fi}
     return {"path": path, "sources": r.sources, "families": [{"dir": f["dir"], "types": f["types"], "source": f["source"]}
                                                              for f in fams],
             "types_allowed": allowed, "types": types,
@@ -1417,6 +1448,91 @@ def test_the_shipped_builtin_profile_loads_and_matches_section_4():
     assert {k: (e["level"], e["code"]) for k, e in fragment["required"].items()} == {
         k: ("warn", "FRAGMENT_NO_FIELD") for k in ("occurred_at", "origin", "participants", "distillation_status")}
     assert [x["code"] for x in r.rules] == ["QUESTION_NO_ANSWER", "QUESTION_NO_CARRIED_TO"]
+
+
+def _on_the_shipped_builtin(tmp_path: Path, own: str | None = None) -> Resolved:
+    import pytest
+
+    if builtin_text() is None:
+        pytest.skip("no built-in profile beside this script nor inlined in it")
+    return load_profile(_bundle(tmp_path, own))
+
+
+def _invalid(r: Resolved) -> list[str]:
+    assert _codes(r) == ["PROFILE_INVALID"] * len(r.findings), r.findings
+    return [f["message"] for f in r.findings]
+
+
+def _decision_type(r: Resolved, t: str) -> tuple:
+    return (r.types[t].get("extends"), sorted(r.types[t]["fields"]), sorted(type_in_force(r, t)["fields"]),
+            r.types[t].get("directory"), prefix_in_force(r, t))
+
+
+_SDR = ("types:\n  Standard Decision: { extends: Decision, description: d, directory: /base/decisions/standard/, "
+        "prefix: SDR }\n")
+
+
+def test_the_shipped_builtin_profile_declares_decision_and_the_architecture_decision_that_extends_it(tmp_path):
+    r = _on_the_shipped_builtin(tmp_path)
+    shared = ["decision_id", "decision_status", "formerly", "superseded_by", "supersedes"]
+    assert r.findings == []
+    assert _decision_type(r, "Decision") == (None, shared, shared, "/base/decisions/", "DEC")
+    assert _decision_type(r, "Architecture Decision") == ("Decision", ["adr_id"], ["adr_id", *shared],
+                                                          "/base/decisions/architecture/", "ADR")
+
+
+def test_a_local_decision_type_declares_its_prefix(tmp_path):
+    r = _on_the_shipped_builtin(tmp_path, _SDR)
+    assert r.findings == []
+    assert r.types["Standard Decision"]["prefix"] == "SDR" and prefix_in_force(r, "Standard Decision") == "SDR"
+
+
+def test_a_decision_type_without_a_prefix_takes_the_one_of_the_type_it_extends(tmp_path):
+    r = _on_the_shipped_builtin(tmp_path, _SDR.replace(", prefix: SDR", ""))
+    assert r.findings == []
+    assert "prefix" not in r.types["Standard Decision"] and prefix_in_force(r, "Standard Decision") == "DEC"
+
+
+def test_a_type_that_extends_architecture_decision_takes_the_adr_prefix(tmp_path):
+    r = _on_the_shipped_builtin(tmp_path, "types:\n  Product ADR: { extends: Architecture Decision, description: d }\n")
+    assert r.findings == []
+    assert prefix_in_force(r, "Product ADR") == "ADR" and prefix_in_force(r, "Term") is None
+
+
+def test_a_prefix_that_is_not_2_to_5_capital_letters_is_invalid(tmp_path):
+    bad = ("sdr", "S", "SDRXYZ", "12")  # 12 is read as a YAML integer
+    found = {b: _invalid(_on_the_shipped_builtin(tmp_path / b, _SDR.replace("prefix: SDR", f"prefix: {b}"))) for b in bad}
+    assert found == {b: ["types.Standard Decision.prefix: 2 to 5 capital letters (SDR)"] for b in bad}
+
+
+def test_two_types_that_declare_the_same_prefix_are_invalid_naming_both(tmp_path):
+    own = {"SDR": ("types:\n  A: { extends: Decision, description: d, prefix: SDR }\n"
+                   "  B: { extends: Decision, description: d, prefix: SDR }\n"),
+           "ADR": "types:\n  X: { extends: Decision, description: d, prefix: ADR }\n",
+           "DEC": "types:\n  X: { extends: Decision, description: d, prefix: DEC }\n"}
+    found = {p: _invalid(_on_the_shipped_builtin(tmp_path / p, text)) for p, text in own.items()}
+    assert found == {"SDR": ["types 'A' and 'B' share the prefix SDR"],
+                     "ADR": ["types 'Architecture Decision' and 'X' share the prefix ADR"],
+                     "DEC": ["types 'Decision' and 'X' share the prefix DEC"]}
+
+
+def test_a_prefix_on_a_type_that_is_not_a_decision_is_invalid(tmp_path):
+    own = "types:\n  Client Meeting: { extends: Knowledge Fragment, description: d, prefix: CM }\n"
+    assert _invalid(_on_the_shipped_builtin(tmp_path, own)) == [
+        "type 'Client Meeting' declares a prefix but is not a Decision"]
+
+
+def test_lint_profiles_json_carries_the_prefix_in_force_of_every_type(tmp_path, capsys):
+    import okf_lint
+    import pytest
+
+    if builtin_text() is None:
+        pytest.skip("no built-in profile beside this script nor inlined in it")
+    assert okf_lint.main([str(_bundle(tmp_path, _SDR)), "--profiles", "/base/decisions/", "--json"]) == 0
+    types = json.loads(capsys.readouterr().out)["types"]
+    assert {t: d["prefix"] for t, d in types.items()} == {
+        **{t: None for t in STANDARD_TYPE_NAMES}, "Decision": "DEC", "Architecture Decision": "ADR",
+        "Standard Decision": "SDR"}
 
 
 def test_check_builtin_names_each_type_or_field_that_differs_from_section_4(tmp_path):
