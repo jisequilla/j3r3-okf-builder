@@ -7,14 +7,14 @@ tags: [policy, agents]
 status: stable
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
-generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T17:56:02Z }
 verified: [{ by: human:jisequilla, at: 2026-11-07T08:30:40Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }, { by: human:jisequilla, at: 2026-11-08T21:39:09Z }, { by: human:jisequilla, at: 2026-11-09T01:20:11Z }, { by: human:jisequilla, at: 2026-11-14T16:21:34Z }]
 ---
 
 # Rule
 
-1. Read `knowledge/index.md` and the ADRs before changing the standard, the skills or the scripts.
-2. A decision change is a new ADR that supersedes the previous one; history is never edited.
+1. Read `knowledge/index.md` and the decisions before changing the standard, the skills or the scripts.
+2. A decision change is a new decision that supersedes the previous one; history is never edited.
 3. Edit only the source `plugin/okf-builder/skills/`; never the platform packages (`.claude/skills`, `.agents/skills`, `dist/`).
 4. Finish with `just test` (code) and `just lint` (knowledge).
 5. Do not use vendor variables in skills; use the `<skills>/` convention.

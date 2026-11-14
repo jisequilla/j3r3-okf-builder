@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_marketplace_version.py — A change to the marketplace manifest raises its own version (ADR-0036).
+"""check_marketplace_version.py — A change to the marketplace manifest raises its own version (DEC-0005).
 
 Usage:
     python3 build/check_marketplace_version.py [BASE]    BASE defaults to origin/main

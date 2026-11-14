@@ -11,13 +11,13 @@ This repository defines the **OKF standard (knowledge/3.0 profile)** and the `ok
 
 ## Rules for any agent
 
-1. Before changing the standard, the skills or the scripts: read `knowledge/base/decisions/` (ADRs). If the decision changes, write a new ADR that supersedes the previous one (`okf-capture`); never edit history.
+1. Before changing the standard, the skills or the scripts: read `knowledge/base/decisions/` and its subfolders (the decisions). If the decision changes, write a new decision that supersedes the previous one (`okf-capture`); never edit history.
 2. Every change in `knowledge/` ends with `uv run plugin/okf-builder/skills/okf-standard/scripts/okf_lint.py knowledge --strict` at 0 errors (`just lint`).
 3. Every change in skills/scripts ends with `just test` (each script's `--test`, init 0.1/0.2, Google fixtures v0.1/v0.2, round-trip migration).
-4. Add `verified: human:` to a concept only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept and its version, kept as a fragment (ADR-0033, `okf-review`).
+4. Add `verified: human:` to a concept only from that person's recorded answer, given in a structured question or on a review page private to them, naming each concept and its version, kept as a fragment (SDR-0022, `okf-review`).
 5. Skills must not depend on vendor variables (`${CLAUDE_PLUGIN_ROOT}` appears only in the paths note); use the `<skills>/...` convention.
 6. Google's specs in `references/` are verbatim copies (Apache-2.0): they are not edited; they are updated from upstream and the update is recorded in `log.md`.
-7. A pull request's title follows Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`, `chore:`; `!` for a breaking change), then a sentence saying what changed, `feat`/`fix` for a change to the plugin (`plugin/okf-builder/`), text included, `docs` and the others for anything else, `!` when a bundle that passed lint would fail it; pull requests are squash-merged, so the title is the commit release-please reads (ADR-0036).
+7. A pull request's title follows Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`, `chore:`; `!` for a breaking change), then a sentence saying what changed, `feat`/`fix` for a change to the plugin (`plugin/okf-builder/`), text included, `docs` and the others for anything else, `!` when a bundle that passed lint would fail it; pull requests are squash-merged, so the title is the commit release-please reads (DEC-0005).
 
 ## Quick map
 

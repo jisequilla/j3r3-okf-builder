@@ -438,7 +438,7 @@ def _root_dirs(bundle: Path) -> list[str]:
 
 def instance_dirs(bundle: Path) -> list[str]:
     """The root directories kept at the root for their instances: each holds at least one operational instance and no
-    document migrate reads besides its own index.md (the directory of a kind's instances, ADR-0039 decision 3). A root
+    document migrate reads besides its own index.md (the directory of a kind's instances, SDR-0024 decision 3). A root
     directory left out as a whole (.okfignore, a nested bundle) stays too, but is not one of them."""
     sc = scan_bundle(bundle)
     out = [*sc.ignored, *sc.nested]

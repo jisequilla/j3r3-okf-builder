@@ -100,7 +100,7 @@ references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-
 """
 
 
-# okf-distill's Closing mode runs okf_close.py, which no M365 skill ships (ADR-0039 decision 12): the section becomes a
+# okf-distill's Closing mode runs okf_close.py, which no M365 skill ships (SDR-0024 decision 12): the section becomes a
 # note, and the routing sentence and the description's closing sentence go
 CLOSING_RE = re.compile(r"^## Closing mode\n.*?(?=^## |\Z)", re.M | re.S)
 M365_NO_CLOSING = ("## Closing mode\n\nClosing an operational instance is not available in Microsoft 365 Copilot: it needs "

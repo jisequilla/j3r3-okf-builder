@@ -358,7 +358,7 @@ def index(tmp: Path) -> None:
 
 def workflows(tmp: Path) -> None:
     """each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways
-    (ADR-0028 decision 5)"""
+    (DEC-0003 decision 5)"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -463,7 +463,7 @@ def _ledger(path: Path) -> list[tuple[str, list[str]]]:
 
 
 def _closing_traces(bundle: Path) -> None:
-    """ADR-0039's traces of req-0002's closing, which lint cannot see: the ledger links each instance concept, each
+    """SDR-0024's traces of req-0002's closing, which lint cannot see: the ledger links each instance concept, each
     promoted parent concept cites its instance concept, and each carried question lands on an open parent question
     asked in it."""
     inst = bundle / _EX_REQ

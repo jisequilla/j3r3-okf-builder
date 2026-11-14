@@ -3,7 +3,7 @@
 # requires-python = ">=3.9"
 # dependencies = ["pyyaml"]
 # ///
-"""okf_projection.py — Check a bundle's knowledge projections (ADR-0022, ADR-0031): each projection.yaml, the
+"""okf_projection.py — Check a bundle's knowledge projections (SDR-0015, ADR-0031): each projection.yaml, the
 dependency rule and drift by nature.
 
 Usage:
@@ -11,7 +11,7 @@ Usage:
 
 - Reads every <bundle>/projections/<slug>/projection.yaml (hidden entries and plain files such as .gitkeep are
   ignored). Without a bundle, finds knowledge/ upwards from the current directory, as okf_audit.py does.
-- Checks the keys of ADR-0022 decision 2 (PROJ_NO_MANIFEST, PROJ_BAD_YAML, PROJ_MISSING_KEY, PROJ_BAD_VALUE), that
+- Checks the keys of SDR-0015 decision 2 (PROJ_NO_MANIFEST, PROJ_BAD_YAML, PROJ_MISSING_KEY, PROJ_BAD_VALUE), that
   each ref exists (PROJ_REF_MISSING) and the dependency rule of decision 3 (PROJ_DEPENDENCY). A ref is a bundle path
   `/base/...` or `/projections/<slug>[/<file>]`; a projection ref takes the lifecycle of the projection it names.
 - Drift by nature (decision 4), the warning PROJ_DRIFT: a composed ref whose SHA-256 (the file's bytes; for a
@@ -177,7 +177,7 @@ def check_manifest(bundle: Path, slug: str, m: dict, lifecycles: dict[str, str |
         if (lifecycle in LIFECYCLES and target_lc in LIFECYCLES
                 and LIFECYCLES.index(target_lc) > LIFECYCLES.index(lifecycle)):
             add("PROJ_DEPENDENCY", f"refs[{i}] {path}: a {lifecycle} projection cannot reference the {target_lc} "
-                                   f"projection '{ref_slug}' (ADR-0022 decision 3)")
+                                   f"projection '{ref_slug}' (SDR-0015 decision 3)")
     return out
 
 

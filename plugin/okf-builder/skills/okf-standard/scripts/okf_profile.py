@@ -3,7 +3,7 @@
 # requires-python = ">=3.9"
 # dependencies = ["pyyaml"]
 # ///
-"""okf_profile.py — Load and compose the Domain Profile of a knowledge/3.0 bundle (standard §4.1, ADR-0026).
+"""okf_profile.py — Load and compose the Domain Profile of a knowledge/3.0 bundle (standard §4.1, SDR-0019).
 
 Usage:
     uv run okf_profile.py [path/to/bundle] [--json]      # the structural findings and the sources in force
@@ -51,7 +51,7 @@ TYPE_KEYS = {"extends", "description", "fields", "directory", "prefix", "note"}
 DECISION = "Decision"  # the type every decision type extends; only such a type declares a prefix (standard §4.1)
 PREFIX_RE = re.compile(r"^[A-Z]{2,5}$")
 KIND_KEYS = {"extends", "description", "directory", "states", "holds", "note"}
-OPERATIONAL = "Operational Bundle"  # the abstract kind every operational kind extends (standard §2.2, ADR-0039)
+OPERATIONAL = "Operational Bundle"  # the abstract kind every operational kind extends (standard §2.2, SDR-0024)
 DOMAIN_BUNDLE = "Domain Bundle"     # the kind a bundle without `kind` is; never declared under kinds
 BASE_STATES = ("open", "closed")    # the states of every operational kind; closed is the only terminal one
 KIND_DIR_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*/$")
@@ -2380,7 +2380,7 @@ def test_the_shipped_builtin_profile_declares_material_and_repository_as_maps():
         "required"]
 
 
-# --- kinds (standard §2.2, ADR-0039) ---
+# --- kinds (standard §2.2, SDR-0024) ---
 _KINDS = ("kinds:\n"
           "  Request: { extends: Operational Bundle, description: A request, directory: requests/, states: [in-review] }\n"
           "  Urgent Request: { extends: Request, description: An urgent one, directory: urgent/, states: [escalated] }\n"

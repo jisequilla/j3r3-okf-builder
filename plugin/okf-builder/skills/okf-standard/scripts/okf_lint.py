@@ -599,7 +599,7 @@ def _text_breach(label: str, v, what: str, pattern: re.Pattern | None = None) ->
 
 
 def check_fragment_origin(doc: Doc, fm: dict, t: str, prof: Resolved, force: dict, rep: Report) -> None:
-    """The checks of a Knowledge Fragment's material and repository (ADR-0029) that a map's keys cannot declare, at
+    """The checks of a Knowledge Fragment's material and repository (SDR-0021) that a map's keys cannot declare, at
     the level and under the code of each field in force: a material item's path is text and its sha256 64 hex digits;
     a repository's url is text and its commit 40 hex digits, either case. They run only on a key the generic map
     check leaves present, so each breach is one finding: a non-map value or a missing key is the generic check's."""
@@ -647,7 +647,7 @@ def utc_date(v) -> date | None:
 
 
 def check_review_due(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
-    """An open question past its review_on (ADR-0026 decision 6); the form of review_on is a profile check."""
+    """An open question past its review_on (SDR-0019 decision 6); the form of review_on is a profile check."""
     ro = fm.get("review_on")
     due = utc_date(ro) if ro is not None else None
     if due is not None and str(fm.get("question_status")) == "open" and due < now.date():
@@ -656,7 +656,7 @@ def check_review_due(doc: Doc, fm: dict, rep: Report, now: datetime) -> None:
 
 def outside_layers(not_okf: list[tuple[str, int]]) -> list[tuple[str, int]]:
     """The non-OKF directories outside fragments/, base/ and projections/: knowledge/3.0 still applies rule 12 to
-    them (ADR-0018 decision 3), one PROFILE_OUTSIDE_LAYER per directory."""
+    them (SDR-0011 decision 3), one PROFILE_OUTSIDE_LAYER per directory."""
     return [(rel, n) for rel, n in not_okf if rel.split("/")[0] not in LAYER_DIRS]
 
 
@@ -995,7 +995,7 @@ def check_material(doc: Doc, fm: dict, bundle: Path, rep: Report, nested: list[s
         if have != want.lower():
             rep.add("ERROR", "FRAGMENT_MATERIAL_CHANGED", doc.rel,
                     f"material {path} has SHA-256 {have}, and the fragment records {want}: the record's source was "
-                    "altered after capture (ADR-0024); restore the file as it was captured, or capture the new "
+                    "altered after capture (SDR-0017); restore the file as it was captured, or capture the new "
                     "version in a new fragment")
 
 
@@ -1323,7 +1323,7 @@ def scan_notices(scan, reported: list[tuple[str, int]] = (), linted: set = froze
     return out
 
 # --------------------------------------------------------------------------
-# Domain and operational bundles (standard §2.2, §7 rule 16; ADR-0039)
+# Domain and operational bundles (standard §2.2, §7 rule 16; SDR-0024)
 # --------------------------------------------------------------------------
 @dataclass
 class Tree:
@@ -2761,7 +2761,7 @@ def _template_sweep(tmp_path) -> list[tuple] | None:
 
 def test_every_template_lints_against_the_builtin_profile_with_no_profile_finding(tmp_path):
     """Each template's keys are declared for its type (no PROFILE_UNKNOWN_KEY) and its values have their declared
-    types, in a bundle with a base/profile.md: owner: team:<team> is a string owner (ADR-0027)."""
+    types, in a bundle with a base/profile.md: owner: team:<team> is a string owner (SDR-0020)."""
     import pytest
 
     found = _template_sweep(tmp_path)
@@ -3087,7 +3087,7 @@ _NOT_A_LAYER = ("ERROR", "PROFILE_OUTSIDE_LAYER", "notes/", "okf-profile",
 
 
 def test_a_non_okf_directory_at_the_root_of_a_30_bundle_is_one_outside_layer_error(tmp_path):
-    """ADR-0018 decision 3: rule 12 still applies at the root, once for the directory, not once per file."""
+    """SDR-0011 decision 3: rule 12 still applies at the root, once for the directory, not once per file."""
     k = _bundle_30(tmp_path)
     _write(k, "notes/a.md", "Plain notes.\n")
     _write(k, "notes/b.md", "---\nlayout: post\n---\n\nA Jekyll page.\n")
@@ -4100,7 +4100,7 @@ def test_json_metrics_count_only_knowledge_fragments_and_concepts_outside_the_re
 
 
 # --------------------------------------------------------------------------
-# The map field type, a fragment's material and its repository (ticket A3, ADR-0029)
+# The map field type, a fragment's material and its repository (ticket A3, SDR-0021)
 # --------------------------------------------------------------------------
 _MATERIAL_REL = "fragments/2026-10-31-meeting.txt"
 _MATERIAL_TEXT = "Alice: we ship on Friday.\nBob: agreed.\n"
@@ -4401,7 +4401,7 @@ def test_the_examples_material_is_hashed_and_one_changed_byte_is_an_error(tmp_pa
         ("ERROR", "FRAGMENT_MATERIAL_CHANGED", "fragments/2026-11-03-refund-topic-retention-chat.md")]
 
 
-# --- domain and operational bundles (standard §2.2, §7 rule 16; ADR-0039) ---
+# --- domain and operational bundles (standard §2.2, §7 rule 16; SDR-0024) ---
 _KINDS_PROFILE = ("kinds:\n"
                   "  Request: { extends: Operational Bundle, description: A request, directory: requests/, "
                   "states: [in-review] }\n"
