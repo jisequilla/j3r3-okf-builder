@@ -53,8 +53,9 @@ knowledge/2.0 → knowledge/3.0 (--profile; okf_version is not changed):
 Decisions to the directory of their type (--move-decisions; knowledge/3.0 only, opt-in, a step
 of its own: never with --to, --profile, --file or --out; --actor, --keep-extensions and --force
 have no effect on it):
-  - every concept whose type is a Decision (the type or one that extends it, a local type name
-    read through the Domain Profile's aliases) and whose file is not directly in the directory
+  - every concept whose type is a Decision (the type or one that extends it; the type read as
+    lint reads it, with the Domain Profile's aliases resolved: a local name of the type key, a
+    local type name, a value alias) and whose file is not directly in the directory
     in force of its type (the one the type declares, else that of the nearest type it extends
     that declares one) moves there, keeping its file name
   - in every .md of the bundle the links, the sources[].resource and the values of the keys the
@@ -72,6 +73,8 @@ have no effect on it):
     knowledge/3.0 (run --profile knowledge/3.0 first)
   - a decision .okfignore matches is no concept of the bundle and stays where it is, and
     .okfignore is never rewritten; a nested bundle is never entered: run the step on it
+  - the root projections/ is not OKF content and is never edited: when the bundle has one, a
+    NOTICE line says to refresh each projection whose refs name a moved decision (okf-projection)
 
 Every step migrates only what lint reads: the paths .okfignore matches and nested bundles are
 left byte-identical (a plain directory of Markdown without OKF frontmatter is read as today).
@@ -98,6 +101,7 @@ from okf_common import (  # noqa: E402
     LAYER_DIRS,
     OKFIGNORE,
     PROFILE_30,
+    PROJECTIONS_DIR,
     OkfIgnore,
     SUPPORTED_VERSIONS,
     declared_profile,
@@ -117,10 +121,10 @@ from okf_profile import (  # noqa: E402
     DECISION,
     DOMAIN_BUNDLE,
     Resolved,
-    canonical_type,
     directory_in_force,
     is_a,
     load_profile,
+    resolve_aliases,
     type_in_force,
 )
 
@@ -710,10 +714,18 @@ def profile_in_force(bundle: Path) -> Resolved:
     return load_profile(bundle, domain=tree.domain if tree is not None else None)
 
 
+def type_read(r: Resolved, fm: dict | None):
+    """The type of a concept as lint reads it: its frontmatter with the aliases of the Domain Profile in force
+    resolved (okf_profile.resolve_aliases), so a type written under a local key name (aliases.fields), under a local
+    type name (aliases.types) or given by a value alias (aliases.values) is the declared one."""
+    return resolve_aliases(r, fm).get("type") if isinstance(fm, dict) else None
+
+
 def keys_with_paths(r: Resolved, fm: dict | None) -> tuple[set[str], set[str]]:
     """(the keys whose values are paths, the keys that hold sources) of a concept: PATH_KEYS and every field its type
-    declares as a path or a list of paths, each under its declared name and under the local names aliases give it."""
-    t = canonical_type(r, (fm or {}).get("type"))
+    (type_read) declares as a path or a list of paths, each under its declared name and under the local names aliases
+    give it."""
+    t = type_read(r, fm)
     fields = type_in_force(r, t)["fields"] if isinstance(t, str) and t in r.types else {}
     paths = set(PATH_KEYS) | {k for k, d in fields.items()
                               if d.get("type") == "path" or (d.get("type") == "list" and d.get("of") == "path")}
@@ -732,7 +744,7 @@ def decision_moves(bundle: Path, r: Resolved) -> dict[str, str]:
     for doc in bundle_docs(bundle):
         if doc.is_reserved or not isinstance(doc.frontmatter, dict):
             continue
-        t = canonical_type(r, doc.frontmatter.get("type"))
+        t = type_read(r, doc.frontmatter)
         if not isinstance(t, str) or not is_a(r, t, DECISION):
             continue
         home = (directory_in_force(r, t) or "").strip("/")
@@ -808,6 +820,9 @@ def move_decisions(bundle: Path, dry_run: bool) -> int:
         print(f"MOVE {old} -> {new}")
     for rel in rewritten:
         print(f"LINKS {move.new(rel)}")
+    if (bundle / PROJECTIONS_DIR).is_dir():
+        print(f"NOTICE {PROJECTIONS_DIR}/ is not edited: refresh each projection whose refs name a moved decision "
+              "(okf-projection)")
     if not dry_run:
         for old, new in moves.items():
             (bundle / new).parent.mkdir(parents=True, exist_ok=True)
@@ -1885,6 +1900,74 @@ def test_move_decisions_reads_local_type_and_key_names_through_the_aliases(tmp_p
     assert _decisions(k) == [f"{_NEW}/ADR-0001-p.md", f"{_OLD}/standard/SDR-0001-format.md"]
     assert _tree(k)[f"{_OLD}/standard/SDR-0001-format.md"] == files["base/decisions/standard/SDR-0001-format.md"].replace(
         f"/{_OLD}/ADR-0001-p.md", f"/{_NEW}/ADR-0001-p.md")
+
+
+_TYPE_ALIASES = ("aliases:\n  fields: { tipo: type }\n"
+                 "  values:\n    - { from: { clase: adr }, to: { type: Architecture Decision } }\n")
+
+
+def _typed_by_alias(d: str) -> dict[str, str]:
+    """Three architecture decisions in base/decisions/, the type of one under a local name of the key (`tipo:`), of
+    one given by a value alias (`clase: adr`) and of one written `type:`, and an open question typed `tipo:` whose
+    path field names the third. With d the directory the decisions are in."""
+    adr = "decision_status: accepted\n"
+    return {
+        "log.md": _LOG_30, "project.md": _concept("Project", "P"),
+        "base/profile.md": _LOCAL_TYPES.replace("{aliases}", _TYPE_ALIASES),
+        f"{d}/ADR-0001-a.md": _concept("Architecture Decision", "A", "adr_id: ADR-0001\n" + adr).replace("type:", "tipo:", 1),
+        f"{d}/ADR-0002-b.md": _concept("Architecture Decision", "B", "adr_id: ADR-0002\n" + adr).replace(
+            "type: Architecture Decision", "clase: adr", 1),
+        f"{d}/ADR-0003-c.md": _concept("Architecture Decision", "C", "adr_id: ADR-0003\n" + adr),
+        "base/questions/why.md": _concept(
+            "Open Question", "Why", "owner: human:alice\nquestion_status: open\n"
+            f"blocks: [/{d}/ADR-0003-c.md, /{d}/ADR-0001-a.md]\n").replace("type:", "tipo:", 1),
+    }
+
+
+def test_move_decisions_reads_the_type_of_each_concept_with_the_aliases_resolved_as_lint_does(tmp_path, capsys):
+    k = _bundle_30(tmp_path, _typed_by_alias(_OLD))
+    found = _findings(k)
+    rc, out, err = _move(k, capsys)
+    moves = [f"`{_OLD}/ADR-000{n}.md` → `{_NEW}/ADR-000{n}.md`" for n in ("1-a", "2-b", "3-c")]
+    assert (rc, out, err) == (0, (
+        f"MOVE {_OLD}/ADR-0001-a.md -> {_NEW}/ADR-0001-a.md\nMOVE {_OLD}/ADR-0002-b.md -> {_NEW}/ADR-0002-b.md\n"
+        f"MOVE {_OLD}/ADR-0003-c.md -> {_NEW}/ADR-0003-c.md\nLINKS {_OLD}/index.md\nLINKS base/questions/why.md\n"
+        f"WROTE {_OLD}/index.md\nWROTE {_NEW}/index.md\n"
+        f"\n3 decisions moved, each to the directory of its type, links rewritten in 2 files → {k}\n"), "")
+    after = _typed_by_alias(_NEW)
+    after["log.md"] = after["log.md"].replace("## 2026-11-01\n", f"## {date.today().isoformat()}\n" + (
+        "* **Migration**: 3 decisions moved, each to the directory of its type, links rewritten in 2 files, with "
+        f"okf-migrate --move-decisions: {'; '.join(moves)}.\n") + "\n## 2026-11-01\n")
+    assert _no_indexes(_tree(k)) == after
+    assert _findings(k) == sorted((level, code, path.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-"),
+                                   msg.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-")) for level, code, path, msg in found)
+    before = _bytes(k)
+    assert _move(k, capsys) == (0, _nothing(k), "")
+    assert _bytes(k) == before
+
+
+_PROJECTION = "# Brief\n\nSee [X](../../base/decisions/ADR-0001-x.md) and `/base/decisions/ADR-0001-x.md`.\n"
+_PROJECTIONS_NOTICE = "NOTICE projections/ is not edited: refresh each projection whose refs name a moved decision (okf-projection)\n"
+
+
+def test_move_decisions_leaves_the_root_projections_as_written_and_says_so(tmp_path, capsys):
+    kept = {"projections/onboarding/brief.md": _PROJECTION,
+            "projections/onboarding/projection.yaml": "refs:\n  - /base/decisions/ADR-0001-x.md\n"}
+
+    def projections(k: Path) -> dict[str, bytes]:
+        return {rel: b for rel, b in _bytes(k).items() if rel.startswith("projections/")}
+
+    k = _bundle_30(tmp_path / "dry", {**_b1(False), **kept})
+    before = _bytes(k)
+    assert projections(k) == {rel: text.encode() for rel, text in kept.items()}
+    assert _move(k, capsys, "--dry-run") == (
+        0, _B1_MOVES + _PROJECTIONS_NOTICE + _B1_SUMMARY.format(dry=" (dry-run)", k=k), "")
+    assert _bytes(k) == before
+    assert _move(k, capsys) == (0, _B1_MOVES + _PROJECTIONS_NOTICE + _B1_WROTE + _B1_SUMMARY.format(dry="", k=k), "")
+    assert projections(k) == {rel: text.encode() for rel, text in kept.items()}
+    assert _move(k, capsys) == (0, _nothing(k), "")
+    k = _bundle_30(tmp_path / "none", _b1(False))
+    assert _move(k, capsys) == (0, _B1_MOVES + _B1_WROTE + _B1_SUMMARY.format(dry="", k=k), "")
 
 
 def test_move_decisions_of_an_open_instance_reads_the_profile_of_its_domain_bundle(tmp_path, capsys):
