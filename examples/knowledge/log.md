@@ -4,7 +4,7 @@
 * **Migration**: 1 decision moved, each to the directory of its type, links rewritten in 6 files, with okf-migrate --move-decisions: `base/decisions/ADR-0001-adopt-kafka.md` → `base/decisions/architecture/ADR-0001-adopt-kafka.md`.
 
 ## 2026-11-12
-* **Creation**: [DEC-0001: The payments team owns the refund dispute export](/base/decisions/DEC-0001-payments-owns-dispute-export.md), a plain Decision distilled from that call: who answers for the export is not about how a system is built, so it is not an Architecture Decision.
+* **Creation**: [DEC-0001: The payments team owns the refund dispute export](/base/decisions/DEC-0001-payments-owns-dispute-export.md), a plain Decision distilled from the fragment [Payments-finance call: who owns the refund dispute export](/fragments/2026-11-12-dispute-export-ownership.md): who answers for the export is not about how a system is built, so it is not an Architecture Decision.
 * **Creation**: [Payments-finance call: who owns the refund dispute export](/fragments/2026-11-12-dispute-export-ownership.md), a fictional call captured as a Knowledge Fragment and distilled.
 
 ## 2026-11-10

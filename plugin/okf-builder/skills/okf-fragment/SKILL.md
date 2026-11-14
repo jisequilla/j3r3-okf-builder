@@ -39,10 +39,9 @@ Keeps an event (a meeting, chat, transcript or slide deck) as a `Knowledge Fragm
 8. **Index and validate**:
    ```bash
    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir fragments
-   uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir .
    uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle>
    ```
-   Fix any ERROR before finishing.
+   The run regenerates `fragments/index.md` and the root `index.md` above it. Fix any ERROR before finishing.
 9. **Close**: show the fragment's path, `occurred_at`, the participants, the redactions, the gaps marked and what was left out, and the `material` and `repository` written. Ask the person to confirm the record with someone who was there before it is distilled, and offer `okf-distill` once it is confirmed. Do not distill in the same step unless the person asks.
 
 ## Backfill

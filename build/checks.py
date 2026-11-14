@@ -206,6 +206,8 @@ def m365(tmp: Path) -> None:
            "okf-distill: does not point to okf-projection's okf_projection.py")
     companions = {skill: len([f for f in (ROOT / M365 / skill).rglob("*") if f.is_file() and f.name != "SKILL.md"])
                   for skill in ("okf-capture", "okf-distill")}
+    expect(companions == {"okf-capture": 20, "okf-distill": 20},
+           f"companion files {companions}: okf-capture and okf-distill each ship 20")
     expect("`templates/decision.md`" in text(M365 / "okf-capture" / "SKILL.md")
            and (ROOT / M365 / "okf-capture" / "templates" / "decision.md").is_file(),
            "okf-capture: names decision.md but does not ship it")

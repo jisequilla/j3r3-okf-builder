@@ -14,7 +14,7 @@ When the person asks for an audit ("audit the bundle", "knowledge audit", "what 
 ## Steps
 
 1. **Find the bundle** (`knowledge/index.md`, searching upwards from the cwd; if there is none, propose `okf-init` and stop), **its version** (`okf_version` in the root `index.md`; if missing, `okf_lint.py --json` → `okf_version`) and **its OKF profile** (`okf_profile` in the root `index.md`; if missing, knowledge/2.0, the older OKF profile). Write in that version and in that OKF profile's layout.
-   - **knowledge/2.0 bundle**: the typed directories sit at the root; drop the `base/` prefix from every directory, bundle path and `--dir` below (`/decisions/x.md`; indexes: `--dir <dir>`, `--dir fragments` when a fragment changed, then `--dir .`, with no `--dir base`), never mix the two layouts, and offer the migration to knowledge/3.0 with the `okf-migrate` skill, applied only after the person confirms.
+   - **knowledge/2.0 bundle**: the typed directories sit at the root; drop the `base/` prefix from every directory, bundle path and `--dir` below (`/decisions/x.md`; indexes: `--dir decisions`, and `--dir fragments` when a fragment changed), never mix the two layouts, and offer the migration to knowledge/3.0 with the `okf-migrate` skill, applied only after the person confirms.
    - **The Domain Profile in force** (knowledge/3.0; a knowledge/2.0 bundle has none): read it with `uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle> --profiles <dir> --json`, not from `base/profile.md` by hand, and resolve its aliases when reading concepts (a `Fragmento` with `ingerido: false` is a pending `Knowledge Fragment` when the aliases say so).
 2. **Pick the reference point**: the one the person gives (a commit, tag, branch or date); by default, the date of the last review recorded in `knowledge/log.md` (the latest `**Verification**` entry or `**Conflict**` entry that resolves or dismisses a conflict), or the most recent date section if there is none. Say which one is used, so the person can widen it.
 3. **List the changes since then.** If the bundle is in Git (`git -C <bundle> rev-parse --is-inside-work-tree`), take them from Git: `git diff --name-status <ref> -- <bundle>` for a ref, or `git log --since=<date> --name-status --format='%h %ad %s' -- <bundle>` for a date, plus `git status --porcelain -- <bundle>` for what is not committed. Otherwise take them from the `log.md` entries of those dates. One line per concept: path, change, log label.
@@ -41,13 +41,11 @@ When the person asks for an audit ("audit the bundle", "knowledge audit", "what 
     - A concept edited after the question was asked or the page was built (its `generated.at` changed) is asked again. Resolving a conflict or approving a change set is not a review. Fragments and the Conflict Log are never verified or moved to `stable`.
 12. **Index and validate** after any change:
     ```bash
-    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir base/<dir>     # each touched directory
-    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir fragments      # if a fragment changed
-    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir base
-    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir .
+    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir <directory>     # once per directory of a concept touched, e.g. base/decisions/architecture
+    uv run "<skills>/okf-standard/scripts/okf_index.py" <bundle> --dir fragments       # if a fragment changed
     uv run "<skills>/okf-standard/scripts/okf_lint.py" <bundle>
     ```
-    Fix any ERROR before finishing.
+    Each run regenerates that directory's `index.md` and the one of every directory above it up to the bundle root, so a directory that is new is listed by its parent. Fix any ERROR before finishing.
 13. **Close**: what was decided and by whom, what is still open (conflicts, and open questions by owner, the due ones first), the concepts still awaiting review, and the concepts that still break the Domain Profile.
 
 ## Audit mode

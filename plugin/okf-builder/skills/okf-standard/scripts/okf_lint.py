@@ -3744,6 +3744,20 @@ def test_section_empty_names_adr_md_for_an_architecture_decision_and_a_local_typ
     assert _empty_consequences(tmp_path / "local", rel, "Product ADR", types) == _empty_consequences_of(rel, "adr.md")
 
 
+def test_each_decision_template_names_its_types_directory_and_prefix_in_the_supersedes_comment(tmp_path):
+    from okf_profile import directory_in_force, load_profile, prefix_in_force
+
+    prof = load_profile(_tree_bundle(tmp_path / "knowledge"))
+    lines = {}
+    for name, t in (("decision.md", "Decision"), ("adr.md", "Architecture Decision")):
+        text = (_templates_dir() / name).read_text(encoding="utf-8")
+        lines[name] = [ln for ln in text.splitlines() if ln.startswith("supersedes:")]
+        assert lines[name] == [f"supersedes:                       # {directory_in_force(prof, t)}"
+                               f"{prefix_in_force(prof, t)}-XXXX-....md"], name
+    assert lines == {"decision.md": ["supersedes:                       # /base/decisions/DEC-XXXX-....md"],
+                     "adr.md": ["supersedes:                       # /base/decisions/architecture/ADR-XXXX-....md"]}
+
+
 def test_each_concept_template_left_unfilled_fires_section_empty(tmp_path):
     """Each template's sections, as okf-capture copies them before filling them in, hold only placeholder text but
     for the tables, code and fixed text the template writes as content (listed here); a {{...}} inside a line of
