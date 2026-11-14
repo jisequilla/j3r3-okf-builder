@@ -360,7 +360,7 @@ def append_log(log_path: Path, to: str, n: int, entry: str | None = None) -> Non
 # --------------------------------------------------------------------------
 ROOT_KEEP = {"index.md", "log.md", "project.md"}
 EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:")
-MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)")
+MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()(<[^<>\r\n]*>|[^)\s]+)")
 RESOURCE_RE = re.compile(r"(\bresource\s*:\s*)([\"']?)([^\s\"',}\]]+)")
 PATH_KEYS = {"supersedes", "superseded_by"}
 SOURCE_KEYS = {"sources"}
@@ -461,13 +461,17 @@ def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
 
 def rewrite_paths(text: str, doc_rel: str, move, path_keys=PATH_KEYS, source_keys=SOURCE_KEYS) -> str:
     """Rewrite the body links, the sources[].resource and the values of the path keys of one .md,
-    keeping every other byte. Of a link only the target changes. move: a Move or a FileMove."""
+    keeping every other byte, the line endings of a text read without newline translation included. Of a link
+    `[text](target)` only the target changes, written plain or in angle brackets; a reference-style definition
+    (`[ref]: target`) is not read as a link. move: a Move or a FileMove."""
     def sub(m: re.Match, group: int) -> str:
-        new = move.target(m.group(group), doc_rel)
+        old = m.group(group)
+        angle = len(old) > 1 and old[0] == "<" and old[-1] == ">"
+        new = move.target(old[1:-1] if angle else old, doc_rel)
         if new is None:
             return m.group(0)
         start, end = m.start(group) - m.start(0), m.end(group) - m.start(0)
-        return m.group(0)[:start] + new + m.group(0)[end:]
+        return m.group(0)[:start] + (f"<{new}>" if angle else new) + m.group(0)[end:]
 
     lines = text.split("\n")
     body_start = 0
@@ -705,7 +709,7 @@ def move_decisions(bundle: Path, dry_run: bool) -> int:
     move = FileMove(moves, exists=lambda rel: (bundle / rel).exists())
     rewritten = {}
     for doc in bundle_docs(bundle):
-        text = doc.path.read_text(encoding="utf-8")
+        text = doc.path.read_bytes().decode("utf-8")
         new = rewrite_paths(text, doc.rel, move, *keys_with_paths(r, doc.frontmatter))
         if new != text:
             rewritten[doc.rel] = new
@@ -718,7 +722,7 @@ def move_decisions(bundle: Path, dry_run: bool) -> int:
             (bundle / new).parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(bundle / old), str(bundle / new))
         for rel, text in rewritten.items():
-            (bundle / move.new(rel)).write_text(text, encoding="utf-8")
+            (bundle / move.new(rel)).write_bytes(text.encode("utf-8"))
         regenerate(bundle, [bundle / d for d in _dirs_up([*moves, *moves.values()])])
         for d in sorted({posixpath.dirname(old) for old in moves}):
             if not any(q.is_file() and q.name != "index.md" for q in (bundle / d).rglob("*")):
@@ -1625,6 +1629,46 @@ def test_move_decisions_changes_a_fragment_record_only_inside_the_target_of_a_li
     assert _outside_link_targets("[a/x.md](/a/x.md)", "[b/x.md](/b/x.md)") == [("a", "b")]
 
 
+def test_move_decisions_keeps_the_line_endings_of_each_file_it_rewrites(tmp_path, capsys):
+    crlf = ["fragments/2026-11-01-m.md", "base/systems/pay.md", f"{_OLD}/ADR-0001-x.md"]
+    mixed = f"{_OLD}/ADR-0002-y.md"
+    k = _bundle_30(tmp_path / "crlf", _b1(False))
+    for rel in crlf:
+        (k / rel).write_bytes(_b1(False)[rel].replace("\n", "\r\n").encode())
+    (k / mixed).write_bytes(_b1(False)[mixed].replace("\n", "\r\n", 3).encode())
+    assert _findings(k) == _findings(_bundle_30(tmp_path / "lf", _b1(False)))
+    assert _move(k, capsys)[0] == 0
+    after = _b1(True)
+    got = _bytes(k)
+    for rel in crlf:
+        new = rel.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-")
+        assert got[new] == after[new].replace("\n", "\r\n").encode(), rel
+    assert got[f"{_NEW}/ADR-0002-y.md"] == after[f"{_NEW}/ADR-0002-y.md"].replace("\n", "\r\n", 3).encode()
+    assert got["base/questions/why.md"] == after["base/questions/why.md"].encode()
+
+
+_ANGLE = ("# Record\n\nBob: [a](<{abs}/ADR-0001-x.md>), [b](<../{rel}/ADR-0001-x.md#context> \"X\"), "
+          "![i](<{abs}/ADR-0001-x.md>), [spaced](<../base/systems/my pay.md>) and [c][r].\n\n"
+          "[r]: /base/decisions/ADR-0001-x.md\n")
+
+
+def test_move_decisions_rewrites_a_target_in_angle_brackets_and_leaves_a_reference_definition(tmp_path, capsys):
+    rel = "fragments/2026-11-02-n.md"
+
+    def bundle(d: str) -> dict[str, str]:
+        return {**_b1(d == _NEW), rel: _concept("Knowledge Fragment", "N", _FRAGMENT.replace("2026-11-01", "2026-11-02"),
+                                               _ANGLE.format(abs=f"/{d}", rel=d))}
+
+    k = _bundle_30(tmp_path, bundle(_OLD))
+    before = _findings(k)
+    assert _move(k, capsys)[0] == 0
+    assert _tree(k)[rel] == bundle(_NEW)[rel]
+    assert _outside_link_targets(bundle(_OLD)[rel], bundle(_NEW)[rel]) == []
+    renamed = sorted((level, code, path.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-"), msg.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-"))
+                     for level, code, path, msg in before)
+    assert before and _findings(k) == renamed
+
+
 def test_move_decisions_dry_run_lists_the_moves_and_writes_nothing(tmp_path, capsys):
     k = _bundle_30(tmp_path, _b1(False))
     before = _bytes(k)
@@ -1871,6 +1915,21 @@ def test_file_move_rewrites_a_target_for_any_map_of_old_to_new_paths():
     }
     assert {case: move.target(*case) for case in cases} == cases
     assert FileMove({a: "base/decisions/standard/SDR-0001-x.md"}).target("docs/bench.md", a) == "../docs/bench.md"
+
+
+def test_rewrite_paths_reads_a_target_in_angle_brackets_whole_and_keeps_the_brackets():
+    a = "base/decisions/ADR-0001-x.md"
+    move = FileMove({a: "base/decisions/architecture/ADR-0001-x.md"})
+    cases = {
+        ("[a](</base/decisions/ADR-0001-x.md>)", "log.md"): "[a](</base/decisions/architecture/ADR-0001-x.md>)",
+        ("![a](<base/decisions/ADR-0001-x.md#why> 'T')\r\n", "log.md"): "![a](<base/decisions/architecture/ADR-0001-x.md#why> 'T')\r\n",
+        ("[a](<my notes/x y.md>) [b](<../systems/pay.md>)", a): "[a](<../my notes/x y.md>) [b](<../../systems/pay.md>)",
+        ("[a](<>) [b](</base/decisions/ADR-0001-x.md) [c](<https://example.com/x y>)", "log.md"):
+            "[a](<>) [b](</base/decisions/ADR-0001-x.md) [c](<https://example.com/x y>)",
+        ("[r]: /base/decisions/ADR-0001-x.md\n[r]: </base/decisions/ADR-0001-x.md>\n", "log.md"):
+            "[r]: /base/decisions/ADR-0001-x.md\n[r]: </base/decisions/ADR-0001-x.md>\n",
+    }
+    assert {case: rewrite_paths(*case, move) for case in cases} == cases
 
 
 if __name__ == "__main__":
