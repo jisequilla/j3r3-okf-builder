@@ -859,10 +859,11 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
     for v in r.validators:
         if v.get("types"):
             v["types"] = [canonical_type(r, t) for t in v["types"]]
-    # a value alias's `from` is read as a concept is: a local field name in it is the declared field and a local
-    # type name the type it stands for; `from` stays as written, `from_declared` is what a concept is matched against
+    # a value alias's `from` names the type as a concept does: a local name of the type key in it is `type` and a
+    # local type name the type it stands for; `from` stays as written, `from_declared` is what a concept is matched
+    # against. Every other key of `from` is matched as written, a local field name included
     for va in r.aliases["values"]:
-        declared = _declared_names(r, va["from"])
+        declared = _declared_names(r, va["from"], only="type")
         if declared != va["from"]:
             va["from_declared"] = declared
     # a question mapped to Type.field with local names stands for the declared type and field
@@ -1167,12 +1168,13 @@ def _same(a: Any, b: Any) -> bool:
     return a == b or str(a) == str(b)
 
 
-def _declared_names(r: Resolved, fm: dict) -> dict:
+def _declared_names(r: Resolved, fm: dict, only: str | None = None) -> dict:
     """fm with each local field name as the declared field, then a local type name as the type it stands for. A key
-    fm also carries under its declared name keeps that value."""
+    fm also carries under its declared name keeps that value. With `only`, just the local names of that field are
+    renamed and every other key stays as written."""
     out = dict(fm)
     for name, a in r.aliases["fields"].items():
-        if name in out:
+        if name in out and only in (None, a["to"]):
             out.setdefault(a["to"], out.pop(name))
     if "type" in out:
         out["type"] = canonical_type(r, out["type"])
@@ -1183,9 +1185,10 @@ def resolve_aliases(r: Resolved, fm: dict) -> dict:
     """The frontmatter as the profile reads it (§4.1 What lint checks), in this order: a local field name becomes
     the declared field, then a local type name becomes the type it stands for, then a value alias whose `from`
     holds in full is replaced by its `to`. So a type written under a local name of the type key is resolved too.
-    A value alias's `from` is read the same way when the profile is loaded, so one that names the type by a local
-    type name or under a local name of the type key holds for every spelling of that type. A key the concept also
-    carries under its declared name keeps the concept's own value."""
+    The type a value alias's `from` names is read the same way when the profile is loaded, so one that names the
+    type by a local type name or under a local name of the type key holds for every spelling of that type; any other
+    key of `from` is matched as written, against the concept's keys already renamed. A key the concept also carries
+    under its declared name keeps the concept's own value."""
     out = _declared_names(r, fm)
     for va in r.aliases["values"]:
         frm = va.get("from_declared", va["from"])
@@ -2288,17 +2291,31 @@ def test_a_value_alias_keeps_its_from_as_written_and_a_key_that_is_no_field_alia
                        "    - { from: { ingerido: true }, to: { distillation_status: distilled } }\n"
                        "    - { from: { ramo: legal }, to: { tags: [legal] } }\n")
     assert [va["from"] for va in r.aliases["values"]] == [{"tipo": "Norma"}, {"ingerido": True}, {"ramo": "legal"}]
-    assert [va.get("from_declared") for va in r.aliases["values"]] == [{"type": "Standard Decision"}, None, {"area": "legal"}]
+    assert [va.get("from_declared") for va in r.aliases["values"]] == [{"type": "Standard Decision"}, None, None]
     assert alias_keys(r) == {"tipo", "ramo", "ingerido"}
     # a `from` on a key that is no field alias holds on that key with that value, whatever the type
     assert resolve_aliases(r, {"type": "Term", "ingerido": True}) == {"type": "Term", "distillation_status": "distilled"}
     assert resolve_aliases(r, {"type": "Term", "ingerido": False}) == {"type": "Term", "ingerido": False}
     assert resolve_aliases(r, {"tipo": "Norma", "ingerido": True}) == {
         "type": "Standard Decision", "tags": ["k"], "distillation_status": "distilled"}
-    # a `from` key that is a field alias holds for the concept written with the local key or the declared one
+    # a `from` on a local name of a field that is not the type is matched as written, after the concept's key was
+    # renamed: it holds for no spelling of the key
+    assert resolve_aliases(r, {"ramo": "legal"}) == {"area": "legal"}
+    assert resolve_aliases(r, {"area": "legal"}) == {"area": "legal"}
+    assert resolve_aliases(r, {"ramo": "fiscal"}) == {"area": "fiscal"}
+    assert resolve_aliases(r, {"tipo": "Norma", "ramo": "legal"}) == {
+        "type": "Standard Decision", "tags": ["k"], "area": "legal"}
+
+
+def test_a_value_alias_on_the_declared_name_of_an_aliased_field_holds_for_both_spellings_of_the_key(tmp_path):
+    r = _value_aliases(tmp_path, _NORMA.replace("{ tipo: type }", "{ tipo: type, ramo: area }"),
+                       "    - { from: { area: legal }, to: { tags: [legal] } }\n"
+                       "    - { from: { tipo: Norma, ramo: fiscal }, to: { tags: [mixed] } }\n")
+    assert [va.get("from_declared") for va in r.aliases["values"]] == [None, {"type": "Standard Decision", "ramo": "fiscal"}]
     assert resolve_aliases(r, {"ramo": "legal"}) == {"tags": ["legal"]}
     assert resolve_aliases(r, {"area": "legal"}) == {"tags": ["legal"]}
-    assert resolve_aliases(r, {"ramo": "fiscal"}) == {"area": "fiscal"}
+    # a `from` that names the type and a local field name: the field part is matched as written and never holds
+    assert resolve_aliases(r, {"tipo": "Norma", "ramo": "fiscal"}) == {"type": "Standard Decision", "area": "fiscal"}
 
 
 def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_type(tmp_path):
