@@ -4,12 +4,14 @@
 # dependencies = ["pyyaml"]
 # ///
 """okf_migrate.py — Migrate an OKF bundle between v0.1 and v0.2 (both directions),
-and from the knowledge/2.0 profile to knowledge/3.0.
+from the knowledge/2.0 profile to knowledge/3.0, and move each decision of a knowledge/3.0
+bundle to the directory its type declares.
 
 Usage:
     uv run okf_migrate.py [bundle] --to 0.2 [--actor process:okf-migrate] [--dry-run] [--out DIR]
     uv run okf_migrate.py [bundle] --to 0.1 [--keep-extensions] [--dry-run] [--out DIR]
     uv run okf_migrate.py [bundle] --profile knowledge/3.0 [--to 0.2] [--dry-run] [--out DIR]
+    uv run okf_migrate.py [bundle] --move-decisions [--dry-run]
 
 0.1 → 0.2 (lossless):
   - timestamp            → generated: { by: <actor>, at: <timestamp> }
@@ -48,7 +50,28 @@ knowledge/2.0 → knowledge/3.0 (--profile; okf_version is not changed):
     moved paths, so it is fixed by hand
   With --to as well, the profile step runs first and the version step walks its result.
 
-Both steps migrate only what lint reads: the paths .okfignore matches and nested bundles are
+Decisions to the directory of their type (--move-decisions; knowledge/3.0 only, opt-in, a step
+of its own: never with --to, --profile, --file or --out; --actor, --keep-extensions and --force
+have no effect on it):
+  - every concept whose type is a Decision (the type or one that extends it, a local type name
+    read through the Domain Profile's aliases) and whose file is not directly in the directory
+    in force of its type (the one the type declares, else that of the nearest type it extends
+    that declares one) moves there, keeping its file name
+  - in every .md of the bundle the links, the sources[].resource and the values of the keys the
+    concept's type declares as a path (supersedes, superseded_by, blocks, answered_by, asked_in
+    and those of a local type; the key under its declared name or a local one) that point to a
+    moved decision are rewritten, and the relative ones of a moved decision are recomputed;
+    of a link only its target changes, so a fragment's # Record keeps every other character
+  - the index.md of each directory a decision left or entered, and of the directories above
+    them, are regenerated; one **Migration** entry in log.md names both paths of each decision
+  - it stops with exit 1, before writing anything, when a new path already exists, when
+    .okfignore matches it or it lies in a nested bundle, and when the bundle is closed
+    (state: closed: a closed bundle is never edited); exit 2 for a bundle that is not
+    knowledge/3.0 (run --profile knowledge/3.0 first)
+  - a decision .okfignore matches is no concept of the bundle and stays where it is, and
+    .okfignore is never rewritten; a nested bundle is never entered: run the step on it
+
+Every step migrates only what lint reads: the paths .okfignore matches and nested bundles are
 left byte-identical (a plain directory of Markdown without OKF frontmatter is read as today).
 
 --out DIR writes a migrated copy and leaves the source bundle untouched (recommended for 0.2→0.1).
@@ -73,6 +96,7 @@ from okf_common import (  # noqa: E402
     LAYER_DIRS,
     OKFIGNORE,
     PROFILE_30,
+    OkfIgnore,
     SUPPORTED_VERSIONS,
     declared_profile,
     detect_version,
@@ -85,7 +109,17 @@ from okf_common import (  # noqa: E402
     walk_bundle,
 )
 from okf_index import index_targets, regenerate  # noqa: E402
-from okf_profile import DOMAIN_BUNDLE  # noqa: E402
+from okf_lint import Report, find_tree  # noqa: E402
+from okf_profile import (  # noqa: E402
+    DECISION,
+    DOMAIN_BUNDLE,
+    Resolved,
+    canonical_type,
+    directory_in_force,
+    is_a,
+    load_profile,
+    type_in_force,
+)
 
 DROP_ON_DOWNGRADE = ["verified", "status", "stale_after", "usage_window"]
 
@@ -329,6 +363,7 @@ EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:")
 MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)")
 RESOURCE_RE = re.compile(r"(\bresource\s*:\s*)([\"']?)([^\s\"',}\]]+)")
 PATH_KEYS = {"supersedes", "superseded_by"}
+SOURCE_KEYS = {"sources"}
 PATH_VALUE_RE = re.compile(r"([\"']?)([^\s\"',\[\]{}]+)")
 
 
@@ -424,9 +459,9 @@ def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
     return dirs, files
 
 
-def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
-    """Rewrite the body links, the sources[].resource and the PATH_KEYS values of one .md,
-    keeping every other byte."""
+def rewrite_paths(text: str, doc_rel: str, move, path_keys=PATH_KEYS, source_keys=SOURCE_KEYS) -> str:
+    """Rewrite the body links, the sources[].resource and the values of the path keys of one .md,
+    keeping every other byte. Of a link only the target changes. move: a Move or a FileMove."""
     def sub(m: re.Match, group: int) -> str:
         new = move.target(m.group(group), doc_rel)
         if new is None:
@@ -444,9 +479,9 @@ def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
                 key = re.match(r"^([A-Za-z_][\w-]*)\s*:", lines[i])
                 if key:
                     block = key.group(1)
-                if block == "sources":
+                if block in source_keys:
                     lines[i] = RESOURCE_RE.sub(lambda m: sub(m, 3), lines[i])
-                elif block in PATH_KEYS:
+                elif block in path_keys:
                     start = key.end() if key else 0
                     value, hash_, comment = lines[i][start:].partition(" #")
                     lines[i] = lines[i][:start] + PATH_VALUE_RE.sub(lambda m: sub(m, 2), value) + hash_ + comment
@@ -540,6 +575,164 @@ def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------
+# Decisions to the directory their type declares (--move-decisions)
+# --------------------------------------------------------------------------
+class FileMove:
+    """Files that move, as a map of bundle-relative posix paths old → new: any file to any path, renames included.
+    It gives rewrite_paths what Move gives it. exists(rel) says a bundle-relative path is in the bundle before the
+    move; with it, a relative target that names nothing there is left as written (a repository-relative resource
+    in a file that moves is not a path relative to that file)."""
+
+    def __init__(self, files: dict[str, str], exists=None):
+        self.files, self.exists = dict(files), exists
+
+    def new(self, rel: str) -> str:
+        return self.files.get(rel, rel)
+
+    def target(self, target: str, doc_rel: str) -> str | None:
+        """The rewritten link target, or None when it stays as it is."""
+        if EXTERNAL_RE.match(target) or target.startswith("#"):
+            return None
+        path, sep, anchor = target.partition("#")
+        if not path:
+            return None
+        slash = "/" if path.endswith("/") and path != "/" else ""
+        if path.startswith("/"):
+            rel = posixpath.normpath(path.lstrip("/"))
+            return f"/{self.files[rel]}{slash}{sep}{anchor}" if rel in self.files else None
+        rel = posixpath.normpath(posixpath.join(posixpath.dirname(doc_rel), path))
+        if rel not in self.files and (doc_rel not in self.files or (self.exists is not None and not self.exists(rel))):
+            return None
+        new = posixpath.relpath(self.new(rel), posixpath.dirname(self.new(doc_rel)) or ".")
+        return None if new == posixpath.normpath(path) else new + slash + sep + anchor
+
+
+def profile_in_force(bundle: Path) -> Resolved:
+    """The Domain Profile in force in a knowledge/3.0 bundle; for an operational instance, composed on the profile of
+    the domain bundle its parent chain reaches, as lint and okf_index.py read it."""
+    tree = find_tree(bundle, Report())
+    return load_profile(bundle, domain=tree.domain if tree is not None else None)
+
+
+def keys_with_paths(r: Resolved, fm: dict | None) -> tuple[set[str], set[str]]:
+    """(the keys whose values are paths, the keys that hold sources) of a concept: PATH_KEYS and every field its type
+    declares as a path or a list of paths, each under its declared name and under the local names aliases give it."""
+    t = canonical_type(r, (fm or {}).get("type"))
+    fields = type_in_force(r, t)["fields"] if isinstance(t, str) and t in r.types else {}
+    paths = set(PATH_KEYS) | {k for k, d in fields.items()
+                              if d.get("type") == "path" or (d.get("type") == "list" and d.get("of") == "path")}
+
+    def named(keys: set[str]) -> set[str]:
+        return keys | {name for name, a in r.aliases["fields"].items() if a["to"] in keys}
+
+    return named(paths), named(set(SOURCE_KEYS))
+
+
+def decision_moves(bundle: Path, r: Resolved) -> dict[str, str]:
+    """old → new for every decision of the bundle that is not directly in the directory in force of its type: a
+    concept lint reads (never a path .okfignore matches nor one inside a nested bundle) whose type, read through the
+    aliases, is a Decision. The file keeps its name."""
+    moves = {}
+    for doc in bundle_docs(bundle):
+        if doc.is_reserved or not isinstance(doc.frontmatter, dict):
+            continue
+        t = canonical_type(r, doc.frontmatter.get("type"))
+        if not isinstance(t, str) or not is_a(r, t, DECISION):
+            continue
+        home = (directory_in_force(r, t) or "").strip("/")
+        if home and posixpath.dirname(doc.rel) != home:
+            moves[doc.rel] = f"{home}/{posixpath.basename(doc.rel)}"
+    return moves
+
+
+def _left_out_destination(ign: OkfIgnore, nested: list[str], rel: str) -> str | None:
+    """Why a decision cannot move to rel: .okfignore matches it or a directory above it, or it lies in a nested bundle."""
+    parts = rel.split("/")
+    if ign.match(rel, False) or any(ign.match("/".join(parts[:i]), True) for i in range(1, len(parts))):
+        return f"{OKFIGNORE} matches it"
+    return "it lies in a nested bundle" if _under(rel, nested) else None
+
+
+def _dirs_up(rels) -> list[str]:
+    """The directory of each path and every directory above it, the bundle root ('') included."""
+    dirs = set()
+    for rel in rels:
+        d = posixpath.dirname(rel)
+        while d not in dirs:
+            dirs.add(d)
+            d = posixpath.dirname(d)
+    return sorted(dirs)
+
+
+def _n(n: int, noun: str) -> str:
+    return f"{n} {noun}" + ("" if n == 1 else "s")
+
+
+def move_decisions(bundle: Path, dry_run: bool) -> int:
+    if str(root_frontmatter(bundle).get("state")) == "closed":
+        print(f"ERROR: {bundle} is closed (state: closed): a closed bundle is never edited.", file=sys.stderr)
+        return 1
+    current = declared_profile(bundle)
+    if current != PROFILE_30:
+        print(f"ERROR: {bundle} declares profile {current or 'none (knowledge/2.0)'}: --move-decisions needs a "
+              f"{PROFILE_30} bundle; run okf_migrate.py --profile {PROFILE_30} first.", file=sys.stderr)
+        return 2
+    r = profile_in_force(bundle)
+    sc = scan_bundle(bundle)
+    if sc.nested:
+        print(f"NOTICE nested bundles not entered: {', '.join(sc.nested)} (run okf_migrate.py --move-decisions on each)")
+    moves = decision_moves(bundle, r)
+    if not moves:
+        print(f"nothing to move: every decision of {bundle} is in the directory its type declares")
+        return 0
+    ign = OkfIgnore.load(bundle)
+    stops, taken = [], {}
+    for old, new in moves.items():
+        why = _left_out_destination(ign, sc.nested, new)
+        if (bundle / new).exists():
+            stops.append(f"{old} cannot move to {new}: {new} already exists")
+        elif new in taken:
+            stops.append(f"{old} cannot move to {new}: {taken[new]} moves there too")
+        elif why:
+            stops.append(f"{old} cannot move to {new}: {why}")
+        taken.setdefault(new, old)
+    if stops:
+        for stop in stops:
+            print(f"ERROR: {stop}", file=sys.stderr)
+        print("Nothing was written; settle each by hand and run the step again.", file=sys.stderr)
+        return 1
+    move = FileMove(moves, exists=lambda rel: (bundle / rel).exists())
+    rewritten = {}
+    for doc in bundle_docs(bundle):
+        text = doc.path.read_text(encoding="utf-8")
+        new = rewrite_paths(text, doc.rel, move, *keys_with_paths(r, doc.frontmatter))
+        if new != text:
+            rewritten[doc.rel] = new
+    for old, new in moves.items():
+        print(f"MOVE {old} -> {new}")
+    for rel in rewritten:
+        print(f"LINKS {move.new(rel)}")
+    if not dry_run:
+        for old, new in moves.items():
+            (bundle / new).parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(bundle / old), str(bundle / new))
+        for rel, text in rewritten.items():
+            (bundle / move.new(rel)).write_text(text, encoding="utf-8")
+        regenerate(bundle, [bundle / d for d in _dirs_up([*moves, *moves.values()])])
+        for d in sorted({posixpath.dirname(old) for old in moves}):
+            if not any(q.is_file() and q.name != "index.md" for q in (bundle / d).rglob("*")):
+                print(f"NOTICE {d}/ holds nothing but its index.md now; remove the directory by hand if it is not "
+                      "wanted")
+        pairs = "; ".join(f"`{old}` → `{new}`" for old, new in moves.items())
+        append_log(bundle / "log.md", "", 0, entry=(
+            f"* **Migration**: {_n(len(moves), 'decision')} moved, each to the directory of its type, links rewritten in "
+            f"{_n(len(rewritten), 'file')}, with okf-migrate --move-decisions: {pairs}."))
+    print(f"\n{_n(len(moves), 'decision')} moved, each to the directory of its type, links rewritten in "
+          f"{_n(len(rewritten), 'file')}{' (dry-run)' if dry_run else ''} → {bundle}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
@@ -548,22 +741,29 @@ def main(argv=None) -> int:
     ap.add_argument("--actor", default="process:okf-migrate", help="generated.by for concepts without an author (0.1→0.2)")
     ap.add_argument("--keep-extensions", action="store_true", help="0.2→0.1: keep v0.2 keys as extensions")
     ap.add_argument("--out", help="write a migrated copy to this directory (the source is left untouched)")
+    ap.add_argument("--move-decisions", action="store_true",
+                    help="move each decision to the directory its type declares and rewrite the links to it (a step "
+                         "of its own, knowledge/3.0 only)")
     ap.add_argument("--dry-run", action="store_true", help="report the changes without writing them")
     ap.add_argument("--force", action="store_true", help="migrate even if the bundle already is at the target")
     ap.add_argument("--file", action="append", default=[],
                     help="migrate only this concept (path relative to the bundle); repeatable. Leaves index/log alone")
     args = ap.parse_args(argv)
+    if args.move_decisions and (args.to or args.profile or args.file or args.out):
+        ap.error("--move-decisions is a step of its own; it cannot be combined with --to, --profile, --file or --out")
     if args.file and args.profile:
         ap.error("--profile migrates the whole bundle; it cannot be combined with --file")
     if args.file and not args.to:
         ap.error("--file needs --to")
-    if not args.to and not args.profile:
-        ap.error("at least one of --to or --profile is required")
+    if not args.to and not args.profile and not args.move_decisions:
+        ap.error("at least one of --to or --profile is required, or --move-decisions on its own")
 
     src = Path(args.bundle).resolve() if args.bundle else find_bundle()
     if src is None or not src.is_dir():
         print("ERROR: bundle not found (knowledge/index.md). Pass its path.", file=sys.stderr)
         return 2
+    if args.move_decisions:
+        return move_decisions(src, args.dry_run)
     if args.file:
         detected, origin = detect_version(src)
         notes: list[str] = []
@@ -1295,6 +1495,382 @@ def test_rewrite_okfignore_follows_only_anchored_entries_under_a_moved_directory
         "# c\n\nbase/decisions/drafts/\n/base/decisions\n!base/decisions/drafts/keep.md\n\\#odd/x\n"
         "drafts/\nother/\n*.tmp\n**/wip/\nfragments/old/\nnotes.md\nbase/other/x/\n")
     assert rewrite_okfignore(text, []) == text
+
+
+# --------------------------------------------------------------------------
+# --move-decisions: each decision to the directory its type declares
+# --------------------------------------------------------------------------
+_OLD, _NEW = "base/decisions", "base/decisions/architecture"
+_ROOT_30 = '---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\n---\n\n# Index\n'
+_FRAGMENT = "occurred_at: 2026-11-01\norigin: Weekly\nparticipants: [human:alice]\ndistillation_status: distilled\n"
+
+
+def _b1(moved: bool) -> dict[str, str]:
+    """B1 without its indexes: two architecture decisions in base/decisions/ and every kind of path to them. With
+    moved, the same bundle after the step: the text it must have, each path to a moved decision renamed."""
+    d = _NEW if moved else _OLD
+    up = "../../" if moved else "../"  # from a decision to base/
+    return {
+        "log.md": ("# Bundle history\n\n## 2026-11-01\n"
+                   f"* **Creation**: [ADR-0001]({d}/ADR-0001-x.md), also [by bundle path](/{d}/ADR-0001-x.md).\n"),
+        "project.md": _concept("Project", "P"),
+        f"{d}/ADR-0001-x.md": _concept(
+            "Architecture Decision", "X",
+            "adr_id: ADR-0001\ndecision_status: accepted\n"
+            "sources:\n  - { id: f, resource: /fragments/2026-11-01-m.md }\n"
+            f"  - id: r\n    resource: \"{up}../fragments/2026-11-01-m.md\"\n  - {{ id: d, resource: docs/bench.md }}\n",
+            f"[pay]({up}systems/pay.md), [abs](/base/systems/pay.md), [next](ADR-0002-y.md#context), "
+            f"[frag]({up}../fragments/2026-11-01-m.md), [gone](nowhere.md), "
+            "[site](https://example.com/base/decisions/ADR-0001-x.md) and [top](#context).\n"),
+        f"{d}/ADR-0002-y.md": _concept(
+            "Architecture Decision", "Y",
+            f"adr_id: ADR-0002\ndecision_status: accepted\nsupersedes: /{d}/ADR-0001-x.md  # the older one\n",
+            "Replaces [X](ADR-0001-x.md).\n"),
+        "base/systems/pay.md": _concept(
+            "System", "Pay", f"sources:\n  - {{ id: a, resource: /{d}/ADR-0001-x.md, title: X }}\n",
+            f"See [abs](/{d}/ADR-0001-x.md#context) and "
+            f"[rel](../decisions/{'architecture/' if moved else ''}ADR-0001-x.md).\n"),
+        "base/questions/why.md": _concept(
+            "Open Question", "Why",
+            "owner: human:alice\nquestion_status: open\nasked_in: /fragments/2026-11-01-m.md\n"
+            f"blocks: [/{d}/ADR-0001-x.md, /base/systems/pay.md]\n"),
+        "fragments/2026-11-01-m.md": _concept(
+            "Knowledge Fragment", "M",
+            _FRAGMENT + f"sources:\n  - {{ id: a, resource: /{d}/ADR-0001-x.md, title: X }}\n",
+            "# Record\n\n"
+            f"Alice: we follow [ADR-0001](../{d}/ADR-0001-x.md) and "
+            f"[base/decisions/ADR-0001-x.md](/{d}/ADR-0001-x.md \"X\"), kept at `/base/decisions/ADR-0001-x.md`.\n"),
+    }
+
+
+def _bundle_30(tmp: Path, files: dict[str, str]) -> Path:
+    """A knowledge/3.0 bundle holding `files`, its indexes written by okf_index.py."""
+    return _bundle_at(tmp / "knowledge", files)
+
+
+def _bundle_at(k: Path, files: dict[str, str]) -> Path:
+    for rel, text in {"index.md": _ROOT_30, **files}.items():
+        (k / rel).parent.mkdir(parents=True, exist_ok=True)
+        (k / rel).write_text(text, encoding="utf-8")
+    regenerate(k, index_targets(k))
+    return k
+
+
+def _no_indexes(tree: dict[str, str]) -> dict[str, str]:
+    return {rel: text for rel, text in tree.items() if rel.rpartition("/")[2] != "index.md"}
+
+
+def _findings(k: Path) -> list[tuple]:
+    from okf_lint import lint
+
+    rep, _, _ = lint(k)
+    return sorted((i["level"], i["code"], i["path"], i["message"]) for i in rep.items)
+
+
+def _move(k: Path, capsys, *extra: str) -> tuple[int, str, str]:
+    capsys.readouterr()
+    rc = main([str(k), "--move-decisions", *extra])
+    io = capsys.readouterr()
+    return rc, io.out, io.err
+
+
+_B1_MOVES = (f"MOVE {_OLD}/ADR-0001-x.md -> {_NEW}/ADR-0001-x.md\nMOVE {_OLD}/ADR-0002-y.md -> {_NEW}/ADR-0002-y.md\n"
+             f"LINKS log.md\nLINKS {_NEW}/ADR-0001-x.md\nLINKS {_NEW}/ADR-0002-y.md\nLINKS {_OLD}/index.md\n"
+             "LINKS base/questions/why.md\nLINKS base/systems/pay.md\nLINKS fragments/2026-11-01-m.md\n")
+_B1_WROTE = f"WROTE {_OLD}/index.md\nWROTE {_NEW}/index.md\n"
+_B1_SUMMARY = "\n2 decisions moved, each to the directory of its type, links rewritten in 7 files{dry} → {k}\n"
+_B1_ENTRY = ("* **Migration**: 2 decisions moved, each to the directory of its type, links rewritten in 7 files, with okf-migrate "
+             f"--move-decisions: `{_OLD}/ADR-0001-x.md` → `{_NEW}/ADR-0001-x.md`; "
+             f"`{_OLD}/ADR-0002-y.md` → `{_NEW}/ADR-0002-y.md`.\n")
+
+
+def test_move_decisions_moves_each_decision_and_rewrites_every_path_to_it(tmp_path, capsys):
+    from okf_index import main as index_main
+
+    k = _bundle_30(tmp_path, _b1(False))
+    before = _findings(k)
+    rc, out, err = _move(k, capsys)
+    assert (rc, out, err) == (0, _B1_MOVES + _B1_WROTE + _B1_SUMMARY.format(dry="", k=k), "")
+    after = _b1(True)
+    after["log.md"] = after["log.md"].replace(
+        "## 2026-11-01\n", f"## {date.today().isoformat()}\n{_B1_ENTRY}\n## 2026-11-01\n")
+    assert _no_indexes(_tree(k)) == after
+    assert index_main([str(k), "--check"]) == 0
+    assert capsys.readouterr().out == "0 index.md out of date\n"
+    renamed = sorted((level, code, path.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-"), msg.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-"))
+                     for level, code, path, msg in before)
+    assert before and _findings(k) == renamed
+
+
+def _outside_link_targets(before: str, after: str) -> list[tuple[str, str]]:
+    """The spans a character diff finds changed that do not lie inside the parentheses of a link, on both sides."""
+    import difflib
+
+    def inside(text: str, i: int, j: int) -> bool:
+        return any(m.start(1) <= i and j <= m.end(1) for m in re.finditer(r"\]\(([^)]*)\)", text))
+
+    ops = difflib.SequenceMatcher(None, before, after, autojunk=False).get_opcodes()
+    return [(before[i1:i2], after[j1:j2]) for tag, i1, i2, j1, j2 in ops
+            if tag != "equal" and not (inside(before, i1, i2) and inside(after, j1, j2))]
+
+
+def test_move_decisions_changes_a_fragment_record_only_inside_the_target_of_a_link(tmp_path, capsys):
+    k = _bundle_30(tmp_path, _b1(False))
+    rel = "fragments/2026-11-01-m.md"
+    before = _tree(k)[rel].partition("# Record\n")[2]
+    assert _move(k, capsys)[0] == 0
+    after = _tree(k)[rel].partition("# Record\n")[2]
+    assert before and after != before
+    assert _outside_link_targets(before, after) == []
+    assert _outside_link_targets("[a/x.md](/a/x.md)", "[b/x.md](/b/x.md)") == [("a", "b")]
+
+
+def test_move_decisions_dry_run_lists_the_moves_and_writes_nothing(tmp_path, capsys):
+    k = _bundle_30(tmp_path, _b1(False))
+    before = _bytes(k)
+    rc, out, err = _move(k, capsys, "--dry-run")
+    assert (rc, out, err) == (0, _B1_MOVES + _B1_SUMMARY.format(dry=" (dry-run)", k=k), "")
+    assert _bytes(k) == before
+
+
+def _nothing(k: Path) -> str:
+    return f"nothing to move: every decision of {k} is in the directory its type declares\n"
+
+
+def test_move_decisions_leaves_a_decision_already_in_the_directory_of_its_type(tmp_path, capsys):
+    for name, files in (("placed", _b1(True)), ("none", {"log.md": _b1(True)["log.md"], "project.md": _concept("Project", "P")})):
+        k = _bundle_30(tmp_path / name, files)
+        before = _bytes(k)
+        assert _move(k, capsys) == (0, _nothing(k), "")
+        assert _bytes(k) == before
+
+
+def test_move_decisions_run_twice_moves_nothing_the_second_time(tmp_path, capsys):
+    k = _bundle_30(tmp_path, _b1(False))
+    assert _move(k, capsys)[0] == 0
+    before = _bytes(k)
+    assert _move(k, capsys) == (0, _nothing(k), "")
+    assert _bytes(k) == before
+
+
+_LOG_30 = "# Bundle history\n\n## 2026-11-01\n* **Creation**: test.\n"
+_DEC = _concept("Decision", "How", "decision_id: DEC-0001\ndecision_status: accepted\n")
+
+
+def test_move_decisions_moves_a_plain_decision_out_of_the_architecture_directory(tmp_path, capsys):
+    from okf_index import main as index_main
+
+    k = _bundle_30(tmp_path, {"log.md": _LOG_30, "project.md": _concept("Project", "P"), f"{_NEW}/DEC-0001-how.md": _DEC})
+    rc, out, err = _move(k, capsys)
+    assert (rc, out, err) == (0, (
+        f"MOVE {_NEW}/DEC-0001-how.md -> {_OLD}/DEC-0001-how.md\nLINKS {_NEW}/index.md\n"
+        f"WROTE {_OLD}/index.md\nWROTE {_NEW}/index.md\n"
+        f"NOTICE {_NEW}/ holds nothing but its index.md now; remove the directory by hand if it is not wanted\n"
+        f"\n1 decision moved, each to the directory of its type, links rewritten in 1 file → {k}\n"), "")
+    tree = _tree(k)
+    assert sorted(rel for rel in tree if rel.startswith(_OLD)) == [
+        f"{_OLD}/DEC-0001-how.md", f"{_NEW}/index.md", f"{_OLD}/index.md"]
+    assert tree[f"{_OLD}/DEC-0001-how.md"] == _DEC
+    assert tree[f"{_NEW}/index.md"] == "> Architecture views and principles.\n\n# architecture\n\n_(empty)_\n"
+    assert tree[f"{_OLD}/index.md"] == _freshly_regenerated(k, tmp_path, _OLD)
+    assert "(DEC-0001-how.md)" in tree[f"{_OLD}/index.md"]
+    assert index_main([str(k), "--check"]) == 0
+
+
+_LOCAL_TYPES = ("---\ntype: Domain Profile\ntitle: DP\ndescription: DP.\n" + _GEN + "types:\n"
+                "  Standard Decision: { extends: Decision, description: A decision about the standard, "
+                "directory: /base/decisions/standard/, prefix: SDR }\n"
+                "  Product ADR: { extends: Architecture Decision, description: A product decision }\n"
+                "{aliases}---\n\n# What this bundle holds\n\nText.\n")
+
+
+def _decisions(k: Path) -> list[str]:
+    return sorted(rel for rel in _no_indexes(_tree(k)) if rel.startswith(_OLD + "/"))
+
+
+def test_move_decisions_takes_a_local_type_to_the_directory_it_declares(tmp_path, capsys):
+    k = _bundle_30(tmp_path, {
+        "log.md": _LOG_30, "project.md": _concept("Project", "P"), "base/profile.md": _LOCAL_TYPES.replace("{aliases}", ""),
+        f"{_OLD}/SDR-0001-format.md": _concept("Standard Decision", "Format", "decision_id: SDR-0001\n"),
+        f"{_OLD}/DEC-0001-how.md": _DEC})
+    assert _move(k, capsys)[0] == 0
+    assert _decisions(k) == [f"{_OLD}/DEC-0001-how.md", f"{_OLD}/standard/SDR-0001-format.md"]
+
+
+def test_move_decisions_takes_a_local_type_without_a_directory_to_that_of_the_type_it_extends(tmp_path, capsys):
+    k = _bundle_30(tmp_path, {
+        "log.md": _LOG_30, "project.md": _concept("Project", "P"), "base/profile.md": _LOCAL_TYPES.replace("{aliases}", ""),
+        f"{_OLD}/ADR-0001-p.md": _concept("Product ADR", "P", "adr_id: ADR-0001\n"),
+        f"{_OLD}/DEC-0001-how.md": _DEC})
+    assert _move(k, capsys)[0] == 0
+    assert _decisions(k) == [f"{_OLD}/DEC-0001-how.md", f"{_NEW}/ADR-0001-p.md"]
+
+
+def test_move_decisions_reads_local_type_and_key_names_through_the_aliases(tmp_path, capsys):
+    aliases = "aliases:\n  types: { Decisión de producto: Product ADR }\n  fields: { reemplaza: supersedes, fuentes: sources }\n"
+    files = {
+        "log.md": _LOG_30, "project.md": _concept("Project", "P"),
+        "base/profile.md": _LOCAL_TYPES.replace("{aliases}", aliases),
+        f"{_OLD}/ADR-0001-p.md": _concept("Decisión de producto", "P", "adr_id: ADR-0001\n"),
+        "base/decisions/standard/SDR-0001-format.md": _concept(
+            "Standard Decision", "Format",
+            f"decision_id: SDR-0001\nreemplaza: /{_OLD}/ADR-0001-p.md\n"
+            f"fuentes:\n  - {{ id: p, resource: /{_OLD}/ADR-0001-p.md }}\n")}
+    k = _bundle_30(tmp_path, files)
+    assert _move(k, capsys)[0] == 0
+    assert _decisions(k) == [f"{_NEW}/ADR-0001-p.md", f"{_OLD}/standard/SDR-0001-format.md"]
+    assert _tree(k)[f"{_OLD}/standard/SDR-0001-format.md"] == files["base/decisions/standard/SDR-0001-format.md"].replace(
+        f"/{_OLD}/ADR-0001-p.md", f"/{_NEW}/ADR-0001-p.md")
+
+
+def test_move_decisions_of_an_open_instance_reads_the_profile_of_its_domain_bundle(tmp_path, capsys):
+    kinds = "kinds:\n  Request: { extends: Operational Bundle, description: A request, directory: requests/ }\n"
+    k = _bundle_30(tmp_path, {"log.md": _LOG_30, "project.md": _concept("Project", "P"),
+                              "base/profile.md": _LOCAL_TYPES.replace("{aliases}", kinds)})
+    inst = _bundle_at(k / "requests" / "req-1", {
+        "index.md": _ROOT_30.replace("---\n\n", "kind: Request\nstate: open\nparent: ../..\n---\n\n"),
+        "log.md": _LOG_30, "project.md": _concept("Project", "R"),
+        f"{_OLD}/SDR-0001-format.md": _concept("Standard Decision", "Format", "decision_id: SDR-0001\n")})
+    regenerate(k, index_targets(k))
+    domain = _bytes(k)
+    assert _move(inst, capsys)[0] == 0
+    assert sorted(rel for rel in _no_indexes(_tree(inst)) if rel.startswith("base/")) == [f"{_OLD}/standard/SDR-0001-format.md"]
+    assert {rel: b for rel, b in _bytes(k).items() if not rel.startswith("requests/req-1/")} == {
+        rel: b for rel, b in domain.items() if not rel.startswith("requests/req-1/")}
+
+
+_DRAFT = _concept("Architecture Decision", "Draft", "adr_id: ADR-0009\n",
+                  "[X](ADR-0001-x.md) and [abs](/base/decisions/ADR-0001-x.md).\n")
+
+
+def test_move_decisions_leaves_a_decision_okfignore_matches(tmp_path, capsys):
+    ignored = {".okfignore": "base/decisions/ADR-0009-draft.md\nbase/decisions/drafts/\n",
+               f"{_OLD}/ADR-0009-draft.md": _DRAFT, f"{_OLD}/drafts/ADR-0008-draft.md": _DRAFT}
+    k = _bundle_30(tmp_path, {**_b1(False), **ignored})
+    rc, out, err = _move(k, capsys)
+    assert {rel: b for rel, b in _bytes(k).items() if rel in ignored} == {rel: t.encode() for rel, t in ignored.items()}
+    assert sorted(rel for rel in _tree(k) if "draft" in rel) == [f"{_OLD}/ADR-0009-draft.md", f"{_OLD}/drafts/ADR-0008-draft.md"]
+    assert (rc, out, err) == (0, _B1_MOVES + _B1_WROTE + _B1_SUMMARY.format(dry="", k=k), "")
+
+
+def _instance(k: Path, rel: str, keys: str, name: str = "ADR-0001-n.md") -> None:
+    """A nested bundle of k at rel, hand-made, holding an architecture decision outside the directory of its type."""
+    b = k / rel
+    (b / _OLD).mkdir(parents=True)
+    (b / "index.md").write_text(f'---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\n{keys}---\n\n# Subdirectories\n\n'
+                                "* [base](base/index.md) - B.\n", encoding="utf-8")
+    (b / "log.md").write_text(_LOG_30, encoding="utf-8")
+    (b / "base" / "index.md").write_text("# base\n\n* [decisions](decisions/index.md) - D.\n", encoding="utf-8")
+    (b / _OLD / "index.md").write_text(f"# decisions\n\n* [N]({name}) - N.\n", encoding="utf-8")
+    (b / _OLD / name).write_text(_concept(
+        "Architecture Decision", "N", "adr_id: ADR-0001\n", "[up](../../../../base/decisions/ADR-0001-x.md)\n"), encoding="utf-8")
+
+
+_NESTED_NOTICE = ("NOTICE nested bundles not entered: nested/, requests/req-1/ (run okf_migrate.py --move-decisions on "
+                  "each)\n")
+
+
+def test_move_decisions_never_enters_a_nested_bundle(tmp_path, capsys):
+    k = tmp_path / "knowledge"
+    _instance(k, "requests/req-1", "kind: Request\nstate: open\nparent: ../..\n")
+    _instance(k, "nested", "", "ADR-0003-m.md")
+    k = _bundle_30(tmp_path, _b1(False))
+    inside = {rel: b for rel, b in _bytes(k).items() if rel.startswith(("requests/req-1/", "nested/"))}
+    rc, out, err = _move(k, capsys)
+    assert len(inside) == 10
+    assert {rel: b for rel, b in _bytes(k).items() if rel.startswith(("requests/req-1/", "nested/"))} == inside
+    assert (rc, out, err) == (0, _NESTED_NOTICE + _B1_MOVES + _B1_WROTE + _B1_SUMMARY.format(dry="", k=k), "")
+    assert _move(k, capsys) == (0, _NESTED_NOTICE + _nothing(k), "")
+
+
+def test_move_decisions_stops_before_writing_when_a_new_path_is_taken_or_left_out(tmp_path, capsys):
+    taken = _concept("Architecture Decision", "Other X", "adr_id: ADR-0001\n")
+    cannot = f"ERROR: {_OLD}/ADR-0001-x.md cannot move to {_NEW}/ADR-0001-x.md: "
+    cannot_y = f"ERROR: {_OLD}/ADR-0002-y.md cannot move to {_NEW}/ADR-0002-y.md: "
+    nothing = "Nothing was written; settle each by hand and run the step again.\n"
+    cases = {
+        "exists": ({f"{_NEW}/ADR-0001-x.md": taken}, cannot + f"{_NEW}/ADR-0001-x.md already exists\n" + nothing),
+        "ignored": ({".okfignore": "base/decisions/architecture/\n"},
+                    cannot + ".okfignore matches it\n" + cannot_y + ".okfignore matches it\n" + nothing)}
+    for name, (extra, err) in cases.items():
+        k = _bundle_30(tmp_path / name, {**_b1(False), **extra})
+        before = _bytes(k)
+        for flags in ((), ("--dry-run",)):
+            result = _move(k, capsys, *flags)
+            assert _bytes(k) == before
+            assert result == (1, "", err)
+
+
+def test_move_decisions_refuses_a_closed_bundle_and_one_that_is_not_knowledge_30(tmp_path, capsys):
+    closed = tmp_path / "closed" / "requests" / "req-1"
+    _instance(tmp_path / "closed", "requests/req-1",
+              "kind: Request\nstate: closed\nclosed_at: 2026-11-08T10:00:00Z\nparent: ../..\n")
+    closed_20 = tmp_path / "closed20" / "requests" / "req-1"
+    _instance(tmp_path / "closed20", "requests/req-1", "kind: Request\nstate: closed\nparent: ../..\n")
+    idx = closed_20 / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace('okf_profile: "knowledge/3.0"\n', ""), encoding="utf-8")
+    old = _bundle_20(tmp_path / "old")
+    bare = _bundle_20(tmp_path / "bare")
+    idx = bare / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace('okf_profile: "knowledge/2.0"\n', ""), encoding="utf-8")
+    is_closed = "ERROR: {k} is closed (state: closed): a closed bundle is never edited.\n"
+    not_30 = ("ERROR: {k} declares profile {p}: --move-decisions needs a knowledge/3.0 bundle; run okf_migrate.py "
+              "--profile knowledge/3.0 first.\n")
+    expected = {closed: (1, "", is_closed.format(k=closed)), closed_20: (1, "", is_closed.format(k=closed_20)),
+                old: (2, "", not_30.format(k=old, p="knowledge/2.0")),
+                bare: (2, "", not_30.format(k=bare, p="none (knowledge/2.0)"))}
+    for k, result in expected.items():
+        before = _bytes(k)
+        for flags in ((), ("--dry-run",)):
+            found = _move(k, capsys, *flags)
+            assert _bytes(k) == before
+            assert found == result
+
+
+def test_move_decisions_is_a_step_of_its_own(tmp_path, capsys):
+    import pytest
+
+    k = _bundle_30(tmp_path, _b1(False))
+    before = _bytes(k)
+    capsys.readouterr()
+    found = {}
+    for flags in (("--to", "0.2"), ("--profile", "knowledge/3.0"), ("--file", "project.md"), ("--out", str(tmp_path / "out")),
+                  ("--to", "0.1", "--out", str(tmp_path / "out"))):
+        with pytest.raises(SystemExit) as stop:
+            main([str(k), "--move-decisions", *flags])
+        found[flags] = (stop.value.code, capsys.readouterr().err.splitlines()[-1].partition(": error: ")[2])
+    assert found == {flags: (2, "--move-decisions is a step of its own; it cannot be combined with --to, --profile, "
+                                "--file or --out") for flags in found}
+    assert len(found) == 5 and _bytes(k) == before and not (tmp_path / "out").exists()
+    with pytest.raises(SystemExit) as stop:
+        main([str(k)])
+    assert (stop.value.code, capsys.readouterr().err.splitlines()[-1].partition(": error: ")[2]) == (
+        2, "at least one of --to or --profile is required, or --move-decisions on its own")
+
+
+def test_file_move_rewrites_a_target_for_any_map_of_old_to_new_paths():
+    a, b, c = "base/decisions/ADR-0001-x.md", "base/decisions/ADR-0002-y.md", "base/decisions/ADR-0003-z.md"
+    move = FileMove({a: "base/decisions/standard/SDR-0001-x.md", b: "base/decisions/DEC-0001-y.md",
+                     c: "base/decisions/architecture/ADR-0003-z.md"},
+                    exists=lambda rel: rel in (a, b, c, "base/systems/pay.md", "base/systems"))
+    cases = {
+        ("/" + a + "#context", "log.md"): "/base/decisions/standard/SDR-0001-x.md#context",
+        ("base/decisions/ADR-0002-y.md", "log.md"): "base/decisions/DEC-0001-y.md",
+        ("../decisions/ADR-0001-x.md", "base/systems/pay.md"): "../decisions/standard/SDR-0001-x.md",
+        ("ADR-0002-y.md", a): "../DEC-0001-y.md",
+        ("ADR-0001-x.md#why", b): "standard/SDR-0001-x.md#why",
+        ("ADR-0001-x.md", c): "../standard/SDR-0001-x.md",
+        ("../systems/pay.md", a): "../../systems/pay.md",
+        ("../systems/", a): "../../systems/",
+        ("../systems/pay.md", b): None,
+        ("docs/bench.md", a): None,
+        ("-", a): None,
+        ("/base/systems/pay.md", a): None,
+        ("https://example.com/" + a, "log.md"): None,
+        ("#context", a): None,
+    }
+    assert {case: move.target(*case) for case in cases} == cases
+    assert FileMove({a: "base/decisions/standard/SDR-0001-x.md"}).target("docs/bench.md", a) == "../docs/bench.md"
 
 
 if __name__ == "__main__":
