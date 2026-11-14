@@ -1162,15 +1162,17 @@ def _same(a: Any, b: Any) -> bool:
 
 
 def resolve_aliases(r: Resolved, fm: dict) -> dict:
-    """The frontmatter as the profile reads it (§4.1 What lint checks): a local type name becomes the type it
-    stands for, a local field name the declared field, and a value alias whose `from` holds in full is replaced
-    by its `to`. A key the concept also carries under its declared name keeps the concept's own value."""
+    """The frontmatter as the profile reads it (§4.1 What lint checks), in this order: a local field name becomes
+    the declared field, then a local type name becomes the type it stands for, then a value alias whose `from`
+    holds in full is replaced by its `to`. So a type written under a local name of the type key is resolved too,
+    and a value alias is matched against the declared names. A key the concept also carries under its declared
+    name keeps the concept's own value."""
     out = dict(fm)
-    if "type" in out:
-        out["type"] = canonical_type(r, out["type"])
     for name, a in r.aliases["fields"].items():
         if name in out:
             out.setdefault(a["to"], out.pop(name))
+    if "type" in out:
+        out["type"] = canonical_type(r, out["type"])
     for va in r.aliases["values"]:
         if all(k in out and _same(out[k], v) for k, v in va["from"].items()):
             for k in va["from"]:
@@ -2212,6 +2214,36 @@ def test_resolve_aliases_reads_local_names_as_the_declared_ones(tmp_path):
     assert resolve_aliases(r, {"type": "Term", "ingerido": False}) == {"type": "Term", "ingerido": False}
     assert canonical_type(r, "Reunión con cliente") == "Client Meeting" and canonical_type(None, "X") == "X"
     assert alias_keys(r) == {"cliente", "ingerido"}
+
+
+_NORMA = ("types:\n  Standard Decision: { extends: Architecture Decision, description: A decision about the standard }\n"
+          "aliases:\n  types: { Norma: Standard Decision }\n  fields: { tipo: type }\n")
+
+
+def test_resolve_aliases_reads_a_local_type_name_written_under_a_local_name_of_the_type_key(tmp_path):
+    r = load_profile(_bundle(tmp_path, _NORMA), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    fm = {"tipo": "Norma", "title": "A norm"}
+    assert resolve_aliases(r, fm) == {"type": "Standard Decision", "title": "A norm"}
+    assert fm == {"tipo": "Norma", "title": "A norm"}  # the frontmatter is not changed
+    for spelled in ({"type": "Standard Decision"}, {"type": "Norma"}, {"tipo": "Standard Decision"}):
+        assert resolve_aliases(r, spelled) == {"type": "Standard Decision"}
+    # a concept that carries both keys keeps its own `type`, resolved
+    assert resolve_aliases(r, {"tipo": "Term", "type": "Norma"}) == {"type": "Standard Decision"}
+    assert resolve_aliases(r, {"tipo": "Norma", "type": "Term"}) == {"type": "Term"}
+
+
+def test_a_value_alias_is_matched_against_the_declared_key_and_type_names(tmp_path):
+    """Value aliases run last, on the frontmatter with its local key and type names already resolved: one whose
+    `from` names the type a concept stands for holds for every spelling of it, and one whose `from` names a local
+    type name or a local name of the type key holds for none."""
+    values = ("  values:\n    - { from: { type: Norma }, to: { type: Standard Decision, tags: [local-type-name] } }\n"
+              "    - { from: { tipo: Norma }, to: { type: Standard Decision, tags: [local-key-name] } }\n"
+              "    - { from: { type: Standard Decision }, to: { type: Standard Decision, tags: [declared] } }\n")
+    r = load_profile(_bundle(tmp_path, _NORMA + values), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    for spelled in ({"type": "Standard Decision"}, {"type": "Norma"}, {"tipo": "Standard Decision"}, {"tipo": "Norma"}):
+        assert resolve_aliases(r, spelled) == {"type": "Standard Decision", "tags": ["declared"]}, spelled
 
 
 def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_type(tmp_path):
