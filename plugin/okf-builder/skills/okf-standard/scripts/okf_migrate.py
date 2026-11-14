@@ -636,6 +636,29 @@ def frontmatter_key(line: str) -> tuple[str, int] | None:
     return (plain.group(1), plain.end()) if plain and plain.group(1) else None
 
 
+def comment_start(line: str) -> int:
+    """The index where the YAML comment of one frontmatter line starts, len(line) when it has none: a `#` that
+    opens the line or follows a space or a tab, outside a quoted scalar. A quote opens a scalar only where a value
+    can start (the start of the line, after a space or a tab, or after one of `[{,:`)."""
+    quote, i = "", 0
+    while i < len(line):
+        c = line[i]
+        if quote == '"' and c == "\\":
+            i += 1
+        elif quote:
+            if c == quote:
+                if quote == "'" and line[i + 1:i + 2] == "'":
+                    i += 1
+                else:
+                    quote = ""
+        elif c in "\"'" and (i == 0 or line[i - 1] in " \t[{,:"):
+            quote = c
+        elif c == "#" and (i == 0 or line[i - 1] in " \t"):
+            return i
+        i += 1
+    return len(line)
+
+
 _RESOURCE_KEY_RE = re.compile(r"""(?:(?<![\w"'.-])resource[ \t]*:(?=[ \t\r]|$)|"resource"[ \t]*:|'resource'[ \t]*:)[ \t]*""")
 _RESOURCE_VALUE_RE = re.compile(r"([\"']?)([^\s\"',}\]]+)")
 _RESOURCE_NEXT_LINE_RE = re.compile(r"(?:[>|][+\-1-9]{0,2}[ \t]*)?(?:#.*)?\r?$")
@@ -646,25 +669,29 @@ def rewrite_resource(line: str, pending: bool, new_target) -> tuple[str, bool]:
     """(the line, whether its last `resource` leaves its path to the next line) for one line of a sources block:
     each `resource` subkey, written plain or in quotes, has its path rewritten with new_target, the path plain or in
     quotes on the line of the key. With pending, the line is read first as the path alone that a `resource:` left
-    open or a block scalar (`resource: >-`) announced on the line before."""
+    open or a block scalar (`resource: >-`) announced on the line before. The YAML comment of the line
+    (comment_start) is kept as written, a path it names included; a line that is only a comment leaves pending as
+    it was."""
     def put(text: str, value: re.Match) -> str:
         new = new_target(value.group(2))
         return text if new is None else text[:value.start(2)] + new + text[value.end(2):]
 
+    cut = comment_start(line)
+    line, comment = line[:cut], line[cut:]
+    if not line.strip():
+        return line + comment, pending
     if pending:
-        if not line.strip():
-            return line, True
         indent = re.match(r"[ \t]+(?=\S)", line)
         value = _RESOURCE_VALUE_RE.match(line, indent.end()) if indent else None
         if value and _RESOURCE_ALONE_RE.match(line, value.end()):
-            return put(line, value), False
+            return put(line, value) + comment, False
     keys = list(_RESOURCE_KEY_RE.finditer(line))
     opens = bool(keys) and _RESOURCE_NEXT_LINE_RE.match(line, keys[-1].end()) is not None
     for key in reversed(keys[:-1] if opens else keys):
         value = _RESOURCE_VALUE_RE.match(line, key.end())
         if value:
             line = put(line, value)
-    return line, opens
+    return line + comment, opens
 
 
 def rewrite_moved(text: str, doc_rel: str, move: "FileMove", path_keys=PATH_KEYS, source_keys=SOURCE_KEYS) -> str:
@@ -672,9 +699,10 @@ def rewrite_moved(text: str, doc_rel: str, move: "FileMove", path_keys=PATH_KEYS
     as CommonMark defines it (okf_common.inline_links: an image and a linked image included, the target plain or in
     angle brackets, whatever the link text and the title), the sources[].resource (rewrite_resource: the subkey
     plain or in quotes, its path on the same line or alone on the next) and the values of the path keys,
-    a key read under any name it is written with (frontmatter_key). Every other byte is kept, the line endings of
-    a text read without newline translation included; a reference-style definition (`[ref]: target`) is not an
-    inline link and stays as written."""
+    a key read under any name it is written with (frontmatter_key). Every other byte is kept, a YAML comment of
+    the frontmatter (comment_start) and the line endings of a text read without newline translation included; a
+    link of a block quote that continues on the next line, after its `>`, is not one inline_links reads and stays
+    as written, as does a reference-style definition (`[ref]: target`), which is not an inline link."""
     def sub(m: re.Match, group: int) -> str:
         new = move.target(m.group(group), doc_rel)
         if new is None:
@@ -695,9 +723,8 @@ def rewrite_moved(text: str, doc_rel: str, move: "FileMove", path_keys=PATH_KEYS
                 if block in source_keys:
                     lines[i], pending = rewrite_resource(lines[i], pending, lambda t: move.target(t, doc_rel))
                 elif block in path_keys:
-                    start = key[1] if key else 0
-                    value, hash_, comment = lines[i][start:].partition(" #")
-                    lines[i] = lines[i][:start] + PATH_VALUE_RE.sub(lambda m: sub(m, 2), value) + hash_ + comment
+                    start, cut = key[1] if key else 0, comment_start(lines[i])
+                    lines[i] = lines[i][:start] + PATH_VALUE_RE.sub(lambda m: sub(m, 2), lines[i][start:cut]) + lines[i][cut:]
             body_start = end + 1
     body = "\n".join(lines[body_start:])
     for link in reversed(inline_links(body)):
@@ -2364,6 +2391,101 @@ def test_profile_step_rewrites_the_links_main_rewrote_and_no_other(tmp_path):
                                               _PROFILE_FORMS.format(abs="/base/", rel="../base/")),
         "base/decisions/ADR-0003-f.md": _concept("Architecture Decision", "F",
                                                  body=_PROFILE_FORMS_ADR.format(up="../../"))}
+
+
+def _commented(d: str, up: str) -> dict[str, str]:
+    """Concepts whose frontmatter names the decision in YAML comments, always by its old path, beside live paths
+    under `d`: a commented-out sources entry, a comment at column 0 inside a block, a trailing comment that keeps
+    the old path, and comment lines between a `resource:` and its path on the next line."""
+    was = f"/{_OLD}/ADR-0001-x.md"
+    sources = ("sources:\n"
+               f"  # - {{ id: old, resource: {was} }}\n"
+               f"# resource: {was}\n"
+               f"  - id: f\n    resource: /fragments/2026-11-01-m.md  # was resource: {was}\n"
+               f"  - id: a\n    resource: /{d}/ADR-0001-x.md  # was resource: {was}\n"
+               f"  - {{ id: b, resource: \"/{d}/ADR-0001-x.md\" }} # was {{ resource: {was} }}\n"
+               f"  - id: c\n    resource:  # resource: {was}\n      # {was}\n      /{d}/ADR-0001-x.md  # {was}\n"
+               f"  - {{ id: e, title: \"a # b\", resource: /{d}/ADR-0001-x.md#context }}\n")
+    return {
+        "project.md": _concept("Project", "P"),
+        f"{d}/ADR-0001-x.md": _concept("Architecture Decision", "X", "adr_id: ADR-0001\ndecision_status: accepted\n"),
+        f"{d}/ADR-0002-y.md": _concept(
+            "Architecture Decision", "Y",
+            "adr_id: ADR-0002\ndecision_status: accepted\n"
+            f"supersedes:\n# see index.md\n  # and ../systems/pay.md\n  - /{d}/ADR-0001-x.md # was {was}\n"
+            f"sources:\n  # - {{ id: old, resource: ../systems/pay.md }}\n  - {{ id: p, resource: {up}systems/pay.md }}\n"),
+        "base/systems/pay.md": _concept("System", "Pay", sources),
+        "base/questions/why.md": _concept(
+            "Open Question", "Why",
+            "owner: human:alice\nquestion_status: open\nasked_in: /fragments/2026-11-01-m.md\n"
+            f"blocks:\n# was {was}\n  # was {was}\n  - /{d}/ADR-0001-x.md  # was {was}\n  - '/base/systems/pay.md'\n"),
+        "fragments/2026-11-01-m.md": _concept("Knowledge Fragment", "M", _FRAGMENT + sources, "# Record\n\nAlice: yes.\n"),
+    }
+
+
+def test_move_decisions_keeps_every_yaml_comment_of_the_frontmatter_as_written(tmp_path, capsys):
+    k = _bundle_30(tmp_path, {"log.md": _LOG_30, **_commented(_OLD, "../")})
+    assert _move(k, capsys)[0] == 0
+    tree = _no_indexes(_tree(k))
+    assert {rel: text for rel, text in tree.items() if rel != "log.md"} == _commented(_NEW, "../../")
+    new = f"/{_NEW}/ADR-0001-x.md"
+    assert [s["resource"] for s in _parse(tree["base/systems/pay.md"])[0]["sources"]] == [
+        "/fragments/2026-11-01-m.md", new, new, new, new + "#context"]
+    assert _parse(tree["base/questions/why.md"])[0]["blocks"] == [new, "/base/systems/pay.md"]
+    assert _parse(tree[f"{_NEW}/ADR-0002-y.md"])[0]["supersedes"] == [new]
+
+
+def test_comment_start_gives_where_the_yaml_comment_of_a_line_starts():
+    lines = {"# c": 0, "  # c": 2, "a: b # c": 5, "a: b\t# c": 5, "a: b#c": 6, "a: /x.md#context": 16,
+             "a: \"b # c\" # d": 11, "a: 'b # c' # d": 11, "a: 'it''s # c' # d": 15, "a: \"b \\\" # c\" # d": 14,
+             "- {\"k\":\"v # w\"} # d": 16, "a: it's # c": 8, "a: [x, 'y # z']": 15, "": 0, "a: b": 4, "a: b #": 5}
+    assert {line: comment_start(line) for line in lines} == lines
+
+
+def test_rewrite_resource_keeps_the_yaml_comment_of_a_line():
+    def new(target: str) -> str | None:
+        return "/new.md" if target == "/old.md" else None
+
+    lines = {
+        ("  # - { id: a, resource: /old.md }", False): ("  # - { id: a, resource: /old.md }", False),
+        ("# resource: /old.md", False): ("# resource: /old.md", False),
+        ("    resource: /old.md  # was resource: /old.md", False): ("    resource: /new.md  # was resource: /old.md", False),
+        ("    resource: /other.md\t# was resource: /old.md", False): ("    resource: /other.md\t# was resource: /old.md", False),
+        ("    resource:  # resource: /old.md", False): ("    resource:  # resource: /old.md", True),
+        ("      # /old.md", True): ("      # /old.md", True),
+        ("# /old.md\r", True): ("# /old.md\r", True),
+        ("      /old.md  # /old.md", True): ("      /new.md  # /old.md", False),
+        ("  # c", False): ("  # c", False),
+        ("- { title: \"a # b\", resource: /old.md }", False): ("- { title: \"a # b\", resource: /new.md }", False),
+        ("    resource: /old.md#context", False): ("    resource: /old.md#context", False),
+    }
+    assert {k: rewrite_resource(*k, new) for k in lines} == lines
+
+
+_QUOTED = ("# Record\n\n"
+           "> Bob: [a](/base/decisions/ADR-0001-x.md\n> \"T\"), [b](/base/decisions/ADR-0001-x.md\n> ) and\n"
+           "> [t](/base/decisions/ADR-0001-x.md \"T\"\n> ), then [one line](/{d}/ADR-0001-x.md \"T\") and [text\n"
+           "> cut](/{d}/ADR-0001-x.md).\n\n"
+           "- item\n  > [c](/base/decisions/ADR-0001-x.md\n  > 'T')\n"
+           "- item [d](/{d}/ADR-0001-x.md\n  'T')\n")
+
+
+def test_move_decisions_leaves_a_link_of_a_block_quote_that_continues_after_the_next_line_marker(tmp_path, capsys):
+    rel = "fragments/2026-11-02-n.md"
+
+    def bundle(d: str) -> dict[str, str]:
+        return {**_b1(d == _NEW), rel: _concept("Knowledge Fragment", "N", _FRAGMENT.replace("2026-11-01", "2026-11-02"),
+                                               _QUOTED.format(d=d))}
+
+    k = _bundle_30(tmp_path, bundle(_OLD))
+    before, found = _tree(k)[rel], _findings(k)
+    assert [before[x.start:x.end] for x in inline_links(before)] == [f"/{_OLD}/ADR-0001-x.md"] * 3
+    assert _move(k, capsys)[0] == 0
+    after = _tree(k)[rel]
+    assert after == bundle(_NEW)[rel] and after.count(f"/{_OLD}/ADR-0001-x.md") == 4
+    assert _outside_link_targets(before, after) == []
+    of_rel = [f for f in found if f[2] == rel]
+    assert [f for f in _findings(k) if f[2] == rel] == of_rel and [f for f in of_rel if "ADR-0001-x" in f[3]] == []
 
 
 if __name__ == "__main__":
