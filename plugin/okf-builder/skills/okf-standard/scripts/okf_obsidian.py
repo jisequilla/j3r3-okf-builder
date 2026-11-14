@@ -20,10 +20,11 @@ Usage:
   base/profile.md). A view column or filter on a field the profile gives local names to (field aliases, value aliases
   whose `to` sets it) reads the formula okf_<field>: the declared field, else each local name in sorted order, each
   value alias written as a test (`==`, strict, unlike lint's string match); a value alias whose `from` holds the field
-  itself is tested before it, as lint replaces it. Decisions also takes the type aliases of Architecture Decision,
-  the local types that extend it and their aliases; By type and the type columns read okf_type, which maps each
-  type alias to its declared type. generated.by and generated.at are nested keys and are read as written, not
-  through aliases. A bundle whose profile has none of these gets KNOWLEDGE_BASE byte for byte.
+  itself is tested before it, as lint replaces it. Decisions takes every type that is a Decision: Decision, the
+  types that extend it (Architecture Decision, a bundle's local decision types) and the type aliases of each; By
+  type and the type columns read okf_type, which maps each type alias to its declared type. generated.by and
+  generated.at are nested keys and are read as written, not through aliases. A bundle whose profile has none of
+  these gets KNOWLEDGE_BASE byte for byte.
 - A Domain Profile that cannot be read (any PROFILE_* finding), or a bundle that is not knowledge/3.0, gets the views
   with the built-in names and one line on stderr saying so.
 - Never overwrites an existing file unless given --force; prints `created <path>`, `rewritten <path>` (with --force)
@@ -43,7 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from okf_common import PROFILE_30, declared_profile  # noqa: E402
-from okf_profile import Resolved, _subtypes, is_a, load_profile  # noqa: E402
+from okf_profile import DECISION, Resolved, _subtypes, is_a, load_profile  # noqa: E402
 
 APP_JSON = """{
   "useMarkdownLinks": true,
@@ -78,7 +79,9 @@ views:
     filters:
       and:
         - file.inFolder("base")
-        - type == "Architecture Decision"
+        - or:
+            - "type == \\"Decision\\""
+            - "type == \\"Architecture Decision\\""
     groupBy:
       property: decision_status
       direction: ASC
@@ -143,7 +146,8 @@ FILES = {
     "knowledge.base": KNOWLEDGE_BASE,
 }
 
-ADR = "Architecture Decision"
+# The decision types of the built-in Domain Profile, for a bundle whose own profile is not read
+BUILTIN_DECISIONS = [DECISION, "Architecture Decision"]
 # The built-in fields the views name, in the order their formulas are written
 VIEW_FIELDS = ("decision_status", "description", "distillation_status", "occurred_at", "origin", "participants",
                "stale_after", "status", "title", "type")
@@ -183,7 +187,7 @@ def view_names(r: Resolved | None) -> tuple[dict, dict, str, list[str]]:
     reads, the expression the Decisions filter compares, the type names that filter accepts)."""
     formulas: dict = {}
     if r is None:
-        return formulas, {f: f for f in VIEW_FIELDS}, "type", [ADR]
+        return formulas, {f: f for f in VIEW_FIELDS}, "type", list(BUILTIN_DECISIONS)
     for f in VIEW_FIELDS:
         local = sorted(n for n, a in r.aliases["fields"].items() if a["to"] == f)
         values = [va for va in r.aliases["values"] if f in va["to"]]
@@ -198,18 +202,15 @@ def view_names(r: Resolved | None) -> tuple[dict, dict, str, list[str]]:
         formulas["okf_type"] = _chain([(f"{as_written} == {_js(n)}", _js(a["to"])) for n, a in type_aliases],
                                       last=as_written)
     reads = {f: f"formula.okf_{f}" if f"okf_{f}" in formulas else f for f in VIEW_FIELDS}
-    others = set(_subtypes(r, ADR)) | {n for n, a in r.aliases["types"].items() if is_a(r, a["to"], ADR)}
-    return formulas, reads, reads["type"] if as_written != "type" else "type", [ADR, *sorted(others)]
+    others = set(_subtypes(r, DECISION)) | {n for n, a in r.aliases["types"].items() if is_a(r, a["to"], DECISION)}
+    return formulas, reads, reads["type"] if as_written != "type" else "type", [DECISION, *sorted(others)]
 
 
 def render_base(r: Resolved | None) -> str:
-    """knowledge.base for the Domain Profile r; with no aliases and no local type extending Architecture Decision
-    (or r None), KNOWLEDGE_BASE."""
-    formulas, n, typed, adr_names = view_names(r)
-    if len(adr_names) == 1:
-        adr_filter = [f'        - {typed} == "{ADR}"']
-    else:
-        adr_filter = ["        - or:", *(f"            - {_js(f'{typed} == {_js(t)}')}" for t in adr_names)]
+    """knowledge.base for the Domain Profile r; with no aliases and no local type extending Decision (or r None),
+    KNOWLEDGE_BASE."""
+    formulas, n, typed, decisions = view_names(r)
+    decision_filter = ["        - or:", *(f"            - {_js(f'{typed} == {_js(t)}')}" for t in decisions)]
     stale = n["stale_after"]
     lines = [
         "filters:", "  and:", '    - file.ext == "md"', '    - file.basename != "index"', '    - file.basename != "log"',
@@ -223,7 +224,7 @@ def render_base(r: Resolved | None) -> str:
         *(x for k in sorted(formulas) for x in (f"  formula.{k}:", f"    displayName: {k[4:]}")),
         "views:",
         "  - type: table", "    name: Decisions", "    filters:", "      and:", '        - file.inFolder("base")',
-        *adr_filter,
+        *decision_filter,
         "    groupBy:", f"      property: {n['decision_status']}", "      direction: ASC",
         "    order:", "      - file.name", f"      - {n['title']}", f"      - {n['decision_status']}",
         f"      - {n['status']}", "      - formula.written",
@@ -400,7 +401,8 @@ def test_base_has_the_five_views_by_layer(tmp_path):
     views = {v["name"]: v for v in base["views"]}
     # ADR-0032 decision 3: (filters, groupBy property or None, columns) per view
     adr = {
-        "Decisions": (['file.inFolder("base")', 'type == "Architecture Decision"'], "decision_status",
+        "Decisions": (['file.inFolder("base")', {"or": ['type == "Decision"', 'type == "Architecture Decision"']}],
+                      "decision_status",
                       ["file.name", "title", "decision_status", "status", "formula.written"]),
         "Awaiting human review": (['file.inFolder("base")', 'status == "draft"'], None,
                                   ["file.name", "type", "formula.author", "formula.written"]),
@@ -447,15 +449,15 @@ def _views(base: dict) -> dict:
 
 def test_a_bundle_without_aliases_gets_knowledge_base_byte_for_byte(tmp_path, capsys):
     no_profile = _bundle(tmp_path / "a")
-    # a local type that extends a type other than Architecture Decision, and a field of its own: nothing the views read
+    # a local type that extends a type that is no Decision, and a field of its own: nothing the views read
     plain = _with_profile(tmp_path / "b", "types:\n  Client Meeting:\n    extends: Knowledge Fragment\n    fields:\n"
                                           "      client: { type: string }\n")
     for b in (no_profile, plain):
         assert _base_of(b, capsys)[1] == KNOWLEDGE_BASE, b
     this_repo = Path(__file__).resolve().parents[5] / "knowledge"
-    if (this_repo / "base/profile.md").is_file():  # this repository's own bundle, when the script runs from it
+    if (this_repo / "knowledge.base").is_file():  # this repository's own bundle, when the script runs from it
         r, why = bundle_profile(this_repo)
-        assert why is None and render_base(r) == KNOWLEDGE_BASE
+        assert why is None and render_base(r) == (this_repo / "knowledge.base").read_text(encoding="utf-8")
 
 
 def test_a_field_alias_is_read_through_a_formula(tmp_path, capsys):
@@ -500,7 +502,7 @@ def test_type_aliases_and_local_subtypes_join_decisions_and_by_type(tmp_path, ca
     base, _ = _base_of(b, capsys)
     v = _views(base)
     assert v["Decisions"]["filters"] == {"and": ['file.inFolder("base")', {"or": [
-        'type == "Architecture Decision"', 'type == "ADR de producto"', 'type == "Decisión"',
+        'type == "Decision"', 'type == "ADR de producto"', 'type == "Architecture Decision"', 'type == "Decisión"',
         'type == "Product ADR"']}]}
     assert base["formulas"]["okf_type"] == (
         'if(type == "ADR de producto", "Product ADR", if(type == "Decisión", "Architecture Decision", '
@@ -511,8 +513,45 @@ def test_type_aliases_and_local_subtypes_join_decisions_and_by_type(tmp_path, ca
     b2 = _with_profile(tmp_path / "sub", "types:\n  Product ADR:\n    extends: Architecture Decision\n")
     base2, _ = _base_of(b2, capsys)
     assert _views(base2)["Decisions"]["filters"]["and"][1] == {
-        "or": ['type == "Architecture Decision"', 'type == "Product ADR"']}
+        "or": ['type == "Decision"', 'type == "Architecture Decision"', 'type == "Product ADR"']}
     assert "okf_type" not in base2["formulas"] and _views(base2)["By type"]["groupBy"]["property"] == "type"
+
+
+# --- Decisions accepts every type that is a Decision (ADR-0041) ---
+_STANDARD_DECISION = ("types:\n  Standard Decision:\n    extends: Decision\n    description: A decision about the standard\n"
+                      "    directory: /base/decisions/standard/\n    prefix: SDR\n")
+
+
+def _decisions_view(b: Path, capsys) -> dict:
+    return _views(_base_of(b, capsys)[0])["Decisions"]
+
+
+def test_decisions_accepts_decision_and_every_type_that_extends_it(tmp_path, capsys):
+    rest = {"groupBy": {"property": "decision_status", "direction": "ASC"},
+            "order": ["file.name", "title", "decision_status", "status", "formula.written"]}
+    # a bundle that declares a local decision type
+    assert _decisions_view(_with_profile(tmp_path / "local", _STANDARD_DECISION), capsys) == {
+        "type": "table", "name": "Decisions", **rest,
+        "filters": {"and": ['file.inFolder("base")', {"or": [
+            'type == "Decision"', 'type == "Architecture Decision"', 'type == "Standard Decision"']}]}}
+    # a bundle with no local decision type, with or without a base/profile.md
+    for b in (_bundle(tmp_path / "none"), _with_profile(tmp_path / "plain", "types:\n  Note: { description: A note }\n")):
+        assert _decisions_view(b, capsys) == {
+            "type": "table", "name": "Decisions", **rest,
+            "filters": {"and": ['file.inFolder("base")', {"or": [
+                'type == "Decision"', 'type == "Architecture Decision"']}]}}, b
+
+
+def test_an_alias_of_any_decision_type_joins_decisions(tmp_path, capsys):
+    b = _with_profile(tmp_path, _STANDARD_DECISION + "aliases:\n  types: { Decisión: Decision, Norma: Standard Decision, "
+                                                     "Glosario: Glossary }\n")
+    assert _decisions_view(b, capsys)["filters"] == {"and": ['file.inFolder("base")', {"or": [
+        'type == "Decision"', 'type == "Architecture Decision"', 'type == "Decisión"', 'type == "Norma"',
+        'type == "Standard Decision"']}]}
+    # the alias of Decision alone
+    b2 = _with_profile(tmp_path / "one", "aliases:\n  types: { Decisión: Decision }\n")
+    assert _decisions_view(b2, capsys)["filters"] == {"and": ['file.inFolder("base")', {"or": [
+        'type == "Decision"', 'type == "Architecture Decision"', 'type == "Decisión"']}]}
 
 
 def test_aliases_of_status_and_stale_after_feed_filters_and_formulas(tmp_path, capsys):
@@ -524,7 +563,8 @@ def test_aliases_of_status_and_stale_after_feed_filters_and_formulas(tmp_path, c
     assert base["formulas"]["stale_in_days"] == (
         'if(formula.okf_stale_after, (date(formula.okf_stale_after) - today()).days.round(0), "")')
     # a field alias of type: Decisions compares the coalesced type
-    assert v["Decisions"]["filters"]["and"][1] == 'formula.okf_type == "Architecture Decision"'
+    assert v["Decisions"]["filters"]["and"][1] == {
+        "or": ['formula.okf_type == "Decision"', 'formula.okf_type == "Architecture Decision"']}
 
 
 def test_names_with_quotes_colons_and_hashes_stay_valid_yaml(tmp_path, capsys):

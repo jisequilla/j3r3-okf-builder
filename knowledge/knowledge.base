@@ -20,7 +20,9 @@ views:
     filters:
       and:
         - file.inFolder("base")
-        - type == "Architecture Decision"
+        - or:
+            - "type == \"Decision\""
+            - "type == \"Architecture Decision\""
     groupBy:
       property: decision_status
       direction: ASC
