@@ -859,13 +859,6 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
     for v in r.validators:
         if v.get("types"):
             v["types"] = [canonical_type(r, t) for t in v["types"]]
-    # a value alias's `from` names the type as a concept does: a local name of the type key in it is `type` and a
-    # local type name the type it stands for; `from` stays as written, `from_declared` is what a concept is matched
-    # against. Every other key of `from` is matched as written, a local field name included
-    for va in r.aliases["values"]:
-        declared = _declared_names(r, va["from"], only="type")
-        if declared != va["from"]:
-            va["from_declared"] = declared
     # a question mapped to Type.field with local names stands for the declared type and field
     for q in r.questions:
         if isinstance(q.get("field"), str) and "." in q["field"]:
@@ -1168,32 +1161,21 @@ def _same(a: Any, b: Any) -> bool:
     return a == b or str(a) == str(b)
 
 
-def _declared_names(r: Resolved, fm: dict, only: str | None = None) -> dict:
-    """fm with each local field name as the declared field, then a local type name as the type it stands for. A key
-    fm also carries under its declared name keeps that value. With `only`, just the local names of that field are
-    renamed and every other key stays as written."""
-    out = dict(fm)
-    for name, a in r.aliases["fields"].items():
-        if name in out and only in (None, a["to"]):
-            out.setdefault(a["to"], out.pop(name))
-    if "type" in out:
-        out["type"] = canonical_type(r, out["type"])
-    return out
-
-
 def resolve_aliases(r: Resolved, fm: dict) -> dict:
     """The frontmatter as the profile reads it (§4.1 What lint checks), in this order: a local field name becomes
     the declared field, then a local type name becomes the type it stands for, then a value alias whose `from`
-    holds in full is replaced by its `to`. So a type written under a local name of the type key is resolved too.
-    The type a value alias's `from` names is read the same way when the profile is loaded, so one that names the
-    type by a local type name or under a local name of the type key holds for every spelling of that type; any other
-    key of `from` is matched as written, against the concept's keys already renamed. A key the concept also carries
-    under its declared name keeps the concept's own value."""
-    out = _declared_names(r, fm)
+    holds in full is replaced by its `to`. So a type written under a local name of the type key is resolved too,
+    and a value alias is matched against the declared names. A key the concept also carries under its declared
+    name keeps the concept's own value."""
+    out = dict(fm)
+    for name, a in r.aliases["fields"].items():
+        if name in out:
+            out.setdefault(a["to"], out.pop(name))
+    if "type" in out:
+        out["type"] = canonical_type(r, out["type"])
     for va in r.aliases["values"]:
-        frm = va.get("from_declared", va["from"])
-        if all(k in out and _same(out[k], v) for k, v in frm.items()):
-            for k in frm:
+        if all(k in out and _same(out[k], v) for k, v in va["from"].items()):
+            for k in va["from"]:
                 out.pop(k)
             for k, v in va["to"].items():
                 out.setdefault(k, v)
@@ -1201,7 +1183,7 @@ def resolve_aliases(r: Resolved, fm: dict) -> dict:
 
 
 def alias_keys(r: Resolved) -> set:
-    """The local names aliases give to keys: field aliases and the keys of each value alias's `from`, as written."""
+    """The local names aliases give to keys: field aliases and the keys of each value alias's `from`."""
     return set(r.aliases["fields"]) | {k for va in r.aliases["values"] for k in va["from"]}
 
 
@@ -2251,71 +2233,17 @@ def test_resolve_aliases_reads_a_local_type_name_written_under_a_local_name_of_t
     assert resolve_aliases(r, {"tipo": "Norma", "type": "Term"}) == {"type": "Term"}
 
 
-_NORMA_FROMS = {"local-type-name": "{ type: Norma }", "local-key-name": "{ tipo: Norma }",
-                "declared": "{ type: Standard Decision }"}
-_NORMA_SPELLINGS = ({"type": "Standard Decision"}, {"type": "Norma"}, {"tipo": "Standard Decision"}, {"tipo": "Norma"})
-
-
-def _value_aliases(tmp_path, profile: str, values: str):
-    r = load_profile(_bundle(tmp_path, profile + "  values:\n" + values), builtin=_builtin(tmp_path))
+def test_a_value_alias_is_matched_against_the_declared_key_and_type_names(tmp_path):
+    """Value aliases run last, on the frontmatter with its local key and type names already resolved: one whose
+    `from` names the type a concept stands for holds for every spelling of it, and one whose `from` names a local
+    type name or a local name of the type key holds for none."""
+    values = ("  values:\n    - { from: { type: Norma }, to: { type: Standard Decision, tags: [local-type-name] } }\n"
+              "    - { from: { tipo: Norma }, to: { type: Standard Decision, tags: [local-key-name] } }\n"
+              "    - { from: { type: Standard Decision }, to: { type: Standard Decision, tags: [declared] } }\n")
+    r = load_profile(_bundle(tmp_path, _NORMA + values), builtin=_builtin(tmp_path))
     assert r.findings == []
-    return r
-
-
-def _from_names_the_type(tmp_path, name: str, spelled: dict) -> None:
-    """One of the 3 x 4 cases: the value alias whose `from` is written `name`'s way, the concept `spelled`."""
-    r = _value_aliases(tmp_path, _NORMA, f"    - {{ from: {_NORMA_FROMS[name]}, to: {{ type: Standard Decision, tags: [{name}] }} }}\n")
-    read = resolve_aliases(r, {**spelled, "title": "A norm"})
-    assert read == {"type": "Standard Decision", "tags": [name], "title": "A norm"}, (name, spelled)
-    assert resolve_aliases(r, {"type": "Term"}) == {"type": "Term"}  # another type: the alias does not hold
-
-
-def test_a_value_alias_whose_from_names_a_local_type_name_holds_for_every_spelling_of_the_type(tmp_path):
-    for n, spelled in enumerate(_NORMA_SPELLINGS):
-        _from_names_the_type(tmp_path / str(n), "local-type-name", spelled)
-
-
-def test_a_value_alias_whose_from_names_a_local_name_of_the_type_key_holds_for_every_spelling_of_the_type(tmp_path):
-    for n, spelled in enumerate(_NORMA_SPELLINGS):
-        _from_names_the_type(tmp_path / str(n), "local-key-name", spelled)
-
-
-def test_a_value_alias_whose_from_names_the_declared_type_holds_for_every_spelling_of_the_type(tmp_path):
-    for n, spelled in enumerate(_NORMA_SPELLINGS):
-        _from_names_the_type(tmp_path / str(n), "declared", spelled)
-
-
-def test_a_value_alias_keeps_its_from_as_written_and_a_key_that_is_no_field_alias_is_matched_as_written(tmp_path):
-    r = _value_aliases(tmp_path, _NORMA.replace("{ tipo: type }", "{ tipo: type, ramo: area }"),
-                       "    - { from: { tipo: Norma }, to: { type: Standard Decision, tags: [k] } }\n"
-                       "    - { from: { ingerido: true }, to: { distillation_status: distilled } }\n"
-                       "    - { from: { ramo: legal }, to: { tags: [legal] } }\n")
-    assert [va["from"] for va in r.aliases["values"]] == [{"tipo": "Norma"}, {"ingerido": True}, {"ramo": "legal"}]
-    assert [va.get("from_declared") for va in r.aliases["values"]] == [{"type": "Standard Decision"}, None, None]
-    assert alias_keys(r) == {"tipo", "ramo", "ingerido"}
-    # a `from` on a key that is no field alias holds on that key with that value, whatever the type
-    assert resolve_aliases(r, {"type": "Term", "ingerido": True}) == {"type": "Term", "distillation_status": "distilled"}
-    assert resolve_aliases(r, {"type": "Term", "ingerido": False}) == {"type": "Term", "ingerido": False}
-    assert resolve_aliases(r, {"tipo": "Norma", "ingerido": True}) == {
-        "type": "Standard Decision", "tags": ["k"], "distillation_status": "distilled"}
-    # a `from` on a local name of a field that is not the type is matched as written, after the concept's key was
-    # renamed: it holds for no spelling of the key
-    assert resolve_aliases(r, {"ramo": "legal"}) == {"area": "legal"}
-    assert resolve_aliases(r, {"area": "legal"}) == {"area": "legal"}
-    assert resolve_aliases(r, {"ramo": "fiscal"}) == {"area": "fiscal"}
-    assert resolve_aliases(r, {"tipo": "Norma", "ramo": "legal"}) == {
-        "type": "Standard Decision", "tags": ["k"], "area": "legal"}
-
-
-def test_a_value_alias_on_the_declared_name_of_an_aliased_field_holds_for_both_spellings_of_the_key(tmp_path):
-    r = _value_aliases(tmp_path, _NORMA.replace("{ tipo: type }", "{ tipo: type, ramo: area }"),
-                       "    - { from: { area: legal }, to: { tags: [legal] } }\n"
-                       "    - { from: { tipo: Norma, ramo: fiscal }, to: { tags: [mixed] } }\n")
-    assert [va.get("from_declared") for va in r.aliases["values"]] == [None, {"type": "Standard Decision", "ramo": "fiscal"}]
-    assert resolve_aliases(r, {"ramo": "legal"}) == {"tags": ["legal"]}
-    assert resolve_aliases(r, {"area": "legal"}) == {"tags": ["legal"]}
-    # a `from` that names the type and a local field name: the field part is matched as written and never holds
-    assert resolve_aliases(r, {"tipo": "Norma", "ramo": "fiscal"}) == {"type": "Standard Decision", "area": "fiscal"}
+    for spelled in ({"type": "Standard Decision"}, {"type": "Norma"}, {"tipo": "Standard Decision"}, {"tipo": "Norma"}):
+        assert resolve_aliases(r, spelled) == {"type": "Standard Decision", "tags": ["declared"]}, spelled
 
 
 def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_type(tmp_path):
