@@ -5,7 +5,7 @@ okf_profile: "knowledge/3.0"
 
 # Project
 
-* [OKF Builder](project.md) - OKF standard (profile knowledge/3.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini _(draft)_
+* [OKF Builder](project.md) - OKF standard (profile knowledge/3.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini
 
 # Conflict Log
 
