@@ -35,7 +35,6 @@ ISO_RE = re.compile(
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ACTOR_RE = re.compile(r"^(human:[^\s/]+|process:[^\s/]+|[^\s/:]+/[^\s/]+)$")
 KEBAB_RE = re.compile(r"^(ADR-\d{4}-)?[a-z0-9]+(-[a-z0-9]+)*\.md$")
-LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 VALID_STATUS = {"draft", "stable", "deprecated"}
 
 
@@ -357,7 +356,7 @@ def placeholder_line(line: str) -> bool:
     placeholder; a list item whose text is '...' or ends with ': ...'; or a table row whose cells after the first
     are all empty or {{...}} placeholders. A line with a link is never placeholder, nor is a table's separator row; a
     header row is told apart by content_lines, which sees the next line."""
-    if LINK_RE.search(line) or TABLE_SEP_RE.match(line):
+    if inline_links(line) or TABLE_SEP_RE.match(line):
         return False
     if _is_placeholder(line):
         return True
@@ -387,18 +386,37 @@ def content_lines(lines: list[str]) -> list[str]:
     return out
 
 
+_ESCAPE_RE = re.compile(r"\\([!-/:-@\[-`{-~])")
+
+
 def extract_links(body: str) -> list[str]:
-    return [m.group(2) for m in LINK_RE.finditer(body)]
+    """The target of each inline link and image of a body (inline_links), its backslash escapes resolved
+    (`/x\\).md` names `/x).md`)."""
+    return [link_target(body, link) for link in inline_links(body)]
+
+
+def link_target(text: str, link: InlineLink) -> str:
+    """The target of an inline link of text, its backslash escapes resolved."""
+    return _ESCAPE_RE.sub(r"\1", text[link.start:link.end])
 
 
 # --------------------------------------------------------------------------
-# Inline links as CommonMark defines them (okf_migrate.py --move-decisions; lint reads LINK_RE)
+# Inline links as CommonMark defines them: the one reading of a link of every script
 # --------------------------------------------------------------------------
 @dataclass(frozen=True)
 class InlineLink:
     start: int  # text[start:end] is the target as written, without the angle brackets of a <target>
     end: int
     image: bool  # ![text](target)
+
+
+@dataclass(frozen=True)
+class LinkSpan:
+    start: int  # text[start:end] is the whole link, from its '[' (its '!' for an image) to its closing ')'
+    end: int
+    text_start: int  # text[text_start:text_end] is the link text, without its brackets
+    text_end: int
+    target: InlineLink
 
 
 _PUNCT = frozenset(string.punctuation)
@@ -519,11 +537,26 @@ def inline_links(text: str) -> list[InlineLink]:
     never closed is not a link, nor is a link text or a title that crosses a blank line, an opening bracket that is
     escaped, or a link whose text holds another link (the inner one is the link). A reference-style definition
     (`[ref]: target`) is not an inline link. A link written inside a code span or a fenced code block is read as
-    one, as LINK_RE reads it: the text is not split into blocks."""
+    one: the text is not split into blocks."""
+    return sorted((span.target for span in _scan_links(text)), key=lambda link: link.start)
+
+
+def link_spans(text: str) -> list[LinkSpan]:
+    """The inline links and images of a Markdown text (inline_links) that no other link holds in its text, in order:
+    a linked image `[![text](inner)](outer)` is one span, the outer link, whose text holds the image."""
+    out: list[LinkSpan] = []
+    for span in sorted(_scan_links(text), key=lambda s: s.start):
+        if not out or span.start >= out[-1].end:
+            out.append(span)
+    return out
+
+
+def _scan_links(text: str) -> list[LinkSpan]:
+    """Every inline link and image of a text, an image inside a link text included (inline_links)."""
     blanks = [m.start() for m in _BLANK_LINE_RE.finditer(text)]
 
-    def scan(i: int, end: int) -> list[InlineLink]:
-        found: list[InlineLink] = []
+    def scan(i: int, end: int) -> list[LinkSpan]:
+        found: list[LinkSpan] = []
         while i < end:
             if _escaped(text, i, end):
                 i += 2
@@ -541,15 +574,15 @@ def inline_links(text: str) -> list[InlineLink]:
                 i = first
                 continue
             inner = scan(first, close)
-            if not image and any(not link.image for link in inner):
+            if not image and any(not span.target.image for span in inner):
                 found += inner
                 i = close + 1
                 continue
-            found += [*inner, InlineLink(tail[0], tail[1], image)]
+            found += [*inner, LinkSpan(i, tail[2], first, close, InlineLink(tail[0], tail[1], image))]
             i = tail[2]
         return found
 
-    return sorted(scan(0, len(text)), key=lambda link: link.start)
+    return scan(0, len(text))
 
 
 def resolve_link(bundle: Path, doc: Doc, target: str) -> Path | None:
