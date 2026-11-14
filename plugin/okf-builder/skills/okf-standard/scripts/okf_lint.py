@@ -4741,6 +4741,33 @@ def test_an_aliased_decision_type_has_the_prefix_of_the_type_it_names(tmp_path):
                           "file name starts with SDR-, not the prefix DEC its type declares (§4.1)")]
 
 
+_TIPO = ("  Practice:\n    description: A practice\n    fields:\n"
+         "      owner: { type: string, required: true, level: error }\n"
+         "aliases:\n  types: { Norma: Standard Decision, Práctica: Practice }\n  fields: { tipo: type }\n")
+
+
+def _typed(key: str, t: str) -> str:
+    return _decision(t).replace("type:", key + ":", 1)
+
+
+def _tipo_findings(tmp_path: Path, key: str, norm: str, practice: str) -> list:
+    k = _tree_bundle(tmp_path / f"{key}-{norm}-{practice}", profile="types:\n" + _SDR_TYPE + _TIPO, extra={
+        "base/decisions/SDR-0001-a-norm.md": _typed(key, norm), "base/practices/p.md": _typed(key, practice)})
+    return sorted((i["level"], i["code"], i["path"], i["message"]) for i in lint(k)[0].items
+                  if i["path"] in ("base/decisions/SDR-0001-a-norm.md", "base/practices/p.md"))
+
+
+def test_a_local_type_name_under_a_local_name_of_the_type_key_is_the_type_it_stands_for(tmp_path):
+    """`tipo: Norma` is a Standard Decision, so its file takes the prefix SDR; `tipo: Práctica` is a Practice, so
+    the field the profile requires of a Practice is required of it. The other three spellings read the same."""
+    required = [("ERROR", "PROFILE_REQUIRED", "base/practices/p.md",
+                 "Practice has no 'owner', required by base/profile.md (§4.1)")]
+    assert _tipo_findings(tmp_path, "tipo", "Norma", "Práctica") == required
+    for key, norm, practice in (("type", "Standard Decision", "Practice"), ("type", "Norma", "Práctica"),
+                                ("tipo", "Standard Decision", "Practice")):
+        assert _tipo_findings(tmp_path, key, norm, practice) == required, (key, norm)
+
+
 def test_without_a_30_domain_profile_in_force_every_name_keeps_the_one_rule(tmp_path):
     concepts = {**_D, "base/decisions/ADR-0007-x.md": "Decision", "base/decisions/standard/Bad_Name.md": "Decision"}
     k = _decisions_bundle(tmp_path, concepts)

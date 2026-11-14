@@ -1929,6 +1929,20 @@ def test_move_decisions_reads_local_type_and_key_names_through_the_aliases(tmp_p
         f"/{_OLD}/ADR-0001-p.md", f"/{_NEW}/ADR-0001-p.md")
 
 
+def test_move_decisions_reads_a_local_type_name_written_under_a_local_name_of_the_type_key(tmp_path, capsys):
+    aliases = "aliases:\n  types: { Norma: Standard Decision }\n  fields: { tipo: type }\n"
+    for n, (key, name) in enumerate((("tipo", "Norma"), ("type", "Standard Decision"), ("type", "Norma"),
+                                     ("tipo", "Standard Decision"))):
+        norm = _concept(name, "Format", "decision_id: SDR-0001\n").replace("type:", key + ":", 1)
+        k = _bundle_30(tmp_path / str(n), {
+            "log.md": _LOG_30, "project.md": _concept("Project", "P"),
+            "base/profile.md": _LOCAL_TYPES.replace("{aliases}", aliases), f"{_OLD}/SDR-0001-format.md": norm})
+        rc, out, _ = _move(k, capsys)
+        assert rc == 0 and out.startswith(f"MOVE {_OLD}/SDR-0001-format.md -> {_OLD}/standard/SDR-0001-format.md\n"), (key, name)
+        assert _decisions(k) == [f"{_OLD}/standard/SDR-0001-format.md"]
+        assert _tree(k)[f"{_OLD}/standard/SDR-0001-format.md"] == norm  # written as it was, local names kept
+
+
 _TYPE_ALIASES = ("aliases:\n  fields: { tipo: type }\n"
                  "  values:\n    - { from: { clase: adr }, to: { type: Architecture Decision } }\n")
 
