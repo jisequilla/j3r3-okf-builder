@@ -20,7 +20,7 @@ Usage:
   instance it finds the domain profile through the `parent` chain, as lint does.
 - Keeps the root frontmatter (okf_version, okf_profile) and any section whose
   heading starts with "# Notes" (or "# Notas").
-- Never writes into or below the root projections/ (not OKF, ADR-0019); the root
+- Never writes into or below the root projections/ (not OKF, SDR-0012); the root
   index lists it only if projections/index.md exists.
 - Skips what lint's scan leaves out, as lint does: the paths .okfignore matches,
   nested bundles (an operational instance included: run okf_index.py on it) and
@@ -477,7 +477,7 @@ def test_questions_dir_has_default_description_and_heading(tmp_path):
     assert "# Open questions\n\n* [Who owns refunds?](who-owns-refunds.md) - Nobody owns refunds yet." in questions
 
 
-# --- every type that is a Decision, in base/decisions/ and its subfolders (ADR-0041) ---
+# --- every type that is a Decision, in base/decisions/ and its subfolders (SDR-0026) ---
 _STANDARD_DECISION = ("types:\n  Standard Decision:\n    extends: Decision\n    description: A decision about the standard\n"
                       "    directory: /base/decisions/standard/\n    prefix: SDR\n")
 _DECISIONS = {"base/decisions/DEC-0001-how-we-work.md": ("Decision", "DEC-0001: How we work", "How we work decided."),
@@ -806,7 +806,7 @@ def test_an_instance_indexed_as_its_own_bundle_keeps_its_root_frontmatter(tmp_pa
     assert main([str(req), "--check"]) == 0
 
 
-# --- the directory of each kind lists its instances and their states (standard §2.2, §5.1; ADR-0039 decision 3) ---
+# --- the directory of each kind lists its instances and their states (standard §2.2, §5.1; SDR-0024 decision 3) ---
 def _kinds(tmp: Path) -> Path:
     """K: okf_lint._domain with its three kinds and four instances, one of them held by an instance."""
     from okf_lint import _OPEN, _domain

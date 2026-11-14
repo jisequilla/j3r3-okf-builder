@@ -101,7 +101,7 @@ def load_doc(bundle: Path, path: Path) -> Doc:
 
 
 def walk_bundle(bundle: Path) -> list[Doc]:
-    """Every .md of the bundle; hidden dirs and the root projections/ (not OKF, ADR-0019) are skipped."""
+    """Every .md of the bundle; hidden dirs and the root projections/ (not OKF, SDR-0012) are skipped."""
     docs = []
     for root, dirs, files in os.walk(bundle):
         at_root = Path(root) == bundle
@@ -204,7 +204,7 @@ class Scan:
 
 
 PROFILE_REL = f"{BASE_DIR}/profile.md"
-# The reserved files of the root (ADR-0018 decision 3) and the bundle's Domain Profile: .okfignore never excludes them
+# The reserved files of the root (SDR-0011 decision 3) and the bundle's Domain Profile: .okfignore never excludes them
 RESERVED_PATHS = ("index.md", "log.md", "project.md", "conflict-log.md", PROFILE_REL)
 
 

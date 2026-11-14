@@ -138,7 +138,7 @@ A field without a code is checked in a bundle that has a `base/profile.md`, like
 
 The keys every concept may carry stay with the spec-level checks, in code, because they apply to every type, an undeclared one included[^frontmatter]: `generated` (`PROFILE_NO_GENERATED` in a 0.2 bundle, `PROFILE_NO_TIMESTAMP` for `timestamp` in a 0.1 one, `BAD_GENERATED`), `verified` (`BAD_VERIFIED`), `status` (`BAD_STATUS`), `stale_after` (`STALE`), `sources` (`BAD_SOURCES`), and the `BAD_ACTOR` and `BAD_ISO` checks of their actors and timestamps.
 
-So do the checks across concepts or over a body (ADR-0026, decision 6)[^domain-profile]: at most one Conflict Log per bundle, the layer rule of a 3.0 bundle, an open question past its `review_on` (`QUESTION_REVIEW_DUE`), the single fence of an Attested Computation, and the structure of `index.md` and `log.md`. They apply to a local type through the standard type it extends.
+So do the checks across concepts or over a body (SDR-0019, decision 6)[^domain-profile]: at most one Conflict Log per bundle, the layer rule of a 3.0 bundle, an open question past its `review_on` (`QUESTION_REVIEW_DUE`), the single fence of an Attested Computation, and the structure of `index.md` and `log.md`. They apply to a local type through the standard type it extends.
 
 # Kinds
 

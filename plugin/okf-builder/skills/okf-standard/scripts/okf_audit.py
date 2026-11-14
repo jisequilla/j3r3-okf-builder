@@ -28,7 +28,7 @@ Usage:
   record anything. Otherwise it is a finding: DELETED_UNRECORDED or RENAMED_UNRECORDED.
 - Looks inside every instance of the bundle, at any depth, with or without --since and inside or outside git:
   EDITED_AFTER_CLOSE for each concept of a closed instance (state: closed, closed_at an ISO 8601 date-time) whose
-  generated.at is a later instant than that instance's own closed_at (standard §2.2, ADR-0039 decision 9). index.md
+  generated.at is a later instant than that instance's own closed_at (standard §2.2, SDR-0024 decision 9). index.md
   and log.md are not concepts; every other document of the instance is. The git facts still leave nested bundles out.
 - Reads log.md for earlier audits at the same reference point (an `**Update**: Audit since ...
   (reference `<key>`)` entry, the key the full SHA when the reference resolved, else the reference as
@@ -712,7 +712,7 @@ def test_the_audit_writes_nothing_to_the_object_store_or_the_index(tmp_path):
     assert _g(tmp_path, "count-objects", "-v") == objects and (tmp_path / ".git" / "index").read_bytes() == index
 
 
-# --- concepts edited after their instance closed (standard §2.2, ADR-0039 decision 9) ---
+# --- concepts edited after their instance closed (standard §2.2, SDR-0024 decision 9) ---
 _KINDS = ("---\ntype: Domain Profile\ntitle: DP\ndescription: DP.\nstatus: draft\nkinds:\n"
           "  Request: { extends: Operational Bundle, description: A request, directory: requests/, states: [in-review] }\n"
           "  Release: { extends: Operational Bundle, description: A release, directory: releases/, holds: [Request] }\n"

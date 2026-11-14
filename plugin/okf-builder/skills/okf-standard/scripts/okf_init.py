@@ -24,7 +24,7 @@ left out, so a fresh bundle has no SECTION_EMPTY; the Knowledge map links only t
 typed directories created. Existing files are not overwritten unless --force is given.
 Idempotent.
 
-With --instance, init opens a unit of work instead (standard §2.2, ADR-0039): an
+With --instance, init opens a unit of work instead (standard §2.2, SDR-0024): an
 operational bundle of that kind, with no typed directory unless --dirs names some,
 in the kind's directory of the --in bundle, whose root index.md declares okf_version,
 okf_profile, kind, state: open and parent: ../..; okf-index then runs on the new
@@ -238,7 +238,7 @@ def main(argv=None) -> int:
     ap.add_argument("--force", action="store_true", help="overwrite existing files")
     ap.add_argument("--okf-version", default="0.2", choices=("0.1", "0.2"),
                     help="OKF version of the bundle (0.1 only to interoperate with older consumers)")
-    ap.add_argument("--instance", metavar="KIND", help="open an operational bundle of this kind (ADR-0039)")
+    ap.add_argument("--instance", metavar="KIND", help="open an operational bundle of this kind (SDR-0024)")
     ap.add_argument("--id", dest="ident", help="with --instance: the instance's directory name")
     ap.add_argument("--in", dest="holder", help="with --instance: the bundle that holds it (a domain bundle or an "
                                                 "instance)")
@@ -477,7 +477,7 @@ def test_okf_version_01(tmp_path):
 
 
 
-# --- --instance: an operational bundle in its kind's directory (standard §2.2, ADR-0039) ---
+# --- --instance: an operational bundle in its kind's directory (standard §2.2, SDR-0024) ---
 _INST = ["--title", "R1", "--description", "Refund one.", "--actor", "human:test"]
 
 

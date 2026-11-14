@@ -49,7 +49,7 @@ No `.okfignore` is created; when `knowledge/` holds paths that are not part of t
 
 ## Open a unit of work
 
-A domain bundle whose Domain Profile declares operational kinds under `kinds` (standard §2.2, ADR-0039) works each request, incident or release as an instance: a bundle of its own in its kind's directory, next to the layers. When the person starts one ("open a request for…", "new incident", "start release 2.3"), create it with:
+A domain bundle whose Domain Profile declares operational kinds under `kinds` (standard §2.2, SDR-0024) works each request, incident or release as an instance: a bundle of its own in its kind's directory, next to the layers. When the person starts one ("open a request for…", "new incident", "start release 2.3"), create it with:
 
 ```bash
 uv run "<skills>/okf-standard/scripts/okf_init.py" --instance <Kind> --id <id> --in <holder> \

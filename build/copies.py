@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""copies.py — Write the root copies of the standard and the templates from the plugin (ADR-0028 decision 2).
+"""copies.py — Write the root copies of the standard and the templates from the plugin (DEC-0003 decision 2).
 
 Usage:
     python3 build/copies.py [OUT]

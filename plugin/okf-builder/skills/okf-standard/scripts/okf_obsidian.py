@@ -517,7 +517,7 @@ def test_type_aliases_and_local_subtypes_join_decisions_and_by_type(tmp_path, ca
     assert "okf_type" not in base2["formulas"] and _views(base2)["By type"]["groupBy"]["property"] == "type"
 
 
-# --- Decisions accepts every type that is a Decision (ADR-0041) ---
+# --- Decisions accepts every type that is a Decision (SDR-0026) ---
 _STANDARD_DECISION = ("types:\n  Standard Decision:\n    extends: Decision\n    description: A decision about the standard\n"
                       "    directory: /base/decisions/standard/\n    prefix: SDR\n")
 

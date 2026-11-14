@@ -4,7 +4,7 @@
 # dependencies = ["pyyaml"]
 # ///
 """okf_close.py — Checks that an operational instance may close into its parent, and writes the closing once a
-person has approved it (standard §2.2, ADR-0039 decisions 7, 8, 9 and 12).
+person has approved it (standard §2.2, SDR-0024 decisions 7, 8, 9 and 12).
 
 Usage:
     uv run okf_close.py <instance> [--json]
