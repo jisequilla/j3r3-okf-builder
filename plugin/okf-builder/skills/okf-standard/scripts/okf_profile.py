@@ -649,7 +649,10 @@ def is_a(r: Resolved, t: str, base: str) -> bool:
 
 
 def prefix_in_force(r: Resolved, t: str) -> str | None:
-    """The prefix of the file names of type t: its own, else that of the nearest type it extends that declares one."""
+    """The prefix of the file names of type t: its own, else that of the nearest type it extends that declares one.
+    None for a type that is not a Decision, whatever it declares."""
+    if not is_a(r, t, DECISION):
+        return None
     for x in (t, *ancestors(r, t)):
         p = (r.types.get(x) or {}).get("prefix")
         if p:
@@ -1522,17 +1525,61 @@ def test_a_prefix_on_a_type_that_is_not_a_decision_is_invalid(tmp_path):
         "type 'Client Meeting' declares a prefix but is not a Decision"]
 
 
+def test_a_type_that_extends_architecture_decision_and_restates_adr_shares_the_prefix(tmp_path):
+    own = "types:\n  X: { extends: Architecture Decision, description: d, prefix: ADR }\n"
+    assert _invalid(_on_the_shipped_builtin(tmp_path, own)) == [
+        "types 'Architecture Decision' and 'X' share the prefix ADR"]
+
+
+def test_a_prefix_on_a_type_that_is_not_a_decision_is_never_reported_as_shared(tmp_path):
+    own = {"taken": "types:\n  M: { extends: Term, description: d, prefix: ADR }\n",
+           "first": ("types:\n  M: { extends: Term, description: d, prefix: SDR }\n"
+                     "  S: { extends: Decision, description: d, prefix: SDR }\n")}
+    found = {c: _invalid(_on_the_shipped_builtin(tmp_path / c, text)) for c, text in own.items()}
+    assert found == {c: ["type 'M' declares a prefix but is not a Decision"] for c in own}
+
+
+def test_a_prefix_with_a_digit_is_invalid(tmp_path):
+    bad = ("A1", '"12"')  # "12" is read as a YAML string
+    found = {b: _invalid(_on_the_shipped_builtin(tmp_path / b.strip('"'), _SDR.replace("prefix: SDR", f"prefix: {b}")))
+             for b in bad}
+    assert found == {b: ["types.Standard Decision.prefix: 2 to 5 capital letters (SDR)"] for b in bad}
+
+
+def test_a_type_that_is_not_a_decision_has_no_prefix_in_force_even_when_it_declares_one(tmp_path, capsys):
+    import okf_lint
+
+    own = "types:\n  A: { extends: Term, description: d, prefix: SDR }\n"
+    r = _on_the_shipped_builtin(tmp_path, own)
+    assert (r.types["A"]["prefix"], prefix_in_force(r, "A")) == ("SDR", None)
+    okf_lint.main([str(tmp_path / "knowledge"), "--profiles", "/base/", "--json"])
+    types = json.loads(capsys.readouterr().out)["types"]
+    assert {t: d["prefix"] for t, d in types.items()} == {
+        **{t: None for t in STANDARD_TYPE_NAMES}, "Decision": "DEC", "Architecture Decision": "ADR", "A": None}
+
+
+def test_without_the_builtin_file_architecture_decision_still_extends_decision(tmp_path):
+    r = load_profile(_bundle(tmp_path), builtin=tmp_path / "missing.md")
+    assert (r.builtin_file, r.findings) == (False, [])
+    assert r.types["Architecture Decision"].get("extends") == "Decision"
+    assert is_a(r, "Architecture Decision", "Decision") is True
+    assert {t: r.types[t].get("extends") for t in STANDARD_TYPE_NAMES} == {
+        **{t: None for t in STANDARD_TYPE_NAMES}, "Architecture Decision": "Decision"}
+
+
 def test_lint_profiles_json_carries_the_prefix_in_force_of_every_type(tmp_path, capsys):
     import okf_lint
     import pytest
 
     if builtin_text() is None:
         pytest.skip("no built-in profile beside this script nor inlined in it")
-    assert okf_lint.main([str(_bundle(tmp_path, _SDR)), "--profiles", "/base/decisions/", "--json"]) == 0
+    own = (_SDR + "  Plain Decision: { extends: Decision, description: d }\n"
+           "  Product ADR: { extends: Architecture Decision, description: d }\n")
+    assert okf_lint.main([str(_bundle(tmp_path, own)), "--profiles", "/base/decisions/", "--json"]) == 0
     types = json.loads(capsys.readouterr().out)["types"]
     assert {t: d["prefix"] for t, d in types.items()} == {
         **{t: None for t in STANDARD_TYPE_NAMES}, "Decision": "DEC", "Architecture Decision": "ADR",
-        "Standard Decision": "SDR"}
+        "Standard Decision": "SDR", "Plain Decision": "DEC", "Product ADR": "ADR"}
 
 
 def test_check_builtin_names_each_type_or_field_that_differs_from_section_4(tmp_path):
