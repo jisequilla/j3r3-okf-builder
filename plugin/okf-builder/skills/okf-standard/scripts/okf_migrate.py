@@ -360,7 +360,8 @@ def append_log(log_path: Path, to: str, n: int, entry: str | None = None) -> Non
 # --------------------------------------------------------------------------
 ROOT_KEEP = {"index.md", "log.md", "project.md"}
 EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:")
-MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()(<[^<>\r\n]*>|[^)\s]+)")
+MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()(<[^<>\r\n]*>|[^)\s]+)"
+                        r"(?=(?:\s+\"[^\"]*\"|[ \t]+(?:'[^'\r\n]*'|\([^()\r\n]*\)))?[ \t]*\))")
 RESOURCE_RE = re.compile(r"(\bresource\s*:\s*)([\"']?)([^\s\"',}\]]+)")
 PATH_KEYS = {"supersedes", "superseded_by"}
 SOURCE_KEYS = {"sources"}
@@ -463,7 +464,8 @@ def rewrite_paths(text: str, doc_rel: str, move, path_keys=PATH_KEYS, source_key
     """Rewrite the body links, the sources[].resource and the values of the path keys of one .md,
     keeping every other byte, the line endings of a text read without newline translation included. Of a link
     `[text](target)` only the target changes, written plain or in angle brackets; a reference-style definition
-    (`[ref]: target`) is not read as a link. move: a Move or a FileMove."""
+    (`[ref]: target`) is not read as a link, nor is a `[text](target` whose parenthesis is never closed.
+    move: a Move or a FileMove."""
     def sub(m: re.Match, group: int) -> str:
         old = m.group(group)
         angle = len(old) > 1 and old[0] == "<" and old[-1] == ">"
@@ -1667,6 +1669,34 @@ def test_move_decisions_rewrites_a_target_in_angle_brackets_and_leaves_a_referen
     renamed = sorted((level, code, path.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-"), msg.replace(f"{_OLD}/ADR-", f"{_NEW}/ADR-"))
                      for level, code, path, msg in before)
     assert before and _findings(k) == renamed
+
+
+_UNCLOSED = ("# Record\n\nBob pasted a cut line: [ADR-0001](/base/decisions/ADR-0001-x.md\n\n"
+             "Then [cut](</base/decisions/ADR-0001-x.md> and [titled](/base/decisions/ADR-0001-x.md \"X\"\n\n"
+             "Closed: [ADR-0001](/{d}/ADR-0001-x.md), [t](/{d}/ADR-0001-x.md 'X'), [p](/{d}/ADR-0001-x.md (X)) "
+             "and [s](/{d}/ADR-0001-x.md ).\n")
+
+
+def test_move_decisions_leaves_a_link_whose_parenthesis_is_never_closed(tmp_path, capsys):
+    from okf_common import extract_links
+
+    rel = "fragments/2026-11-02-n.md"
+
+    def bundle(d: str) -> dict[str, str]:
+        return {**_b1(d == _NEW), rel: _concept("Knowledge Fragment", "N", _FRAGMENT.replace("2026-11-01", "2026-11-02"),
+                                               _UNCLOSED.format(d=d))}
+
+    cut = _UNCLOSED.partition("Closed:")[0]
+    assert extract_links(cut) == []
+    k = _bundle_30(tmp_path, bundle(_OLD))
+    before = _tree(k)[rel]
+    assert _move(k, capsys)[0] == 0
+    after = _tree(k)[rel]
+    assert after == bundle(_NEW)[rel] and after != before
+    assert after.partition("Closed:")[0] == before.partition("Closed:")[0]
+    assert _outside_link_targets(before, after) == []
+    text = "---\ntype: Reference\n---\n" + cut
+    assert rewrite_paths(text, rel, FileMove({f"{_OLD}/ADR-0001-x.md": f"{_NEW}/ADR-0001-x.md"})) == text
 
 
 def test_move_decisions_dry_run_lists_the_moves_and_writes_nothing(tmp_path, capsys):
