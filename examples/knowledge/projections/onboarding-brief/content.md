@@ -2,7 +2,7 @@
 
 ## The bus
 
-Payment events travel on Kafka ([ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md)). The payments service needs 7-day retention of its events.
+Payment events travel on Kafka ([ADR-0001](/base/decisions/architecture/ADR-0001-adopt-kafka.md)). The payments service needs 7-day retention of its events.
 
 ## When an alert fires
 

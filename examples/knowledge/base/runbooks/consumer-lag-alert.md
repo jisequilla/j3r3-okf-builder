@@ -12,4 +12,4 @@ verified:
 
 # Trigger
 
-Alert `KafkaConsumerLagHigh`. See [ADR-0001](/base/decisions/ADR-0001-adopt-kafka.md).
+Alert `KafkaConsumerLagHigh`. See [ADR-0001](/base/decisions/architecture/ADR-0001-adopt-kafka.md).

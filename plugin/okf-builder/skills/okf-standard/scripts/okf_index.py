@@ -30,6 +30,10 @@ Usage:
 - A path with a hidden directory (a name starting with '.') never counts as content
   and never gets an index.md; nor does anything below a non-OKF directory, which
   counts as content of no ancestor. --dir into either exits 2 and writes nothing.
+- --dir SUBDIR: regenerates the index.md of SUBDIR and of every directory above it up to the
+  bundle root, deepest first, so each parent reads its child's new first sentence and lists a
+  directory that is new; no directory below SUBDIR and no other directory is written. With
+  --check it checks those same directories.
 - --check: writes nothing; exit 1 if any index.md would change.
 """
 from __future__ import annotations
@@ -314,6 +318,14 @@ def index_targets(bundle: Path, sub: Path | None = None) -> list[Path]:
             and (d == bundle or holds_content(bundle, sc, d))]
 
 
+def dir_targets(bundle: Path, sc: Scan, d: Path) -> list[Path]:
+    """Directories whose index.md `--dir d` regenerates: d and every directory above it up to the bundle root,
+    deepest first, each only when it is the bundle root or holds content (holds_content)."""
+    parts = d.resolve().relative_to(bundle.resolve()).parts
+    above = [bundle.joinpath(*parts[:n]) for n in range(len(parts) - 1, -1, -1)]
+    return [t for t in ([d, *above] if parts else [bundle]) if t == bundle or holds_content(bundle, sc, t)]
+
+
 def regenerate(bundle: Path, targets: list[Path], check: bool = False) -> int:
     """Write (or, with check, report) each out-of-date index.md of `targets`; return how many differ."""
     changed = 0
@@ -339,7 +351,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("bundle", nargs="?", help="path to the bundle (default: search upwards for knowledge/)")
     ap.add_argument("--check", action="store_true", help="write nothing; exit 1 if any index.md is out of date")
-    ap.add_argument("--dir", help="regenerate only this subdirectory (relative to the bundle)")
+    ap.add_argument("--dir", help="regenerate (with --check: check) only this subdirectory (relative to the bundle) "
+                                  "and every directory above it up to the bundle root, deepest first")
     args = ap.parse_args(argv)
 
     bundle = Path(args.bundle).resolve() if args.bundle else find_bundle()
@@ -359,7 +372,7 @@ def main(argv=None) -> int:
             print(f"ERROR: {_rel(bundle, d)}/ is not part of this bundle ({why}); okf-index does not write there.",
                   file=sys.stderr)
             return 2
-        targets = [d] if d == bundle or holds_content(bundle, sc, d) else []
+        targets = dir_targets(bundle, sc, d)
     else:
         targets = index_targets(bundle)
     changed = regenerate(bundle, targets, args.check)
@@ -564,6 +577,90 @@ def test_a_typed_directory_is_described_by_the_type_that_declares_it(tmp_path):
     assert main([str(k)]) == 0
     assert idx.read_text(encoding="utf-8").startswith("> Our ADRs.\n")
     assert "* [architecture](architecture/index.md) - Our ADRs.\n" in (k / "base/decisions/index.md").read_text(encoding="utf-8")
+
+
+# --- --dir X covers X and every directory above it, deepest first, and nothing else ---
+def _init_without_architecture(tmp: Path) -> Path:
+    """A fresh okf_init.py bundle as one made before base/decisions/architecture/ existed: that directory removed and
+    every index.md regenerated."""
+    import shutil
+    import subprocess
+
+    import pytest
+
+    init = Path(__file__).resolve().parent / "okf_init.py"
+    if not init.is_file():
+        pytest.skip("okf_init.py not beside this script")
+    subprocess.run([sys.executable, str(init), "--root", str(tmp), "--title", "Demo", "--description", "A demo.",
+                    "--actor", "human:x"], check=True, capture_output=True)
+    k = tmp / "knowledge"
+    shutil.rmtree(k / "base" / "decisions" / "architecture")
+    assert main([str(k)]) == 0 and main([str(k), "--check"]) == 0
+    return k
+
+
+_ADR = ("---\ntype: Architecture Decision\ntitle: \"ADR-0001: Use Kafka\"\ndescription: Kafka decided.\nstatus: draft\n"
+        "adr_id: ADR-0001\ndecision_status: accepted\ngenerated: { by: human:x, at: 2026-11-14T09:00:00Z }\n---\n\n"
+        "# Context\n\nText.\n\n# Decision\n\nText.\n\n# Alternatives considered\n\nText.\n\n# Consequences\n\nText.\n\n"
+        "# Related\n\nNone.\n")
+
+
+def test_dir_regenerates_the_directories_above_it(tmp_path, capsys):
+    k = _init_without_architecture(tmp_path)
+    adr = k / "base" / "decisions" / "architecture" / "ADR-0001-use-kafka.md"
+    adr.parent.mkdir()
+    adr.write_text(_ADR, encoding="utf-8")
+    capsys.readouterr()
+    assert main([str(k), "--dir", "base/decisions/architecture"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "WROTE base/decisions/architecture/index.md", "WROTE base/decisions/index.md", "2 index.md regenerated"]
+    assert ("* [architecture](architecture/index.md) - A decision about how a system is built (ADR).\n"
+            in (k / "base/decisions/index.md").read_text(encoding="utf-8"))
+    assert main([str(k), "--check"]) == 0
+    assert [f for f in _lint_view(k)[0] if f[0] == "INDEX_STALE"] == []
+    # each parent reads its child's new first sentence: the child is written before the directory above it
+    idx = adr.parent / "index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("> A decision about how a system is built (ADR).", "> Our ADRs."),
+                   encoding="utf-8")
+    assert main([str(k), "--dir", "base/decisions/architecture"]) == 0
+    assert "* [architecture](architecture/index.md) - Our ADRs.\n" in (k / "base/decisions/index.md").read_text(encoding="utf-8")
+    assert main([str(k), "--check"]) == 0
+
+
+def test_dir_check_reports_a_directory_above_it(tmp_path, capsys):
+    k = _decisions_bundle(tmp_path)
+    assert main([str(k)]) == 0
+    for rel in ("base/decisions/index.md", "base/index.md", "index.md", "base/decisions/standard/index.md"):
+        (k / rel).write_text((k / rel).read_text(encoding="utf-8") + "\nStray line.\n", encoding="utf-8")
+    before = _tree(k)
+    capsys.readouterr()
+    assert main([str(k), "--dir", "base/decisions/architecture", "--check"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "OUT OF DATE base/decisions/index.md", "OUT OF DATE base/index.md", "OUT OF DATE index.md",
+        "3 index.md out of date"]
+    assert _tree(k) == before
+    assert main([str(k), "--dir", ".", "--check"]) == 1
+    assert capsys.readouterr().out.splitlines() == ["OUT OF DATE index.md", "1 index.md out of date"]
+
+
+def test_dir_leaves_a_sibling_and_what_lies_below_it_as_they_are(tmp_path, capsys):
+    k = _decisions_bundle(tmp_path)
+    _concept(k, "base/systems/billing.md", "System", "Billing", "The billing system.")
+    assert main([str(k)]) == 0
+    stale = ("base/decisions/standard/index.md", "base/systems/index.md")
+    for rel in stale:
+        (k / rel).write_text((k / rel).read_text(encoding="utf-8") + "\nStray line.\n", encoding="utf-8")
+    kept = {rel: (k / rel).read_bytes() for rel in stale}
+    capsys.readouterr()
+    assert main([str(k), "--dir", "base/decisions/architecture"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["0 index.md regenerated"]
+    # --dir on a parent writes neither a directory below it nor a sibling
+    assert main([str(k), "--dir", "base/decisions"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["0 index.md regenerated"]
+    assert {rel: (k / rel).read_bytes() for rel in stale} == kept
+    assert main([str(k), "--check"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "OUT OF DATE base/decisions/standard/index.md", "OUT OF DATE base/systems/index.md", "2 index.md out of date"]
 
 
 def test_default_root_frontmatter_is_30(tmp_path):

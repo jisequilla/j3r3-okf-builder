@@ -43,10 +43,10 @@ The bundle's taxonomy is its Domain Profile, `base/profile.md` on top of the bui
 - **Addition**: knowledge the bundle lacks; a new concept or a new part of one.
 - **Confirmation**: the fragment states what a concept already says; add the fragment to its sources and footnote the sentence that already says it, with no new prose.
 - **Update**: the fragment refines a concept and contradicts nothing; edit it and log an **Update**.
-- **Refutation**: the fragment makes a concept outdated, names or implies its replacement, and nobody in the record disputes it. Deprecate the concept and link its replacement (for a decision, a new ADR that supersedes it); log a **Deprecation**. Do not open a conflict.
+- **Refutation**: the fragment makes a concept outdated, names or implies its replacement, and nobody in the record disputes it. Deprecate the concept and link its replacement (for a decision, a new decision of the same type that supersedes it); log a **Deprecation**. Do not open a conflict.
 - **Conflict**: it is unclear which is right, because participants disagree, sources disagree or the replacement is unknown. Open a row in the Conflict Log with a proposed resolution.
 
-Before the kinds, route each item: a decision, fact or definition becomes a concept; a question nobody answers becomes an `Open Question` in `base/questions/` with its `owner` and `asked_in`; an answer to an open question adds or updates the concept that holds the answer and sets the question's `question_status: answered` and `answered_by`; a proposal nobody validated becomes a proposed ADR or an open question; an action item goes under "To the tracker" in the change set for the person to file, never into `base/`; logistics, tone and commercial terms stay in the record.
+Before the kinds, route each item: a decision, fact or definition becomes a concept; a question nobody answers becomes an `Open Question` in `base/questions/` with its `owner` and `asked_in`; an answer to an open question adds or updates the concept that holds the answer and sets the question's `question_status: answered` and `answered_by`; a proposal nobody validated becomes a proposed decision or an open question; an action item goes under "To the tracker" in the change set for the person to file, never into `base/`; logistics, tone and commercial terms stay in the record.
 
 When in doubt between refutation and conflict, it is a conflict. Every concept you create, confirm, update or deprecate from a fragment cites it in `sources`, with footnotes on the claims it supports.
 

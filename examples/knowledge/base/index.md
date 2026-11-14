@@ -10,7 +10,7 @@
 * [architecture](architecture/index.md) - Architecture views and principles.
 * [computations](computations/index.md) - Sanctioned computations (Attested Computation).
 * [data](data/index.md) - Datasets, tables and schemas.
-* [decisions](decisions/index.md) - Architecture decision records (ADRs).
+* [decisions](decisions/index.md) - Decisions: what was decided, why, and what else was considered.
 * [domain](domain/index.md) - Glossary and business concepts.
 * [metrics](metrics/index.md) - Metric and KPI definitions.
 * [playbooks](playbooks/index.md) - Team and business procedures.

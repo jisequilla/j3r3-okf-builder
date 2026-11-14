@@ -16,11 +16,11 @@ description: Regenerates the index.md files of knowledge/ from the concepts' fro
    ```bash
    uv run "<skills>/okf-standard/scripts/okf_index.py" [<bundle>] --check
    ```
-3. Regenerate (all, or one directory):
+3. Regenerate (all, or one directory and the directories above it):
    ```bash
    uv run "<skills>/okf-standard/scripts/okf_index.py" [<bundle>] [--dir <subdir>]
    ```
-   In a knowledge/3.0 bundle, after adding to a typed directory: `--dir base/<dir>`, then `--dir base` (so `base/index.md` lists a new directory), then `--dir .`.
+   `--dir <subdir>` regenerates the `index.md` of that directory and of every directory above it up to the bundle root, deepest first, so each parent reads its child's new first sentence and lists a directory that is new; it writes no directory below `<subdir>` and no other directory. With `--check` it checks those same directories. After adding to a directory, one run with that directory is enough: `--dir base/decisions/architecture` (knowledge/2.0: `--dir decisions`).
    To index an operational instance (or any nested bundle), run it on the instance's directory as a bundle of its own: `okf_index.py <bundle>/requests/req-1`; `--dir` into it exits 2. A run indexes one bundle: the indexes inside its instances are left as they are, so run it on each instance whose own content changed, and on an instance that holds a kind (`okf_index.py <bundle>/releases/rel-1`) to list that kind's instances; it finds the domain bundle's Domain Profile through the `parent` chain.
 4. Rules the generator applies (don't duplicate them by hand):
    - Sections by `type` in the profile's order; entries `* [title](file.md) - description`, with a `_(draft)_` / `_(deprecated)_` suffix.
