@@ -4750,8 +4750,8 @@ def _typed(key: str, t: str) -> str:
     return _decision(t).replace("type:", key + ":", 1)
 
 
-def _tipo_findings(tmp_path: Path, key: str, norm: str, practice: str) -> list:
-    k = _tree_bundle(tmp_path / f"{key}-{norm}-{practice}", profile="types:\n" + _SDR_TYPE + _TIPO, extra={
+def _tipo_findings(tmp_path: Path, key: str, norm: str, practice: str, values: str = "") -> list:
+    k = _tree_bundle(tmp_path / f"{key}-{norm}-{practice}", profile="types:\n" + _SDR_TYPE + _TIPO + values, extra={
         "base/decisions/SDR-0001-a-norm.md": _typed(key, norm), "base/practices/p.md": _typed(key, practice)})
     return sorted((i["level"], i["code"], i["path"], i["message"]) for i in lint(k)[0].items
                   if i["path"] in ("base/decisions/SDR-0001-a-norm.md", "base/practices/p.md"))
@@ -4766,6 +4766,16 @@ def test_a_local_type_name_under_a_local_name_of_the_type_key_is_the_type_it_sta
     for key, norm, practice in (("type", "Standard Decision", "Practice"), ("type", "Norma", "Práctica"),
                                 ("tipo", "Standard Decision", "Practice")):
         assert _tipo_findings(tmp_path, key, norm, practice) == required, (key, norm)
+
+
+def test_a_value_alias_whose_from_names_the_type_supplies_a_required_field_for_every_spelling_of_it(tmp_path):
+    """The value alias gives a Practice its required `owner`. Its `from` names the type by a local type name, under
+    a local name of the type key or by the declared name: each holds for the four spellings of the concept's type."""
+    for n, frm in enumerate(("{ type: Práctica }", "{ tipo: Práctica }", "{ type: Practice }")):
+        values = f"  values:\n    - {{ from: {frm}, to: {{ type: Practice, owner: someone }} }}\n"
+        for key, norm, practice in (("type", "Standard Decision", "Practice"), ("type", "Norma", "Práctica"),
+                                    ("tipo", "Standard Decision", "Practice"), ("tipo", "Norma", "Práctica")):
+            assert _tipo_findings(tmp_path / str(n), key, norm, practice, values) == [], (frm, key, practice)
 
 
 def test_without_a_30_domain_profile_in_force_every_name_keeps_the_one_rule(tmp_path):
