@@ -9,7 +9,7 @@ decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-08T14:02:56Z }
+verified: [{ by: human:jisequilla, at: 2026-11-08T14:02:56Z }, { by: human:jisequilla, at: 2026-11-14T17:01:20Z }]
 sources:
   - { id: okf-1b5, resource: "bead okf-1b5", title: "OKF inside Obsidian: bundle as a vault (closed 2026-10-31)" }
   - { id: okf-ov8, resource: "bead okf-ov8", title: "Obsidian projection: vault config and Bases views for a bundle" }

@@ -9,7 +9,7 @@ formerly: ADR-0021
 decision_status: accepted
 supersedes: /base/decisions/standard/SDR-0011-three-layers-fragments-base-projections.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-07T11:58:57Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T11:58:57Z }, { by: human:jisequilla, at: 2026-11-14T17:25:28Z }]
 sources:
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }
   - { id: tool, resource: /fragments/2026-11-02-migration-tool-okf-review.md, title: "Fragment: what a long-running OKF implementation teaches" }

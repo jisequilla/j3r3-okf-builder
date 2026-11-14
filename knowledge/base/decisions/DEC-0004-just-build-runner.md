@@ -10,7 +10,7 @@ decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T01:03:27Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T01:03:27Z }, { by: human:jisequilla, at: 2026-11-14T16:59:47Z }]
 sources:
   - { id: adr-0011, resource: /base/decisions/architecture/ADR-0011-uv-pep723-scripts.md }
   - { id: adr-0028, resource: /base/decisions/DEC-0003-where-things-go.md }

@@ -10,7 +10,7 @@ decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-08T14:01:05Z }
+verified: [{ by: human:jisequilla, at: 2026-11-08T14:01:05Z }, { by: human:jisequilla, at: 2026-11-14T17:27:47Z }]
 sources:
   - { id: review, resource: /fragments/2026-11-02-migration-tool-okf-review.md, title: "Fragment: what a long-running OKF implementation teaches" }
   - { id: adr-0024, resource: /base/decisions/standard/SDR-0017-fragment-capture-field-backfill.md }

@@ -7,7 +7,7 @@ tags: [doctrine, agents, workflow, process]
 status: stable
 owner: human:jisequilla
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:26Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }]
+verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:26Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-14T17:30:26Z }]
 sources:
   - { id: adr-0009, resource: /base/decisions/DEC-0002-build-in-layers-and-tickets.md, title: "DEC-0002: Build multi-stage changes in layers and delegated tickets" }
   - { id: adr-0028, resource: /base/decisions/DEC-0003-where-things-go.md, title: "DEC-0003: Where things go" }

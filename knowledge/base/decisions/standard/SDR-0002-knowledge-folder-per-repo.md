@@ -8,7 +8,7 @@ decision_id: SDR-0002
 formerly: ADR-0002
 decision_status: accepted
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-07T09:00:54Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T09:00:54Z }, { by: human:jisequilla, at: 2026-11-14T17:22:36Z }]
 ---
 
 # Context

@@ -5,7 +5,7 @@ description: Something derived from a bundle's base for a reader, kept in knowle
 tags: [domain, glossary, okf, projections]
 status: stable
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T10:55:51Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:55:51Z }, { by: human:jisequilla, at: 2026-11-14T17:31:13Z }]
 sources:
   - { id: adr-0022, resource: /base/decisions/standard/SDR-0015-knowledge-projections-drift-by-nature.md }
   - { id: bundles, resource: /fragments/2026-11-01-real-bundles-review.md, title: "Fragment: what eleven real knowledge bundles teach" }

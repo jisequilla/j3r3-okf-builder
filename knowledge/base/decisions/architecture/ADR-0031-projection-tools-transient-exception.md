@@ -9,7 +9,7 @@ decision_status: accepted
 supersedes: /base/decisions/architecture/ADR-0030-projection-tools.md
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-08T14:02:25Z }
+verified: [{ by: human:jisequilla, at: 2026-11-08T14:02:25Z }, { by: human:jisequilla, at: 2026-11-14T17:01:10Z }]
 sources:
   - { id: adr-0022, resource: /base/decisions/standard/SDR-0015-knowledge-projections-drift-by-nature.md }
   - { id: adr-0026, resource: /base/decisions/standard/SDR-0019-built-in-domain-profile.md }

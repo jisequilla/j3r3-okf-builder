@@ -9,7 +9,7 @@ formerly: ADR-0010
 decision_status: accepted
 supersedes: /base/decisions/standard/SDR-0003-spanish-names.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-07T09:38:37Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T09:38:37Z }, { by: human:jisequilla, at: 2026-11-14T17:23:25Z }]
 ---
 
 # Context

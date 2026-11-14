@@ -9,7 +9,7 @@ decision_status: superseded
 supersedes:
 superseded_by: /base/decisions/architecture/ADR-0037-organization-distributed-copy.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T01:08:05Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T01:08:05Z }, { by: human:jisequilla, at: 2026-11-14T17:43:06Z }]
 sources:
   - { id: adr-0007, resource: /base/decisions/architecture/ADR-0007-single-source-and-projections.md }
   - { id: adr-0011, resource: /base/decisions/architecture/ADR-0011-uv-pep723-scripts.md }

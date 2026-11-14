@@ -9,7 +9,7 @@ decision_status: accepted
 supersedes: /base/decisions/architecture/ADR-0034-organization-package.md
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T10:55:08Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:55:08Z }, { by: human:jisequilla, at: 2026-11-14T17:01:31Z }]
 sources:
   - { id: fragment, resource: /fragments/2026-11-09-organization-distributed-copy.md }
   - { id: adr-0034, resource: /base/decisions/architecture/ADR-0034-organization-package.md }

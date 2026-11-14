@@ -6,7 +6,7 @@ resource: /plugin/okf-builder/skills/okf-standard/references/OKF-COMPATIBILITY.m
 tags: [reference, compatibility]
 status: stable
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T10:56:33Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:33Z }, { by: human:jisequilla, at: 2026-11-14T17:33:56Z }]
 ---
 
 # Summary

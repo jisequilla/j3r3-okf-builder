@@ -3,8 +3,9 @@ type: Term
 title: Attestation
 description: The check, by deterministic code over the receipt of a run, that a number was produced by its sanctioned computation; okf-builder records and shape-checks an Attested Computation and runs nothing.
 tags: [domain, glossary, okf, attestation]
-status: draft
+status: stable
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-13T18:45:12Z }
+verified: { by: human:jisequilla, at: 2026-11-14T17:41:38Z }
 sources:
   - { id: video-review, resource: /fragments/2026-11-13-okf-v02-video-review.md, title: "Fragment: a video on the trust signals of OKF v0.2, read against this repo" }
   - { id: spec, resource: /base/references/okf-spec-google.md, title: "Open Knowledge Format (Google spec), v0.2 §10" }

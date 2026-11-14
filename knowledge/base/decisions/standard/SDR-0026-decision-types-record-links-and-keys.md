@@ -10,7 +10,7 @@ decision_status: accepted
 supersedes: /base/decisions/standard/SDR-0025-decision-types.md
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-13T21:32:44Z }
+verified: [{ by: human:jisequilla, at: 2026-11-13T21:32:44Z }, { by: human:jisequilla, at: 2026-11-14T17:28:44Z }]
 sources:
   - { id: fragment, resource: /fragments/2026-11-13-decision-types-beyond-adr.md, title: "2026-11-13 · Not every decision is an Architecture Decision, and how the standard and this repo should type decisions" }
   - { id: answers, resource: /fragments/2026-11-13-decision-types-identity-and-existing-files.md, title: "2026-11-13 · Decision types, the owner's answers on where a kind's folder and prefix are declared and on moving the 29 existing ADRs" }

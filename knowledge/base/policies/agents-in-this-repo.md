@@ -8,7 +8,7 @@ status: stable
 owner: human:jisequilla
 stale_after: 2027-10-30T00:00:00Z
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: [{ by: human:jisequilla, at: 2026-11-07T08:30:40Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }, { by: human:jisequilla, at: 2026-11-08T21:39:09Z }, { by: human:jisequilla, at: 2026-11-09T01:20:11Z }]
+verified: [{ by: human:jisequilla, at: 2026-11-07T08:30:40Z }, { by: human:jisequilla, at: 2026-11-08T14:12:07Z }, { by: human:jisequilla, at: 2026-11-08T21:39:09Z }, { by: human:jisequilla, at: 2026-11-09T01:20:11Z }, { by: human:jisequilla, at: 2026-11-14T16:21:34Z }]
 ---
 
 # Rule

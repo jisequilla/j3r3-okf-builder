@@ -10,7 +10,7 @@ decision_status: accepted
 supersedes: /base/decisions/standard/SDR-0023-domain-and-operational-bundles.md
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-11T20:17:35Z }
+verified: [{ by: human:jisequilla, at: 2026-11-11T20:17:35Z }, { by: human:jisequilla, at: 2026-11-14T17:28:38Z }]
 sources:
   - { id: fragment, resource: /fragments/2026-11-10-domain-and-operational-bundles.md, title: "Fragment: domain and operational bundles" }
   - { id: closing, resource: /fragments/2026-11-11-closing-an-instance.md, title: "Fragment: closing an instance" }

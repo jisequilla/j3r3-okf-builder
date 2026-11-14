@@ -10,7 +10,7 @@ decision_status: accepted
 supersedes: /base/decisions/standard/SDR-0018-verification-recorded-by-question.md
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-08T14:03:11Z }
+verified: [{ by: human:jisequilla, at: 2026-11-08T14:03:11Z }, { by: human:jisequilla, at: 2026-11-14T17:28:06Z }]
 sources:
   - { id: adr-0025, resource: /base/decisions/standard/SDR-0018-verification-recorded-by-question.md }
   - { id: adr-0024, resource: /base/decisions/standard/SDR-0017-fragment-capture-field-backfill.md }

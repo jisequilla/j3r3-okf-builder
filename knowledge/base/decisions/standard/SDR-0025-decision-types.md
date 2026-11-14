@@ -10,7 +10,7 @@ decision_status: superseded
 supersedes:
 superseded_by: /base/decisions/standard/SDR-0026-decision-types-record-links-and-keys.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-13T20:05:02Z }
+verified: [{ by: human:jisequilla, at: 2026-11-13T20:05:02Z }, { by: human:jisequilla, at: 2026-11-14T17:43:06Z }]
 sources:
   - { id: fragment, resource: /fragments/2026-11-13-decision-types-beyond-adr.md, title: "2026-11-13 · Not every decision is an Architecture Decision, and how the standard and this repo should type decisions" }
   - { id: answers, resource: /fragments/2026-11-13-decision-types-identity-and-existing-files.md, title: "2026-11-13 · Decision types, the owner's answers on where a kind's folder and prefix are declared and on moving the 29 existing ADRs" }

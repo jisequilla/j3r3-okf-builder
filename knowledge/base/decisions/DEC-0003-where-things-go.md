@@ -10,7 +10,7 @@ decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-08T14:00:32Z }
+verified: [{ by: human:jisequilla, at: 2026-11-08T14:00:32Z }, { by: human:jisequilla, at: 2026-11-14T16:54:36Z }]
 sources:
   - { id: adr-0007, resource: /base/decisions/architecture/ADR-0007-single-source-and-projections.md }
   - { id: adr-0009, resource: /base/decisions/DEC-0002-build-in-layers-and-tickets.md }

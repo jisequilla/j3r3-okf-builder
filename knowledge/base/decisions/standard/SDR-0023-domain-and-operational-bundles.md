@@ -10,7 +10,7 @@ decision_status: superseded
 supersedes:
 superseded_by: /base/decisions/standard/SDR-0024-closing-operational-bundles.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-10T22:34:50Z }
+verified: [{ by: human:jisequilla, at: 2026-11-10T22:34:50Z }, { by: human:jisequilla, at: 2026-11-14T17:43:06Z }]
 sources:
   - { id: fragment, resource: /fragments/2026-11-10-domain-and-operational-bundles.md, title: "Fragment: domain and operational bundles" }
   - { id: adr-0026, resource: /base/decisions/standard/SDR-0019-built-in-domain-profile.md }

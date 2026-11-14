@@ -8,7 +8,7 @@ adr_id: ADR-0011
 decision_status: accepted
 supersedes: /base/decisions/architecture/ADR-0006-dependency-free-scripts.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-07T09:52:21Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T09:52:21Z }, { by: human:jisequilla, at: 2026-11-14T17:00:53Z }]
 sources:
   - { id: m365-note, resource: tools/export_m365.py }
   - { id: common, resource: plugin/okf-builder/skills/okf-standard/scripts/okf_common.py }

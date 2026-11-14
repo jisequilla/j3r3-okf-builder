@@ -5,7 +5,7 @@ description: How okf-builder serves the KDD knowledge architect role, which the 
 tags: [role, knowledge-architect, agents, kdd]
 status: stable
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-09T10:56:23Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:23Z }, { by: human:jisequilla, at: 2026-11-14T17:35:30Z }]
 sources:
   - { id: kdd-role, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/roles/arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect role profile v1.3, human-verified" }
   - { id: kdd-agent, resource: "https://github.com/jisequilla/kdd-knowledge/blob/929515c/knowledge/base/agents/agente-arquitecto-del-conocimiento.md", title: "KDD bundle: knowledge architect agent definition, ten skills" }

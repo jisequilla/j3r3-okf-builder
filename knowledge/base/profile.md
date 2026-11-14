@@ -17,7 +17,7 @@ types:
     directory: /base/decisions/standard/
     prefix: SDR
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-10T22:38:51Z }
+verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:51Z }, { by: human:jisequilla, at: 2026-11-14T17:32:10Z }]
 sources:
   - { id: adr-0028, resource: /base/decisions/DEC-0003-where-things-go.md, title: "DEC-0003: Where things go" }
   - { id: adr-0041, resource: /base/decisions/standard/SDR-0026-decision-types-record-links-and-keys.md, title: "SDR-0026: A decision is a Decision; Architecture Decision is one kind of it, each kind has its own folder, prefix and sequence, and a link inside a record follows a decision that moves" }

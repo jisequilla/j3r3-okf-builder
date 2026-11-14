@@ -8,7 +8,7 @@ adr_id: ADR-0017
 decision_status: accepted
 supersedes: /base/decisions/architecture/ADR-0013-agent-projections.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-07T10:19:54Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T10:19:54Z }, { by: human:jisequilla, at: 2026-11-14T17:01:01Z }]
 sources:
   - { id: claude-agents, resource: "https://code.claude.com/docs/en/sub-agents", title: "Claude Code subagents" }
   - { id: claude-plugins, resource: "https://code.claude.com/docs/en/plugins-reference", title: "Claude Code plugins reference" }

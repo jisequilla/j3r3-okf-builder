@@ -10,7 +10,7 @@ decision_status: accepted
 supersedes:
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-08T13:57:15Z }
+verified: [{ by: human:jisequilla, at: 2026-11-08T13:57:15Z }, { by: human:jisequilla, at: 2026-11-14T17:27:37Z }]
 sources:
   - { id: spec-actor, resource: plugin/okf-builder/skills/okf-standard/references/OKF-SPEC-v0.2.md, title: "OKF spec v0.2 §2 (Actor) and §7 (Actor convention)" }
   - { id: types, resource: standard/OKF-STANDARD.md, title: "OKF standard §4: Profile type vocabulary" }

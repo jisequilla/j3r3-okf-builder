@@ -9,7 +9,7 @@ formerly: ADR-0024
 decision_status: accepted
 supersedes: /base/decisions/standard/SDR-0010-refutation-as-a-distillation-kind.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-08T13:48:10Z }
+verified: [{ by: human:jisequilla, at: 2026-11-08T13:48:10Z }, { by: human:jisequilla, at: 2026-11-14T17:26:42Z }]
 sources:
   - { id: adr-0016, resource: /base/decisions/standard/SDR-0010-refutation-as-a-distillation-kind.md }
   - { id: adr-0005, resource: /base/decisions/standard/SDR-0005-required-generated-human-verified.md }

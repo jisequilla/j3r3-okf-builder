@@ -8,7 +8,7 @@ decision_id: SDR-0008
 formerly: ADR-0014
 decision_status: accepted
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: { by: human:jisequilla, at: 2026-11-07T09:57:04Z }
+verified: [{ by: human:jisequilla, at: 2026-11-07T09:57:04Z }, { by: human:jisequilla, at: 2026-11-14T17:24:56Z }]
 sources:
   - { id: spec-git, resource: /base/references/okf-spec-google.md, title: "OKF v0.2 §3: a git repository is the recommended distribution" }
   - { id: cs-quotas, resource: "https://learn.microsoft.com/en-us/microsoft-copilot-studio/requirements-quotas", title: "Copilot Studio quotas and limits (SharePoint knowledge file types)" }
