@@ -632,10 +632,42 @@ def frontmatter_key(line: str) -> tuple[str, int] | None:
     return (plain.group(1), plain.end()) if plain and plain.group(1) else None
 
 
+_RESOURCE_KEY_RE = re.compile(r"""(?:(?<![\w"'.-])resource[ \t]*:(?=[ \t\r]|$)|"resource"[ \t]*:|'resource'[ \t]*:)[ \t]*""")
+_RESOURCE_VALUE_RE = re.compile(r"([\"']?)([^\s\"',}\]]+)")
+_RESOURCE_NEXT_LINE_RE = re.compile(r"(?:[>|][+\-1-9]{0,2}[ \t]*)?(?:#.*)?\r?$")
+_RESOURCE_ALONE_RE = re.compile(r"[\"']?[ \t]*(?:#.*)?\r?$")
+
+
+def rewrite_resource(line: str, pending: bool, new_target) -> tuple[str, bool]:
+    """(the line, whether its last `resource` leaves its path to the next line) for one line of a sources block:
+    each `resource` subkey, written plain or in quotes, has its path rewritten with new_target, the path plain or in
+    quotes on the line of the key. With pending, the line is read first as the path alone that a `resource:` left
+    open or a block scalar (`resource: >-`) announced on the line before."""
+    def put(text: str, value: re.Match) -> str:
+        new = new_target(value.group(2))
+        return text if new is None else text[:value.start(2)] + new + text[value.end(2):]
+
+    if pending:
+        if not line.strip():
+            return line, True
+        indent = re.match(r"[ \t]+(?=\S)", line)
+        value = _RESOURCE_VALUE_RE.match(line, indent.end()) if indent else None
+        if value and _RESOURCE_ALONE_RE.match(line, value.end()):
+            return put(line, value), False
+    keys = list(_RESOURCE_KEY_RE.finditer(line))
+    opens = bool(keys) and _RESOURCE_NEXT_LINE_RE.match(line, keys[-1].end()) is not None
+    for key in reversed(keys[:-1] if opens else keys):
+        value = _RESOURCE_VALUE_RE.match(line, key.end())
+        if value:
+            line = put(line, value)
+    return line, opens
+
+
 def rewrite_moved(text: str, doc_rel: str, move: "FileMove", path_keys=PATH_KEYS, source_keys=SOURCE_KEYS) -> str:
     """Rewrite, in one .md, every path that names a file of a FileMove: the target of each inline link of the body
     as CommonMark defines it (okf_common.inline_links: an image and a linked image included, the target plain or in
-    angle brackets, whatever the link text and the title), the sources[].resource and the values of the path keys,
+    angle brackets, whatever the link text and the title), the sources[].resource (rewrite_resource: the subkey
+    plain or in quotes, its path on the same line or alone on the next) and the values of the path keys,
     a key read under any name it is written with (frontmatter_key). Every other byte is kept, the line endings of
     a text read without newline translation included; a reference-style definition (`[ref]: target`) is not an
     inline link and stays as written."""
@@ -651,13 +683,13 @@ def rewrite_moved(text: str, doc_rel: str, move: "FileMove", path_keys=PATH_KEYS
     if lines and lines[0].strip() == "---":
         end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
         if end is not None:
-            block = None
+            block, pending = None, False
             for i in range(1, end):
                 key = frontmatter_key(lines[i])
                 if key:
-                    block = key[0]
+                    block, pending = key[0], False
                 if block in source_keys:
-                    lines[i] = RESOURCE_RE.sub(lambda m: sub(m, 3), lines[i])
+                    lines[i], pending = rewrite_resource(lines[i], pending, lambda t: move.target(t, doc_rel))
                 elif block in path_keys:
                     start = key[1] if key else 0
                     value, hash_, comment = lines[i][start:].partition(" #")
@@ -2075,6 +2107,69 @@ def test_move_decisions_rewrites_a_path_key_under_a_non_ascii_alias_and_a_quoted
             "a b:\r": ("a b", 4), "url: http://x": ("url", 4), "  nested: x": None, "- item: x": None, "# c: x": None,
             "http://x": None, '"open: x': None, "": None}
     assert {line: frontmatter_key(line) for line in keys} == keys
+
+
+def _resource_forms(d: str) -> str:
+    """A sources block with every way of writing an entry's resource that the step rewrites, then the ones it
+    leaves: another key that ends in `resource`, a resource with no path and a path that is not alone on its line."""
+    p = f"/{d}/ADR-0001-x.md"
+    return ("sources:\n"
+            f"  - id: a\n    resource: {p}\n"
+            f"  - id: b\n    \"resource\": {p}\n"
+            f"  - id: c\n    'resource' : '{p}#context'  # quoted\n"
+            f"  - {{ \"id\": d, \"resource\": \"{p}\" }}\n"
+            f"  - {{\"id\":\"e\",\"resource\":\"{p}\"}}\n"
+            f"  - id: f\n    resource: >-\n      {p}\n"
+            f"  - id: g\n    resource: |-\n      {p}\n"
+            f"  - id: h\n    resource:  # on the next line\n      \"{p}\"\n"
+            f"  - [ {{ id: i, resource: {p} }}, {{ id: j, resource: {p} }} ]\n"
+            f"  - id: k\n    resource: {p}\r\n"
+            "  - id: l\n    sub_resource: /base/decisions/ADR-0001-x.md\n"
+            "  - id: m\n    resource:\n    title: /base/decisions/ADR-0001-x.md\n"
+            "  - id: n\n    resource: >-\n      see /base/decisions/ADR-0001-x.md\n")
+
+
+def test_move_decisions_rewrites_a_sources_resource_under_a_quoted_subkey_and_on_the_next_line(tmp_path, capsys):
+    def bundle(d: str) -> dict[str, str]:
+        return {"log.md": _LOG_30, "project.md": _concept("Project", "P"),
+                f"{d}/ADR-0001-x.md": _concept("Architecture Decision", "X", "adr_id: ADR-0001\ndecision_status: accepted\n"),
+                "base/systems/pay.md": _concept("System", "Pay", _resource_forms(d))}
+
+    k = _bundle_30(tmp_path, bundle(_OLD))
+    (k / "base/systems/pay.md").write_bytes(bundle(_OLD)["base/systems/pay.md"].encode())
+    assert _move(k, capsys)[0] == 0
+    assert (k / "base/systems/pay.md").read_bytes().decode() == bundle(_NEW)["base/systems/pay.md"]
+    resources = [s.get("resource") for s in _parse((k / "base/systems/pay.md").read_text(encoding="utf-8"))[0]["sources"][:8]]
+    assert resources == [f"/{_NEW}/ADR-0001-x.md", f"/{_NEW}/ADR-0001-x.md", f"/{_NEW}/ADR-0001-x.md#context",
+                         *[f"/{_NEW}/ADR-0001-x.md"] * 5]
+
+
+def test_rewrite_resource_reads_each_subkey_and_says_when_the_path_is_on_the_next_line():
+    def new(target: str) -> str | None:
+        return "/new.md" if target == "/old.md" else None
+
+    lines = {
+        ("    resource: /old.md", False): ("    resource: /new.md", False),
+        ("    \"resource\": /old.md", False): ("    \"resource\": /new.md", False),
+        ("- {'resource':'/old.md', id: a}", False): ("- {'resource':'/new.md', id: a}", False),
+        ("- { resource: /old.md }, { resource: /other.md }, { resource: /old.md }", False):
+            ("- { resource: /new.md }, { resource: /other.md }, { resource: /new.md }", False),
+        ("    resource: >-", False): ("    resource: >-", True),
+        ("    resource: |2+  # kept", False): ("    resource: |2+  # kept", True),
+        ("    \"resource\":\r", False): ("    \"resource\":\r", True),
+        ("- { resource: /old.md }, resource:", False): ("- { resource: /new.md }, resource:", True),
+        ("", True): ("", True),
+        ("      /old.md", True): ("      /new.md", False),
+        ("      '/old.md'  # c\r", True): ("      '/new.md'  # c\r", False),
+        ("      /old.md and more", True): ("      /old.md and more", False),
+        ("    title: /old.md", True): ("    title: /old.md", False),
+        ("/old.md", True): ("/old.md", False),
+        ("    resource: /old.md", True): ("    resource: /new.md", False),
+        ("    my-resource: /old.md", False): ("    my-resource: /old.md", False),
+        ("    resource:/old.md", False): ("    resource:/old.md", False),
+        ("    title: /old.md", False): ("    title: /old.md", False),
+    }
+    assert {k: rewrite_resource(*k, new) for k in lines} == lines
 
 
 _RECORD_FORMS = ("# Record\n\n"
