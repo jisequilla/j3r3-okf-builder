@@ -14,6 +14,9 @@ Usage:
 
 Creates the three layers: fragments/ (with its index.md), base/ with one typed
 directory per --dirs entry, and projections/ (with only a .gitkeep: it is not OKF).
+Below a typed directory it also creates each directory a type of the built-in Domain
+Profile declares there (base/decisions/architecture/ for Architecture Decision), with
+that type's description, and references/skills/ and references/attesters/.
 project.md holds no placeholder: what init knows is filled in (title, description,
 repository URL, and Purpose from --purpose or else the description), and the rows
 and sections it cannot fill (Scope, Team and ownership, empty Key links rows) are
@@ -66,7 +69,7 @@ DEFAULT_DIRS = ["architecture", "decisions", "domain", "systems", "apis", "data"
                 "metrics", "computations", "runbooks", "playbooks", "policies", "questions", "references"]
 DIR_DESC = {
     "architecture": "Architecture views and principles.",
-    "decisions": "Architecture decision records (ADR).",
+    "decisions": "Decisions: what was decided, why, and what else was considered.",
     "domain": "Glossary and business concepts.",
     "systems": "Services, modules and deployable components.",
     "apis": "API contracts and their semantics.",
@@ -279,14 +282,21 @@ def main(argv=None) -> int:
 
     log.append(write(k / "log.md", render("log.md", date=date.today().isoformat()), args.force))
 
-    def empty_index(path: Path, name: str) -> None:
-        desc = DIR_DESC.get(name, f"Concepts in {name}.")
+    def empty_index(path: Path, name: str, desc: str | None = None) -> None:
+        desc = desc or DIR_DESC.get(name, f"Concepts in {name}.")
         log.append(write(path / "index.md", f"# {name}\n\n> {desc}\n\n_(empty)_\n", args.force))
+
+    from okf_index import type_dirs  # noqa: E402
+    from okf_profile import load_profile  # noqa: E402
+    typed = type_dirs(load_profile(k, read_own=False))  # the built-in Domain Profile's type directories
 
     empty_index(k / FRAGMENTS_DIR, FRAGMENTS_DIR)
     empty_index(k / BASE_DIR, BASE_DIR)
     for d in dirs:
         empty_index(k / BASE_DIR / d, d)
+        for rel, desc in typed.items():
+            if rel.startswith(f"{BASE_DIR}/{d}/"):
+                empty_index(k / rel, rel.rpartition("/")[2], desc)
         if d == "references":
             for sub in ("skills", "attesters"):
                 empty_index(k / BASE_DIR / d / sub, sub)
@@ -333,6 +343,36 @@ def test_creates_questions_listed_in_base_index(tmp_path):
     assert "* [questions](questions/index.md) - Questions nobody has answered yet, each with an owner." in base
     from okf_index import DIR_DESCRIPTIONS
     assert DIR_DESCRIPTIONS["questions"] == DIR_DESC["questions"]
+
+
+def _below_decisions(k: Path) -> tuple[list, dict]:
+    """What init left under base/decisions/ and the description each index.md there carries."""
+    d = k / "base" / "decisions"
+    files = sorted(p.relative_to(d).as_posix() for p in d.rglob("*"))
+    return files, {p.relative_to(d).as_posix(): p.read_text(encoding="utf-8") for p in sorted(d.rglob("index.md"))}
+
+
+def test_creates_decisions_with_the_architecture_decisions_directory(tmp_path):
+    from okf_index import DIR_DESCRIPTIONS
+    from okf_index import main as index_main
+
+    want = (["architecture", "architecture/index.md", "index.md"],
+            {"index.md": "> Decisions: what was decided, why, and what else was considered.\n\n# Subdirectories\n\n"
+                         "* [architecture](architecture/index.md) - A decision about how a system is built (ADR).\n",
+             "architecture/index.md": "> A decision about how a system is built (ADR).\n\n# architecture\n\n_(empty)_\n"})
+    assert main(["--root", str(tmp_path / "default"), *_ARGS]) == 0
+    assert main(["--root", str(tmp_path / "custom"), *_ARGS, "--dirs", "decisions"]) == 0
+    for root in ("default", "custom"):
+        k = tmp_path / root / "knowledge"
+        assert _below_decisions(k) == want, root
+        assert index_main([str(k), "--check"]) == 0, root
+        assert _codes(k) == [], root
+    assert DIR_DESCRIPTIONS["decisions"] == DIR_DESC["decisions"]
+    base = (tmp_path / "default" / "knowledge" / "base" / "index.md").read_text(encoding="utf-8")
+    assert "* [decisions](decisions/index.md) - Decisions: what was decided, why, and what else was considered.\n" in base
+    # a --dirs without decisions creates neither
+    assert main(["--root", str(tmp_path / "none"), *_ARGS, "--dirs", "questions"]) == 0
+    assert not (tmp_path / "none" / "knowledge" / "base" / "decisions").exists()
 
 
 def test_custom_dirs_leave_questions_out(tmp_path):
