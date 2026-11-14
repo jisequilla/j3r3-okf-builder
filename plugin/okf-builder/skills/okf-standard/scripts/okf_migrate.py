@@ -61,7 +61,9 @@ have no effect on it):
     concept's type declares as a path (supersedes, superseded_by, blocks, answered_by, asked_in
     and those of a local type; the key under its declared name or a local one) that point to a
     moved decision are rewritten, and the relative ones of a moved decision are recomputed;
-    of a link only its target changes, so a fragment's # Record keeps every other character
+    a link is an inline link as CommonMark defines it (okf_common.inline_links), an image
+    included; of a link only its target changes, so a fragment's # Record keeps every other
+    character; a reference-style definition ([ref]: target) stays as written
   - the index.md of each directory a decision left or entered, and of the directories above
     them, are regenerated; one **Migration** entry in log.md names both paths of each decision
   - it stops with exit 1, before writing anything, when a new path already exists, when
@@ -101,6 +103,7 @@ from okf_common import (  # noqa: E402
     declared_profile,
     detect_version,
     find_bundle,
+    inline_links,
     load_doc,
     parse_yaml,
     root_frontmatter,
@@ -360,8 +363,7 @@ def append_log(log_path: Path, to: str, n: int, entry: str | None = None) -> Non
 # --------------------------------------------------------------------------
 ROOT_KEEP = {"index.md", "log.md", "project.md"}
 EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:")
-MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()(<[^<>\r\n]*>|[^)\s]+)"
-                        r"(?=(?:\s+\"[^\"]*\"|[ \t]+(?:'[^'\r\n]*'|\([^()\r\n]*\)))?[ \t]*\))")
+MD_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)")
 RESOURCE_RE = re.compile(r"(\bresource\s*:\s*)([\"']?)([^\s\"',}\]]+)")
 PATH_KEYS = {"supersedes", "superseded_by"}
 SOURCE_KEYS = {"sources"}
@@ -460,20 +462,15 @@ def profile_moves(bundle: Path) -> tuple[list[str], list[str]]:
     return dirs, files
 
 
-def rewrite_paths(text: str, doc_rel: str, move, path_keys=PATH_KEYS, source_keys=SOURCE_KEYS) -> str:
-    """Rewrite the body links, the sources[].resource and the values of the path keys of one .md,
-    keeping every other byte, the line endings of a text read without newline translation included. Of a link
-    `[text](target)` only the target changes, written plain or in angle brackets; a reference-style definition
-    (`[ref]: target`) is not read as a link, nor is a `[text](target` whose parenthesis is never closed.
-    move: a Move or a FileMove."""
+def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
+    """Rewrite the body links, the sources[].resource and the PATH_KEYS values of one .md,
+    keeping every other byte."""
     def sub(m: re.Match, group: int) -> str:
-        old = m.group(group)
-        angle = len(old) > 1 and old[0] == "<" and old[-1] == ">"
-        new = move.target(old[1:-1] if angle else old, doc_rel)
+        new = move.target(m.group(group), doc_rel)
         if new is None:
             return m.group(0)
         start, end = m.start(group) - m.start(0), m.end(group) - m.start(0)
-        return m.group(0)[:start] + (f"<{new}>" if angle else new) + m.group(0)[end:]
+        return m.group(0)[:start] + new + m.group(0)[end:]
 
     lines = text.split("\n")
     body_start = 0
@@ -485,9 +482,9 @@ def rewrite_paths(text: str, doc_rel: str, move, path_keys=PATH_KEYS, source_key
                 key = re.match(r"^([A-Za-z_][\w-]*)\s*:", lines[i])
                 if key:
                     block = key.group(1)
-                if block in source_keys:
+                if block == "sources":
                     lines[i] = RESOURCE_RE.sub(lambda m: sub(m, 3), lines[i])
-                elif block in path_keys:
+                elif block in PATH_KEYS:
                     start = key.end() if key else 0
                     value, hash_, comment = lines[i][start:].partition(" #")
                     lines[i] = lines[i][:start] + PATH_VALUE_RE.sub(lambda m: sub(m, 2), value) + hash_ + comment
@@ -586,9 +583,9 @@ def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
 # --------------------------------------------------------------------------
 class FileMove:
     """Files that move, as a map of bundle-relative posix paths old → new: any file to any path, renames included.
-    It gives rewrite_paths what Move gives it. exists(rel) says a bundle-relative path is in the bundle before the
-    move; with it, a relative target that names nothing there is left as written (a repository-relative resource
-    in a file that moves is not a path relative to that file)."""
+    rewrite_moved rewrites the paths of one .md with it. exists(rel) says a bundle-relative path is in the bundle
+    before the move; with it, a relative target that names nothing there is left as written (a
+    repository-relative resource in a file that moves is not a path relative to that file)."""
 
     def __init__(self, files: dict[str, str], exists=None):
         self.files, self.exists = dict(files), exists
@@ -612,6 +609,66 @@ class FileMove:
             return None
         new = posixpath.relpath(self.new(rel), posixpath.dirname(self.new(doc_rel)) or ".")
         return None if new == posixpath.normpath(path) else new + slash + sep + anchor
+
+
+_QUOTED_KEY_RE = re.compile(r'"(?:[^"\\]|\\.)*"|\'(?:[^\']|\'\')*\'')
+_KEY_COLON_RE = re.compile(r"[ \t]*:(?=\s|$)")
+
+
+def frontmatter_key(line: str) -> tuple[str, int] | None:
+    """(the key, the index after its colon) of a frontmatter line that opens a top-level key, or None: the key
+    written plain, whatever its first letter (`ámbito:`), or in quotes (`"superseded_by":`)."""
+    if not line or line[0] in " \t#-":
+        return None
+    if line[0] in "\"'":
+        quoted = _QUOTED_KEY_RE.match(line)
+        colon = _KEY_COLON_RE.match(line, quoted.end()) if quoted else None
+        try:
+            keys = list(parse_yaml(quoted.group(0) + ": 0")) if colon else []
+        except Exception:  # noqa: BLE001
+            keys = []
+        return (str(keys[0]), colon.end()) if len(keys) == 1 else None
+    plain = re.match(r"(.*?)[ \t]*:(?=\s|$)", line)
+    return (plain.group(1), plain.end()) if plain and plain.group(1) else None
+
+
+def rewrite_moved(text: str, doc_rel: str, move: "FileMove", path_keys=PATH_KEYS, source_keys=SOURCE_KEYS) -> str:
+    """Rewrite, in one .md, every path that names a file of a FileMove: the target of each inline link of the body
+    as CommonMark defines it (okf_common.inline_links: an image and a linked image included, the target plain or in
+    angle brackets, whatever the link text and the title), the sources[].resource and the values of the path keys,
+    a key read under any name it is written with (frontmatter_key). Every other byte is kept, the line endings of
+    a text read without newline translation included; a reference-style definition (`[ref]: target`) is not an
+    inline link and stays as written."""
+    def sub(m: re.Match, group: int) -> str:
+        new = move.target(m.group(group), doc_rel)
+        if new is None:
+            return m.group(0)
+        start, end = m.start(group) - m.start(0), m.end(group) - m.start(0)
+        return m.group(0)[:start] + new + m.group(0)[end:]
+
+    lines = text.split("\n")
+    body_start = 0
+    if lines and lines[0].strip() == "---":
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+        if end is not None:
+            block = None
+            for i in range(1, end):
+                key = frontmatter_key(lines[i])
+                if key:
+                    block = key[0]
+                if block in source_keys:
+                    lines[i] = RESOURCE_RE.sub(lambda m: sub(m, 3), lines[i])
+                elif block in path_keys:
+                    start = key[1] if key else 0
+                    value, hash_, comment = lines[i][start:].partition(" #")
+                    lines[i] = lines[i][:start] + PATH_VALUE_RE.sub(lambda m: sub(m, 2), value) + hash_ + comment
+            body_start = end + 1
+    body = "\n".join(lines[body_start:])
+    for link in reversed(inline_links(body)):
+        new = move.target(body[link.start:link.end], doc_rel)
+        if new is not None:
+            body = body[:link.start] + new + body[link.end:]
+    return "\n".join([*lines[:body_start], body])
 
 
 def profile_in_force(bundle: Path) -> Resolved:
@@ -712,7 +769,7 @@ def move_decisions(bundle: Path, dry_run: bool) -> int:
     rewritten = {}
     for doc in bundle_docs(bundle):
         text = doc.path.read_bytes().decode("utf-8")
-        new = rewrite_paths(text, doc.rel, move, *keys_with_paths(r, doc.frontmatter))
+        new = rewrite_moved(text, doc.rel, move, *keys_with_paths(r, doc.frontmatter))
         if new != text:
             rewritten[doc.rel] = new
     for old, new in moves.items():
@@ -1207,7 +1264,7 @@ def _without_requests_index(tree: dict[str, str]) -> dict[str, str]:
 
 def _freshly_regenerated(k: Path, tmp: Path, rel: str) -> str:
     """rel/index.md as regenerate writes it on a copy of k, now."""
-    fresh = tmp / "fresh"
+    fresh = tmp / ("fresh-" + rel.replace("/", "-"))
     shutil.copytree(k, fresh)
     regenerate(fresh, [fresh / rel])
     return (fresh / rel / "index.md").read_text(encoding="utf-8")
@@ -1696,7 +1753,7 @@ def test_move_decisions_leaves_a_link_whose_parenthesis_is_never_closed(tmp_path
     assert after.partition("Closed:")[0] == before.partition("Closed:")[0]
     assert _outside_link_targets(before, after) == []
     text = "---\ntype: Reference\n---\n" + cut
-    assert rewrite_paths(text, rel, FileMove({f"{_OLD}/ADR-0001-x.md": f"{_NEW}/ADR-0001-x.md"})) == text
+    assert rewrite_moved(text, rel, FileMove({f"{_OLD}/ADR-0001-x.md": f"{_NEW}/ADR-0001-x.md"})) == text
 
 
 def test_move_decisions_dry_run_lists_the_moves_and_writes_nothing(tmp_path, capsys):
@@ -1745,7 +1802,8 @@ def test_move_decisions_moves_a_plain_decision_out_of_the_architecture_directory
     assert sorted(rel for rel in tree if rel.startswith(_OLD)) == [
         f"{_OLD}/DEC-0001-how.md", f"{_NEW}/index.md", f"{_OLD}/index.md"]
     assert tree[f"{_OLD}/DEC-0001-how.md"] == _DEC
-    assert tree[f"{_NEW}/index.md"] == "> Architecture views and principles.\n\n# architecture\n\n_(empty)_\n"
+    assert tree[f"{_NEW}/index.md"] == _freshly_regenerated(k, tmp_path, _NEW)
+    assert "DEC-0001-how.md" not in tree[f"{_NEW}/index.md"]
     assert tree[f"{_OLD}/index.md"] == _freshly_regenerated(k, tmp_path, _OLD)
     assert "(DEC-0001-how.md)" in tree[f"{_OLD}/index.md"]
     assert index_main([str(k), "--check"]) == 0
@@ -1862,17 +1920,25 @@ def test_move_decisions_stops_before_writing_when_a_new_path_is_taken_or_left_ou
     cannot = f"ERROR: {_OLD}/ADR-0001-x.md cannot move to {_NEW}/ADR-0001-x.md: "
     cannot_y = f"ERROR: {_OLD}/ADR-0002-y.md cannot move to {_NEW}/ADR-0002-y.md: "
     nothing = "Nothing was written; settle each by hand and run the step again.\n"
+    nested = f"NOTICE nested bundles not entered: {_NEW}/ (run okf_migrate.py --move-decisions on each)\n"
     cases = {
-        "exists": ({f"{_NEW}/ADR-0001-x.md": taken}, cannot + f"{_NEW}/ADR-0001-x.md already exists\n" + nothing),
-        "ignored": ({".okfignore": "base/decisions/architecture/\n"},
-                    cannot + ".okfignore matches it\n" + cannot_y + ".okfignore matches it\n" + nothing)}
-    for name, (extra, err) in cases.items():
+        "exists": ({f"{_NEW}/ADR-0001-x.md": taken}, "", cannot + f"{_NEW}/ADR-0001-x.md already exists\n" + nothing),
+        "ignored": ({".okfignore": "base/decisions/architecture/\n"}, "",
+                    cannot + ".okfignore matches it\n" + cannot_y + ".okfignore matches it\n" + nothing),
+        "nested": ({f"{_NEW}/index.md": _ROOT_30}, nested,
+                   cannot + "it lies in a nested bundle\n" + cannot_y + "it lies in a nested bundle\n" + nothing),
+        "same": ({f"{_OLD}/old/ADR-0001-x.md": taken}, "",
+                 f"ERROR: {_OLD}/old/ADR-0001-x.md cannot move to {_NEW}/ADR-0001-x.md: {_OLD}/ADR-0001-x.md moves "
+                 "there too\n" + nothing)}
+    for name, (extra, out, err) in cases.items():
         k = _bundle_30(tmp_path / name, {**_b1(False), **extra})
+        for rel, text in extra.items():
+            (k / rel).write_text(text, encoding="utf-8")
         before = _bytes(k)
         for flags in ((), ("--dry-run",)):
             result = _move(k, capsys, *flags)
             assert _bytes(k) == before
-            assert result == (1, "", err)
+            assert result == (1, out, err)
 
 
 def test_move_decisions_refuses_a_closed_bundle_and_one_that_is_not_knowledge_30(tmp_path, capsys):
@@ -1947,7 +2013,7 @@ def test_file_move_rewrites_a_target_for_any_map_of_old_to_new_paths():
     assert FileMove({a: "base/decisions/standard/SDR-0001-x.md"}).target("docs/bench.md", a) == "../docs/bench.md"
 
 
-def test_rewrite_paths_reads_a_target_in_angle_brackets_whole_and_keeps_the_brackets():
+def test_rewrite_moved_reads_a_target_in_angle_brackets_whole_and_keeps_the_brackets():
     a = "base/decisions/ADR-0001-x.md"
     move = FileMove({a: "base/decisions/architecture/ADR-0001-x.md"})
     cases = {
@@ -1959,7 +2025,167 @@ def test_rewrite_paths_reads_a_target_in_angle_brackets_whole_and_keeps_the_brac
         ("[r]: /base/decisions/ADR-0001-x.md\n[r]: </base/decisions/ADR-0001-x.md>\n", "log.md"):
             "[r]: /base/decisions/ADR-0001-x.md\n[r]: </base/decisions/ADR-0001-x.md>\n",
     }
-    assert {case: rewrite_paths(*case, move) for case in cases} == cases
+    assert {case: rewrite_moved(*case, move) for case in cases} == cases
+
+
+def test_move_decisions_regenerates_the_index_of_each_directory_above_a_destination_outside_the_one_left(tmp_path, capsys):
+    from okf_index import main as index_main
+
+    k = _bundle_30(tmp_path, {
+        "log.md": _LOG_30, "project.md": _concept("Project", "P"),
+        "base/profile.md": _LOCAL_TYPES.replace("{aliases}", "").replace("/base/decisions/standard/", "/base/standard/decisions/"),
+        f"{_OLD}/SDR-0001-format.md": _concept("Standard Decision", "Format", "decision_id: SDR-0001\n"),
+        f"{_OLD}/DEC-0001-how.md": _DEC})
+    rc, out, err = _move(k, capsys)
+    assert (rc, out, err) == (0, (
+        f"MOVE {_OLD}/SDR-0001-format.md -> base/standard/decisions/SDR-0001-format.md\nLINKS {_OLD}/index.md\n"
+        f"WROTE base/index.md\nWROTE {_OLD}/index.md\nWROTE base/standard/index.md\n"
+        "WROTE base/standard/decisions/index.md\n"
+        f"\n1 decision moved, each to the directory of its type, links rewritten in 1 file → {k}\n"), "")
+    tree = _tree(k)
+    assert sorted(rel for rel in tree if rel.startswith("base/standard")) == [
+        "base/standard/decisions/SDR-0001-format.md", "base/standard/decisions/index.md", "base/standard/index.md"]
+    for rel in ("base", _OLD, "base/standard", "base/standard/decisions"):
+        assert tree[f"{rel}/index.md"] == _freshly_regenerated(k, tmp_path, rel), rel
+    assert "(standard/index.md)" in tree["base/index.md"] and "SDR-0001" not in tree[f"{_OLD}/index.md"]
+    assert index_main([str(k), "--check"]) == 0
+    assert capsys.readouterr().out == "0 index.md out of date\n"
+
+
+def test_move_decisions_rewrites_a_path_key_under_a_non_ascii_alias_and_a_quoted_key(tmp_path, capsys):
+    aliases = "aliases:\n  fields: { ámbito: supersedes, 'fuentes de origen': sources }\n"
+    sdr = "base/decisions/standard/SDR-0001-format.md"
+    files = {
+        "log.md": _LOG_30, "project.md": _concept("Project", "P"),
+        "base/profile.md": _LOCAL_TYPES.replace("{aliases}", aliases),
+        f"{_OLD}/ADR-0001-p.md": _concept("Product ADR", "P", "adr_id: ADR-0001\n"),
+        sdr: _concept(
+            "Standard Decision", "Format",
+            f"decision_id: SDR-0001\n\"superseded_by\": /{_OLD}/ADR-0001-p.md  # quoted\n\"decision_status\": superseded\n"
+            f"ámbito: [/{_OLD}/ADR-0001-p.md]\ntags: [/{_OLD}/ADR-0001-p.md]\n"
+            f"'fuentes de origen':\n- {{ id: p, resource: /{_OLD}/ADR-0001-p.md }}\n")}
+    k = _bundle_30(tmp_path, files)
+    assert _move(k, capsys)[0] == 0
+    assert _tree(k)[sdr] == _concept(
+        "Standard Decision", "Format",
+        f"decision_id: SDR-0001\n\"superseded_by\": /{_NEW}/ADR-0001-p.md  # quoted\n\"decision_status\": superseded\n"
+        f"ámbito: [/{_NEW}/ADR-0001-p.md]\ntags: [/{_OLD}/ADR-0001-p.md]\n"
+        f"'fuentes de origen':\n- {{ id: p, resource: /{_NEW}/ADR-0001-p.md }}\n")
+    keys = {"ámbito: /x": ("ámbito", 7), '"superseded_by" : /x': ("superseded_by", 17), "'it''s': x": ("it's", 8),
+            "a b:\r": ("a b", 4), "url: http://x": ("url", 4), "  nested: x": None, "- item: x": None, "# c: x": None,
+            "http://x": None, '"open: x': None, "": None}
+    assert {line: frontmatter_key(line) for line in keys} == keys
+
+
+_RECORD_FORMS = ("# Record\n\n"
+                 "Bob: [[ADR-0001]]({abs}/ADR-0001-x.md), [a \\] b]({abs}/ADR-0001-x.md), "
+                 "[`list[0]` and ``a ` ]``](../{rel}/ADR-0001-x.md#context),\n"
+                 "[![i](a.png)]({abs}/ADR-0001-x.md), [![i]({abs}/ADR-0001-x.md)](https://example.com), "
+                 "![i](<{abs}/ADR-0001-x.md> 'it\\'s'), [q]({abs}/ADR-0001-x.md \"a \\\" b\"),\n"
+                 "[n]({abs}/ADR-0001-x.md\n  \"on the next line\"), [c]({abs}/ADR-0001-x.md\n), "
+                 "[p]({abs}/ADR-0001-x.md (a \\(b\\) c)) and [two]({abs}/ADR-0001-x.md 'two\nlines').\n\n"
+                 "In code, as lint reads it: `[s]({abs}/ADR-0001-x.md)`.\n\n"
+                 "```\n[f]({abs}/ADR-0001-x.md)\n```\n\n"
+                 "Not links: [cut](/base/decisions/ADR-0001-x.md, \\[esc](/base/decisions/ADR-0001-x.md), "
+                 "[t](/base/decisions/ADR-0001-x.md (a (b) c)), [far](/base/decisions/ADR-0001-x.md\n\n) and [c][r].\n\n"
+                 "[r]: /base/decisions/ADR-0001-x.md\n")
+
+
+def test_move_decisions_rewrites_every_inline_link_commonmark_defines(tmp_path, capsys):
+    from okf_common import extract_links
+
+    rel = "fragments/2026-11-02-n.md"
+
+    def bundle(d: str) -> dict[str, str]:
+        return {**_b1(d == _NEW), rel: _concept("Knowledge Fragment", "N", _FRAGMENT.replace("2026-11-01", "2026-11-02"),
+                                               _RECORD_FORMS.format(abs=f"/{d}", rel=d))}
+
+    k = _bundle_30(tmp_path, bundle(_OLD))
+    before = _tree(k)[rel]
+    assert _move(k, capsys)[0] == 0
+    after = _tree(k)[rel]
+    assert after == bundle(_NEW)[rel] and after != before
+    assert _outside_link_targets(before, after) == []
+    assert after.count(f"{_NEW}/ADR-0001-x.md") == 13 and after.count(f"/{_OLD}/ADR-0001-x.md") == 5
+    in_code = "`[s](/x.md)`\n\n```\n[f](/y.md)\n```\n"
+    assert extract_links(in_code) == ["/x.md", "/y.md"] == [in_code[x.start:x.end] for x in inline_links(in_code)]
+
+
+def _marked(spec: str) -> tuple[str, list]:
+    """spec without its marks, and the links the marks stand for: «target» of a link, ‹target› of an image."""
+    from okf_common import InlineLink
+
+    text, links, start = "", [], 0
+    for ch in spec:
+        if ch in "«‹":
+            start = len(text)
+        elif ch in "»›":
+            links.append(InlineLink(start, len(text), ch == "›"))
+        else:
+            text += ch
+    return text, links
+
+
+_INLINE_LINKS = (
+    "[a](«/x.md») and [b](«y.md#h» \"T\"), then [c]( «z.md» ).",
+    "[[ADR-0001]](«/x.md») [a \\] b](«/x.md») [a \\[ b](«/x.md») [a [b] [c [d]]](«/x.md»)",
+    "[a `]` b](«/x.md») [``a ` ]`` b](«/x.md») `[a](«/x.md»)` [a ` b](«/x.md»)",
+    "[a ` b](/x.md) and ` closes the code span that holds the bracket; [b](«/y.md»)",
+    "![i](‹a.png›) [![i](‹a.png›)](«/x.md») [![i](<‹a b.png›> 'T')](<«/my x.md»>) ![a [b](«/in.md») c](‹/img.png›)",
+    "[a](<«/my x.md»> 'T') [b](<«»>) [c](«») [d](«/x(1)(2(3)).md») [e](«/x\\).md») [f](<«/x\\>y.md»>) [g](«\"t\"») [h](«/x.md\"T\"»)",
+    "[a](«/x.md» \"a \\\" b\") [b](«/x.md» 'it\\'s') [c](«/x.md» (a \\) \\( b)) [d](«/x.md» \"(\") [e](«/x.md» ')')",
+    "[a](«/x.md»\n\"T\") [b](«/x.md»\n) [c](\n«/x.md»\n  'T'\n) [d](«/x.md» \"two\nlines\")",
+    "[a](«/x.md»\r\n\"T\"\r\n) [b](«/x.md»\r\n)\r\n\r\n[c](\r«/x.md»\r)",
+    "```\n[a](«/x.md»)\n```\n\n    [b](«/y.md»)\n\n<!-- [c](«/z.md») -->\n",
+    "[a [b](«/in.md») c](/out.md) [a ![i](‹i.png›) [b](«/in.md»)](/out.md) \\\\[a](«/x.md»)",
+    "[a](/x.md",
+    "[a](/x.md \"T\"",
+    "[a](</x.md) [a](<x\ny.md>) [a](<x<y.md>)",
+    "[a](/x.md\n\n) [a](/x.md \"T\n\nU\")",
+    "[a\n\nb](/x.md)",
+    "[r]: /x.md\n[r]: </x.md> \"T\"\n[a][r] [r][] [r]\n",
+    "\\[a](/x.md) [a\\](/x.md) [a] (/x.md) [a]\n(/x.md)",
+    "[a](/x.md \"T\" x) [a](/x.md and more) [a](/x (y).md [a](/x.md (a (b) c)) [a](/x.md 'T'\"U\")",
+    "[a](/x.md \"T\"\n\n) [a](/x(.md) [a]",
+)
+
+
+def test_inline_links_gives_the_exact_span_of_each_target_commonmark_defines():
+    cases = dict(_marked(spec) for spec in _INLINE_LINKS)
+    assert len(cases) == len(_INLINE_LINKS)
+    assert {text: inline_links(text) for text in cases} == cases
+    assert sum(1 for links in cases.values() if not links) == 9
+
+
+_PROFILE_FORMS = ("[q]({abs}decisions/ADR-0001-x.md \"a \\\" b\"), [n]({abs}decisions/ADR-0001-x.md\n\"T\"), "
+                  "[c]({rel}decisions/ADR-0001-x.md\n), [p]({abs}decisions/ADR-0001-x.md (a (b) c)), "
+                  "[s]({abs}decisions/ADR-0001-x.md 'X'),\n[cut]({abs}decisions/ADR-0001-x.md, "
+                  "![img]({rel}decisions/ADR-0001-x.md) and \\[esc]({abs}decisions/ADR-0001-x.md);\n"
+                  "left as written: [angle](</decisions/ADR-0001-x.md>), [[ADR-0001]](/decisions/ADR-0001-x.md), "
+                  "[a \\] b](/decisions/ADR-0001-x.md) and [![i](a.png)](/decisions/ADR-0001-x.md).\n")
+_PROFILE_FORMS_ADR = "[up]({up}project.md\n\"T\"), [in](ADR-0001-x.md 'X') and [angle](<../project.md>).\n"
+
+
+def _profile_forms(k: Path) -> dict[str, str]:
+    """_bundle_20 plus a fragment and a decision holding links in every form, migrated: the two files as written."""
+    frag, adr = "fragments/2026-10-31-f.md", "decisions/ADR-0003-f.md"
+    keys = "occurred_at: 2026-10-31\norigin: Weekly\nparticipants: [human:alice]\ndistillation_status: pending\n"
+    (k / frag).write_text(_concept("Knowledge Fragment", "F", keys, _PROFILE_FORMS.format(abs="/", rel="../")), encoding="utf-8")
+    (k / adr).write_text(_concept("Architecture Decision", "F", body=_PROFILE_FORMS_ADR.format(up="../")), encoding="utf-8")
+    assert main([str(k), "--profile", "knowledge/3.0"]) == 0
+    return {rel: (k / rel).read_text(encoding="utf-8") for rel in (frag, "base/" + adr)}
+
+
+def test_profile_step_rewrites_the_links_main_rewrote_and_no_other(tmp_path):
+    """What okf_migrate.py of main 54ff9d0 writes for these links, byte for byte: the profile step keeps its own
+    reading of a link (MD_LINK_RE), which is not the one --move-decisions uses."""
+    assert MD_LINK_RE.pattern == r"(!?\[[^\]]*\]\()([^)\s]+)"
+    keys = "occurred_at: 2026-10-31\norigin: Weekly\nparticipants: [human:alice]\ndistillation_status: pending\n"
+    assert _profile_forms(_bundle_20(tmp_path)) == {
+        "fragments/2026-10-31-f.md": _concept("Knowledge Fragment", "F", keys,
+                                              _PROFILE_FORMS.format(abs="/base/", rel="../base/")),
+        "base/decisions/ADR-0003-f.md": _concept("Architecture Decision", "F",
+                                                 body=_PROFILE_FORMS_ADR.format(up="../../"))}
 
 
 if __name__ == "__main__":
