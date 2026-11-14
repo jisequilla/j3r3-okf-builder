@@ -4,8 +4,9 @@ title: OKF Builder
 description: OKF standard (profile knowledge/3.0) and the okf-builder plugin for managing project knowledge with Claude, Copilot, M365 and Gemini
 resource: https://github.com/jisequilla/j3r3-okf-builder
 tags: [okf, knowledge, plugin]
-status: draft
+status: stable
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T18:23:39Z }
+verified: { by: human:jisequilla, at: 2026-11-14T18:37:53Z }
 sources:
   - { id: conformance, resource: /base/policies/okf-conformance.md }
   - { id: dogfooding, resource: /base/decisions/DEC-0001-dogfooding.md }
