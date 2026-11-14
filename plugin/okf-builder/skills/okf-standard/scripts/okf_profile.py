@@ -1182,6 +1182,16 @@ def resolve_aliases(r: Resolved, fm: dict) -> dict:
     return out
 
 
+def concept_type(r: Resolved | None, fm: Any) -> Any:
+    """The type of a concept as the profile reads it: the `type` of its frontmatter with every alias resolved
+    (resolve_aliases), so a type written under a local name of the type key, under a local type name or given by a
+    value alias is the declared one. With no profile, the type as written; None when the frontmatter is no mapping
+    or has no type. It never walks `extends`: a type that extends another stays itself."""
+    if not isinstance(fm, dict):
+        return None
+    return (resolve_aliases(r, fm) if r is not None else fm).get("type")
+
+
 def alias_keys(r: Resolved) -> set:
     """The local names aliases give to keys: field aliases and the keys of each value alias's `from`."""
     return set(r.aliases["fields"]) | {k for va in r.aliases["values"] for k in va["from"]}
@@ -2231,6 +2241,21 @@ def test_resolve_aliases_reads_a_local_type_name_written_under_a_local_name_of_t
     # a concept that carries both keys keeps its own `type`, resolved
     assert resolve_aliases(r, {"tipo": "Term", "type": "Norma"}) == {"type": "Standard Decision"}
     assert resolve_aliases(r, {"tipo": "Norma", "type": "Term"}) == {"type": "Term"}
+
+
+def test_concept_type_is_the_type_with_every_alias_resolved_and_the_type_as_written_without_a_profile(tmp_path):
+    values = "  values: [{ from: { clase: norma }, to: { type: Standard Decision } }]\n"
+    r = load_profile(_bundle(tmp_path, _NORMA + values), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    for fm in ({"type": "Standard Decision"}, {"type": "Norma"}, {"tipo": "Standard Decision"}, {"tipo": "Norma"},
+               {"clase": "norma"}):
+        assert concept_type(r, fm) == "Standard Decision", fm
+    # resolving aliases is not walking `extends`; a type no alias names is itself
+    assert concept_type(r, {"tipo": "Term"}) == "Term"
+    assert concept_type(r, {"type": "Architecture Decision"}) == "Architecture Decision"
+    # no profile: the type as written; no type, or a frontmatter that is no mapping: None
+    assert concept_type(None, {"type": "Norma"}) == "Norma" and concept_type(None, {"tipo": "Norma"}) is None
+    assert [concept_type(x, fm) for x in (r, None) for fm in ({}, {"title": "T"}, None, ["type"], "type")] == [None] * 10
 
 
 def test_a_value_alias_is_matched_against_the_declared_key_and_type_names(tmp_path):

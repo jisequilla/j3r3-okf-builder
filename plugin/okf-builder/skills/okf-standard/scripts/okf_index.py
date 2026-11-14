@@ -8,7 +8,9 @@
 Usage:
     uv run okf_index.py [path/to/bundle] [--check] [--dir SUBDIR]
 
-- Groups concepts by `type` inside each directory.
+- Groups concepts by `type` inside each directory, each under the declared name of the type it stands for: a
+  local type name, a local name of the type key and a value alias that gives the type (the aliases of the Domain
+  Profile in force) are read as that type. A type that extends another keeps its own section.
 - Lists subdirectories with the first sentence of their own index.md, or their name.
 - A directory with no index.md yet is described by the built-in text of a layer or typed directory of the
   standard (fragments/, base/, base/<name>/), else by the description of the first type of the Domain Profile
@@ -57,7 +59,7 @@ from okf_common import (  # noqa: E402
     split_frontmatter,
 )
 from okf_lint import Report, find_tree, kind_instances  # noqa: E402
-from okf_profile import Resolved, kind_in_force, load_profile  # noqa: E402
+from okf_profile import Resolved, concept_type, kind_in_force, load_profile  # noqa: E402
 
 DIR_DESCRIPTIONS = {
     "fragments": "Records of events, distilled into the base.",
@@ -236,12 +238,16 @@ def instance_entry(inst: Path) -> str:
 
 
 def build_index(bundle: Path, d: Path, sc: Scan | None = None, kinds: dict | None = None,
-                types: dict | None = None) -> str:
+                types: dict | None = None, prof: Resolved | None = None) -> str:
+    """The index.md of directory d. kinds (kind_dirs), types (type_dirs) and prof (the Domain Profile in force in
+    this bundle, profiles_of(bundle)[0]) are read here when not given. Each concept is grouped under its type with
+    the aliases of prof resolved (concept_type); its line is built from the frontmatter as written."""
     sc = sc if sc is not None else scan_bundle(bundle)
-    if kinds is None or types is None:
+    if kinds is None or types is None or prof is None:
         profs = profiles_of(bundle)
         kinds = kinds if kinds is not None else kind_dirs(bundle, sc, profs)
         types = types if types is not None else type_dirs(profs[0])
+        prof = prof if prof is not None else profs[0]
     is_root = d.resolve() == bundle.resolve()
     kind_desc, instances = kinds.get(_rel(bundle, d), (None, []))
     concepts = []
@@ -249,7 +255,7 @@ def build_index(bundle: Path, d: Path, sc: Scan | None = None, kinds: dict | Non
         if p.is_file() and p.suffix == ".md" and p.name not in RESERVED and left_out(bundle, sc, p) is None:
             doc = load_doc(bundle, p)
             fm = doc.frontmatter or {}
-            concepts.append((str(fm.get("type") or "Other"), fm.get("title") or p.stem,
+            concepts.append((str(concept_type(prof, fm) or "Other"), fm.get("title") or p.stem,
                              fm.get("description") or "", p.name, fm.get("status")))
     subdirs = [p for p in sorted(d.iterdir()) if p.is_dir() and not p.name.startswith(".")
                and ((p / "index.md").is_file() if is_root and p.name == PROJECTIONS_DIR
@@ -333,7 +339,7 @@ def regenerate(bundle: Path, targets: list[Path], check: bool = False) -> int:
     profs = profiles_of(bundle)
     kinds, types = kind_dirs(bundle, sc, profs), type_dirs(profs[0])
     for d in targets:
-        new = build_index(bundle, d, sc, kinds, types)
+        new = build_index(bundle, d, sc, kinds, types, profs[0])
         idx = d / "index.md"
         old = idx.read_text(encoding="utf-8") if idx.exists() else None
         if old != new:
@@ -914,6 +920,67 @@ def test_lint_clean_after_index(tmp_path):
     assert before[0] == []
     main([str(k)])
     assert _lint_view(k) == before
+
+
+# --- a section is headed by the declared name of the type its concepts stand for ---
+_LOCAL_NAMES = (_STANDARD_DECISION + "aliases:\n  types: { Norma: Standard Decision }\n  fields: { tipo: type }\n"
+                "  values:\n    - { from: { clase: adr }, to: { type: Architecture Decision } }\n"
+                "    - { from: { clase: norma }, to: { type: Standard Decision } }\n")
+
+
+def _written(k: Path, rel: str, type_line: str) -> None:
+    """A concept whose type is written by the frontmatter line given ('' for none); its title is its file's stem."""
+    (k / rel).parent.mkdir(parents=True, exist_ok=True)
+    (k / rel).write_text(f"---\n{type_line}title: {Path(rel).stem}\ndescription: D.\n---\n\n# Context\n", encoding="utf-8")
+
+
+def test_each_local_name_of_a_type_is_listed_under_the_type_it_stands_for(tmp_path):
+    k = _decisions_bundle(tmp_path, profile=_LOCAL_NAMES)
+    for rel in _DECISIONS:
+        (k / rel).unlink()
+    for name, line in (("a", "type: Norma\n"), ("b", "type: Standard Decision\n"), ("c", "tipo: Standard Decision\n"),
+                       ("d", "clase: norma\n"), ("e", "tipo: Norma\n"), ("f", ""), ("g", "type: Term\n")):
+        _written(k, f"base/decisions/standard/{name}.md", line)
+    _written(k, "base/decisions/architecture/h.md", "clase: adr\n")
+    _written(k, "base/decisions/architecture/i.md", "type: Architecture Decision\n")
+    assert main([str(k)]) == 0
+    assert (k / "base/decisions/standard/index.md").read_text(encoding="utf-8") == (
+        "> A decision about the standard.\n\n# Terms\n\n* [g](g.md) - D.\n\n# Other\n\n* [f](f.md) - D.\n\n"
+        "# Standard Decision\n\n* [a](a.md) - D.\n* [b](b.md) - D.\n* [c](c.md) - D.\n* [d](d.md) - D.\n* [e](e.md) - D.\n")
+    assert (k / "base/decisions/architecture/index.md").read_text(encoding="utf-8") == (
+        "> A decision about how a system is built (ADR).\n\n# Architecture decisions\n\n* [h](h.md) - D.\n* [i](i.md) - D.\n")
+    assert main([str(k), "--check"]) == 0
+    # build_index given no profile reads the one in force in the bundle
+    d = k / "base/decisions/standard"
+    assert build_index(k, d) == (d / "index.md").read_text(encoding="utf-8")
+
+
+def test_a_type_that_extends_another_keeps_its_own_section(tmp_path):
+    profile = ("types:\n  Payments Meeting:\n    extends: Knowledge Fragment\n    description: A meeting of the payments team\n"
+               "aliases:\n  types: { Reunión de pagos: Payments Meeting, Fragmento: Knowledge Fragment }\n"
+               "  fields: { tipo: type }\n")
+    k = _decisions_bundle(tmp_path, profile=profile)
+    for name, line in (("a", "type: Fragmento\n"), ("b", "type: Payments Meeting\n"), ("c", "type: Knowledge Fragment\n"),
+                       ("d", "type: Reunión de pagos\n"), ("e", "tipo: Fragmento\n"), ("f", "tipo: Payments Meeting\n")):
+        _written(k, f"fragments/{name}.md", line)
+    assert main([str(k)]) == 0
+    assert (k / "fragments/index.md").read_text(encoding="utf-8") == (
+        "> Records of events, distilled into the base.\n\n"
+        "# Knowledge Fragment\n\n* [a](a.md) - D.\n* [c](c.md) - D.\n* [e](e.md) - D.\n\n"
+        "# Payments Meeting\n\n* [b](b.md) - D.\n* [d](d.md) - D.\n* [f](f.md) - D.\n")
+
+
+def test_an_index_written_by_the_grouping_on_the_type_as_written_is_out_of_date(tmp_path, capsys):
+    k = _decisions_bundle(tmp_path, profile=_LOCAL_NAMES)
+    _written(k, "base/decisions/standard/a.md", "type: Norma\n")
+    assert main([str(k)]) == 0
+    idx = k / "base/decisions/standard/index.md"
+    new = idx.read_text(encoding="utf-8")
+    assert new.count("# Standard Decision\n") == 1 and "# Norma" not in new
+    idx.write_text(new.replace("* [a](a.md) - D.\n", "").rstrip("\n") + "\n\n# Norma\n\n* [a](a.md) - D.\n", encoding="utf-8")
+    capsys.readouterr()
+    assert main([str(k), "--check"]) == 1
+    assert capsys.readouterr().out.splitlines() == ["OUT OF DATE base/decisions/standard/index.md", "1 index.md out of date"]
 
 
 if __name__ == "__main__":
