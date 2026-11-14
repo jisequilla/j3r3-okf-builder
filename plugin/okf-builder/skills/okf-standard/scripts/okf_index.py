@@ -10,6 +10,10 @@ Usage:
 
 - Groups concepts by `type` inside each directory.
 - Lists subdirectories with the first sentence of their own index.md, or their name.
+- A directory with no index.md yet is described by the built-in text of a layer or typed directory of the
+  standard (fragments/, base/, base/<name>/), else by the description of the first type of the Domain Profile
+  in force that declares it as its directory (base/decisions/architecture/, a local type's directory), else by
+  the built-in text for its name, else "Concepts in <name>.".
 - Lists, in the directory of each kind the bundle holds (standard §2.2, §5.1), its instances under
   `# Instances`, each with its project.md description and its state; the kind's description from the
   Domain Profile is that index's blockquote and the parent's description of the directory. On an
@@ -37,6 +41,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from okf_common import (  # noqa: E402
+    BASE_DIR,
     PROFILE_30,
     PROJECTIONS_DIR,
     RESERVED,
@@ -48,13 +53,13 @@ from okf_common import (  # noqa: E402
     split_frontmatter,
 )
 from okf_lint import Report, find_tree, kind_instances  # noqa: E402
-from okf_profile import kind_in_force, load_profile  # noqa: E402
+from okf_profile import Resolved, kind_in_force, load_profile  # noqa: E402
 
 DIR_DESCRIPTIONS = {
     "fragments": "Records of events, distilled into the base.",
     "base": "The project's knowledge, in typed directories.",
     "architecture": "Architecture views and principles.",
-    "decisions": "Architecture decision records (ADR).",
+    "decisions": "Decisions: what was decided, why, and what else was considered.",
     "domain": "Glossary and business concepts.",
     "systems": "Services, modules and deployable components.",
     "apis": "API contracts and their semantics.",
@@ -72,7 +77,7 @@ DIR_DESCRIPTIONS = {
 
 # Order of the sections (types) in the index; the rest follow alphabetically.
 TYPE_ORDER = [
-    "Project", "Architecture View", "Architecture Decision", "Term", "Glossary",
+    "Project", "Architecture View", "Decision", "Architecture Decision", "Term", "Glossary",
     "System", "API", "Dataset", "Table", "Metric", "Attested Computation",
     "Runbook", "Playbook", "Policy", "Open Question", "Reference",
 ]
@@ -82,6 +87,7 @@ def plural_heading(t: str) -> str:
     table = {
         "Project": "Project",
         "Architecture View": "Architecture views",
+        "Decision": "Decisions",
         "Architecture Decision": "Architecture decisions",
         "Term": "Terms",
         "Glossary": "Glossary",
@@ -100,13 +106,22 @@ def plural_heading(t: str) -> str:
     return table.get(t, t)
 
 
-def dir_description(d: Path) -> str:
+def dir_description(d: Path, rel: str | None = None, types: dict | None = None) -> str:
+    """The description of directory d, whose bundle-relative path is rel (default: its name): the blockquote of its
+    index.md; else DIR_DESCRIPTIONS when d is a layer or typed directory of the standard (<name>/ or base/<name>/);
+    else the description of the type that declares rel as its directory (types: type_dirs); else DIR_DESCRIPTIONS by
+    name; else "Concepts in <name>."."""
     idx = d / "index.md"
     if idx.exists():
         _, body = split_frontmatter(idx.read_text(encoding="utf-8"))
         m = re.search(r"^>[ \t]*(.+)$", body, re.M)  # optional descriptive blockquote
         if m:
             return m.group(1).strip()
+    rel = d.name if rel is None else rel
+    if rel in (d.name, f"{BASE_DIR}/{d.name}") and d.name in DIR_DESCRIPTIONS:
+        return DIR_DESCRIPTIONS[d.name]
+    if types and rel in types:
+        return types[rel]
     return DIR_DESCRIPTIONS.get(d.name, f"Concepts in {d.name}.")
 
 
@@ -165,17 +180,38 @@ def holds_content(bundle: Path, sc: Scan, d: Path) -> bool:
             or any(n.startswith(pre) for n in sc.nested))
 
 
-def kind_dirs(bundle: Path, sc: Scan) -> dict[str, tuple[str, list[str]]]:
-    """The directory of each kind this bundle holds (bundle-relative, no trailing slash): the kind's description from
-    the Domain Profile (the domain bundle's, found through the parent chain for an instance) and its instances
-    (scan.nested form). A broken parent chain is printed on stderr and the bundle's own profile is used."""
+def profiles_of(bundle: Path) -> tuple[Resolved, Resolved]:
+    """The Domain Profile in force in this bundle and that of the domain bundle of its tree (found through the parent
+    chain for an instance, else the same). A broken parent chain is printed on stderr and the bundle's own profile is
+    used."""
     rep = Report()
     tree = find_tree(bundle, rep)
     for i in rep.items:
         print(f"WARNING: {i['code']}: {i['message']}", file=sys.stderr)
     domain = tree.domain if tree is not None else None
     prof = load_profile(bundle, domain=domain)
-    domain = domain or prof
+    return prof, domain or prof
+
+
+def type_dirs(prof: Resolved) -> dict[str, str]:
+    """The directory each type of the Domain Profile declares (bundle-relative, no trailing slash) with that type's
+    description, ending in a period; when several types declare one directory, the first in the profile's order that
+    has a description."""
+    out: dict[str, str] = {}
+    for t in prof.types.values():
+        rel = str(t.get("directory") or "").strip("/")
+        desc = str(t.get("description") or "").strip()
+        if rel and desc and rel not in out:
+            out[rel] = desc if desc.endswith(".") else desc + "."
+    return out
+
+
+def kind_dirs(bundle: Path, sc: Scan,
+              profs: tuple[Resolved, Resolved] | None = None) -> dict[str, tuple[str, list[str]]]:
+    """The directory of each kind this bundle holds (bundle-relative, no trailing slash): the kind's description from
+    the Domain Profile (the domain bundle's, found through the parent chain for an instance) and its instances
+    (scan.nested form). profs: profiles_of(bundle), read here when not given."""
+    prof, domain = profs if profs is not None else profiles_of(bundle)
     out = {}
     for k, d, rels in kind_instances(bundle, root_frontmatter(bundle), prof, domain, sc):
         desc = kind_in_force(domain, k)["description"]
@@ -195,9 +231,13 @@ def instance_entry(inst: Path) -> str:
     return line + (f" _(state: {state})_" if state is not None and str(state).strip() else " _(no state)_")
 
 
-def build_index(bundle: Path, d: Path, sc: Scan | None = None, kinds: dict | None = None) -> str:
+def build_index(bundle: Path, d: Path, sc: Scan | None = None, kinds: dict | None = None,
+                types: dict | None = None) -> str:
     sc = sc if sc is not None else scan_bundle(bundle)
-    kinds = kinds if kinds is not None else kind_dirs(bundle, sc)
+    if kinds is None or types is None:
+        profs = profiles_of(bundle)
+        kinds = kinds if kinds is not None else kind_dirs(bundle, sc, profs)
+        types = types if types is not None else type_dirs(profs[0])
     is_root = d.resolve() == bundle.resolve()
     kind_desc, instances = kinds.get(_rel(bundle, d), (None, []))
     concepts = []
@@ -226,7 +266,7 @@ def build_index(bundle: Path, d: Path, sc: Scan | None = None, kinds: dict | Non
             fm_prefix = f'---\nokf_version: "0.2"\nokf_profile: "{PROFILE_30}"\n---\n\n'
     else:
         _, notes = existing_root_fm_and_notes(d / "index.md")
-        out.append(f"> {kind_desc or dir_description(d)}\n")
+        out.append(f"> {kind_desc or dir_description(d, _rel(bundle, d), types)}\n")
 
     for t in ordered:
         out.append(f"# {plural_heading(t)}\n")
@@ -244,7 +284,8 @@ def build_index(bundle: Path, d: Path, sc: Scan | None = None, kinds: dict | Non
     if subdirs:
         out.append("# Subdirectories\n")
         for s in subdirs:
-            desc = kinds[_rel(bundle, s)][0] if _rel(bundle, s) in kinds else dir_description(s)
+            rel = _rel(bundle, s)
+            desc = kinds[rel][0] if rel in kinds else dir_description(s, rel, types)
             out.append(f"* [{s.name}]({s.name}/index.md) - {desc}")
         out.append("")
     if not ordered and not subdirs and not instances:
@@ -277,9 +318,10 @@ def regenerate(bundle: Path, targets: list[Path], check: bool = False) -> int:
     """Write (or, with check, report) each out-of-date index.md of `targets`; return how many differ."""
     changed = 0
     sc = scan_bundle(bundle)
-    kinds = kind_dirs(bundle, sc)
+    profs = profiles_of(bundle)
+    kinds, types = kind_dirs(bundle, sc, profs), type_dirs(profs[0])
     for d in targets:
-        new = build_index(bundle, d, sc, kinds)
+        new = build_index(bundle, d, sc, kinds, types)
         idx = d / "index.md"
         old = idx.read_text(encoding="utf-8") if idx.exists() else None
         if old != new:
@@ -392,7 +434,8 @@ def test_30_root_lists_layers_and_base_lists_typed_dirs(tmp_path):
     assert "projections" not in root and "decisions" not in root
     base = (k / "base" / "index.md").read_text(encoding="utf-8")
     assert base.startswith("> The project's knowledge, in typed directories.\n")
-    assert "* [decisions](decisions/index.md) - Architecture decision records (ADR)." in base
+    assert ("* [decisions](decisions/index.md) - Decisions: what was decided, why, and what else was considered."
+            in base)
     assert "* [X](ADR-0001-x.md) - The X decision." in (k / "base" / "decisions" / "index.md").read_text(encoding="utf-8")
     assert sorted(p.name for p in (k / "projections").rglob("*")) == ["content.md", "deck"]
     assert main([str(k), "--check"]) == 0
@@ -419,6 +462,108 @@ def test_questions_dir_has_default_description_and_heading(tmp_path):
     assert "* [questions](questions/index.md) - Questions nobody has answered yet, each with an owner." in base
     questions = (k / "base" / "questions" / "index.md").read_text(encoding="utf-8")
     assert "# Open questions\n\n* [Who owns refunds?](who-owns-refunds.md) - Nobody owns refunds yet." in questions
+
+
+# --- every type that is a Decision, in base/decisions/ and its subfolders (ADR-0041) ---
+_STANDARD_DECISION = ("types:\n  Standard Decision:\n    extends: Decision\n    description: A decision about the standard\n"
+                      "    directory: /base/decisions/standard/\n    prefix: SDR\n")
+_DECISIONS = {"base/decisions/DEC-0001-how-we-work.md": ("Decision", "DEC-0001: How we work", "How we work decided."),
+              "base/decisions/architecture/ADR-0001-use-kafka.md": ("Architecture Decision", "ADR-0001: Use Kafka",
+                                                                    "Kafka decided."),
+              "base/decisions/standard/SDR-0001-format.md": ("Standard Decision", "SDR-0001: Format", "Format decided.")}
+_DECISIONS_DESC = "Decisions: what was decided, why, and what else was considered."
+
+
+def _concept(k: Path, rel: str, type_: str, title: str, desc: str) -> None:
+    (k / rel).parent.mkdir(parents=True, exist_ok=True)
+    (k / rel).write_text(f'---\ntype: {type_}\ntitle: "{title}"\ndescription: {desc}\nstatus: draft\n---\n\n# Context\n',
+                         encoding="utf-8")
+
+
+def _decisions_bundle(tmp: Path, profile: str = _STANDARD_DECISION) -> Path:
+    """D: a knowledge/3.0 bundle whose profile declares Standard Decision, with one decision of each of the three
+    types in its type's directory and no index.md below base/."""
+    k = tmp / "knowledge"
+    (k / "base").mkdir(parents=True)
+    (k / "index.md").write_text(f'---\nokf_version: "0.2"\nokf_profile: "{PROFILE_30}"\n---\n\n# Project\n\n_(empty)_\n',
+                                encoding="utf-8")
+    (k / "base" / "profile.md").write_text("---\ntype: Domain Profile\ntitle: P\ndescription: The taxonomy.\nstatus: draft\n"
+                                           + profile + "---\n\n# What this bundle holds\n\nText.\n", encoding="utf-8")
+    for rel, concept in _DECISIONS.items():
+        _concept(k, rel, *concept)
+    return k
+
+
+def _decision_indexes(k: Path) -> dict:
+    return {d: (k / "base" / d / "index.md").read_text(encoding="utf-8")
+            for d in ("decisions", "decisions/architecture", "decisions/standard")}
+
+
+def test_decisions_and_their_subfolders_are_described_by_their_types(tmp_path):
+    k = _decisions_bundle(tmp_path)
+    for d in ("base/decisions/standard", "base/decisions/architecture", "base/decisions", "base", "."):
+        assert main([str(k), "--dir", d]) == 0
+    assert _decision_indexes(k) == {
+        "decisions": f"> {_DECISIONS_DESC}\n\n"
+                     "# Decisions\n\n* [DEC-0001: How we work](DEC-0001-how-we-work.md) - How we work decided. _(draft)_\n\n"
+                     "# Subdirectories\n\n"
+                     "* [architecture](architecture/index.md) - A decision about how a system is built (ADR).\n"
+                     "* [standard](standard/index.md) - A decision about the standard.\n",
+        "decisions/architecture": "> A decision about how a system is built (ADR).\n\n# Architecture decisions\n\n"
+                                  "* [ADR-0001: Use Kafka](ADR-0001-use-kafka.md) - Kafka decided. _(draft)_\n",
+        "decisions/standard": "> A decision about the standard.\n\n# Standard Decision\n\n"
+                              "* [SDR-0001: Format](SDR-0001-format.md) - Format decided. _(draft)_\n"}
+    assert main([str(k), "--check"]) == 0
+    # the same bodies when the parent is written first and describes subfolders that have no index.md yet
+    k2 = _decisions_bundle(tmp_path / "top-down")
+    assert main([str(k2)]) == 0
+    assert _decision_indexes(k2) == _decision_indexes(k)
+
+
+def test_decisions_of_both_types_in_one_directory_list_decisions_first(tmp_path):
+    k = _decisions_bundle(tmp_path, profile="")
+    for rel in list(_DECISIONS)[1:]:
+        (k / rel).unlink()
+    _concept(k, "base/decisions/ADR-0001-use-kafka.md", "Architecture Decision", "ADR-0001: Use Kafka", "Kafka decided.")
+    assert main([str(k)]) == 0
+    assert (k / "base/decisions/index.md").read_text(encoding="utf-8") == (
+        f"> {_DECISIONS_DESC}\n\n"
+        "# Decisions\n\n* [DEC-0001: How we work](DEC-0001-how-we-work.md) - How we work decided. _(draft)_\n\n"
+        "# Architecture decisions\n\n* [ADR-0001: Use Kafka](ADR-0001-use-kafka.md) - Kafka decided. _(draft)_\n")
+
+
+def test_a_typed_directory_is_described_by_the_type_that_declares_it(tmp_path):
+    profile = ("types:\n  Meeting Note:\n    description: What a meeting settled.\n    directory: /base/meetings/\n"
+               "  Review Note:\n    description: A second type of the same directory\n    directory: /base/meetings/\n"
+               "  System View:\n    description: How one system is laid out\n    directory: /base/systems/architecture/\n")
+    k = _decisions_bundle(tmp_path, profile=profile)
+    for rel, type_ in (("base/meetings/kickoff.md", "Meeting Note"), ("base/systems/architecture/billing.md", "System View"),
+                       ("base/architecture/context.md", "Architecture View"), ("base/systems/decisions/x.md", "Term")):
+        _concept(k, rel, type_, "T", "D.")
+    assert main([str(k)]) == 0
+    first = {d: (k / "base" / d / "index.md").read_text(encoding="utf-8").partition("\n")[0]
+             for d in ("meetings", "systems/architecture", "decisions/architecture", "architecture", "systems",
+                       "systems/decisions", "decisions")}
+    assert first == {
+        # the first type in the profile's order; a description that ends in a period gains none
+        "meetings": "> What a meeting settled.",
+        # never the text of the top-level directory of the same name when a type declares the subfolder
+        "systems/architecture": "> How one system is laid out.",
+        "decisions/architecture": "> A decision about how a system is built (ADR).",
+        # a typed directory of the standard keeps its built-in text, not its type's description
+        "architecture": "> Architecture views and principles.",
+        "systems": "> Services, modules and deployable components.",
+        "decisions": f"> {_DECISIONS_DESC}",
+        # a subfolder no type declares is described by its name, as before
+        "systems/decisions": f"> {_DECISIONS_DESC}"}
+    assert "* [meetings](meetings/index.md) - What a meeting settled.\n" in (k / "base/index.md").read_text(encoding="utf-8")
+    # an existing index.md's blockquote wins over the type's description
+    idx = k / "base/decisions/architecture/index.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("> A decision about how a system is built (ADR).", "> Our ADRs."),
+                   encoding="utf-8")
+    assert main([str(k)]) == 0
+    assert idx.read_text(encoding="utf-8").startswith("> Our ADRs.\n")
+    assert "* [architecture](architecture/index.md) - Our ADRs.\n" in (k / "base/decisions/index.md").read_text(encoding="utf-8")
 
 
 def test_default_root_frontmatter_is_30(tmp_path):
