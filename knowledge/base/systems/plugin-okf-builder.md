@@ -4,10 +4,10 @@ title: okf-builder plugin
 description: Package of 11 Agent Skills (okf-standard, init, capture, fragment, distill, review, lint, index, ask, migrate, projection) and the knowledge-architect agent, which apply profile knowledge/3.0.
 resource: /plugin/okf-builder
 tags: [system, plugin, skills]
-status: stable
+status: draft
 owner: human:jisequilla
 runtime: agent-skills
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-08T21:34:38Z }
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-15T21:48:55Z }
 verified: { by: human:jisequilla, at: 2026-11-09T10:56:48Z }
 ---
 
@@ -24,7 +24,7 @@ Give any agent the instructions to create, maintain, validate, query and migrate
 | okf-capture | "document this decision", "create a runbook" | templates, okf_index.py, okf_lint.py, okf_migrate.py --file |
 | okf-fragment | "capture this meeting", "save this transcript" | templates/fragment.md, okf_index.py, okf_lint.py, okf_migrate.py --file |
 | okf-distill | "distill this fragment", "what does this meeting change" | concept templates, templates/conflict-log.md, okf_index.py, okf_lint.py, okf_migrate.py --file, okf_projection.py --json |
-| okf-review | "double check", "resolve this conflict" | okf_index.py, okf_lint.py, okf_audit.py |
+| okf-review | "double check", "resolve this conflict" | okf_index.py, okf_lint.py, okf_audit.py, okf_viewer.py and the page template in okf-standard/viewer/ for a round on the [Knowledge Viewer](/base/systems/knowledge-viewer.md) ([ADR-0042](/base/decisions/architecture/ADR-0042-knowledge-viewer.md); not in the Microsoft 365 package nor the Copilot pack, which carry a note in its place) |
 | okf-lint | "validate knowledge" | okf_lint.py, okf_profile.py |
 | okf-index | "regenerate indexes" | okf_index.py |
 | okf-ask | "why did we decide…?" | progressive reading of index.md |

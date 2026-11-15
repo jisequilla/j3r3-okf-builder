@@ -1,6 +1,10 @@
 # Bundle history
 
 ## 2026-11-15
+* **Update**: [OKF scripts](/base/systems/scripts-okf.md) and the [okf-builder plugin](/base/systems/plugin-okf-builder.md) describe `okf_viewer.py` as merged in tracker items okf-1lj.2 and okf-1lj.3: the page and its data, `--answers` and its rows, and that it writes no `verified`.
+* **Creation**: [Knowledge Viewer](/base/systems/knowledge-viewer.md), the page built by `okf_viewer.py`, its views, its data file, its answers and what it does not do yet (tracker items okf-1lj.5, okf-1lj.6, okf-1lj.8), written from the merged template and script (tracker item okf-1lj.4).
+* **Creation**: [Run a verification round](/base/runbooks/run-a-verification-round.md), the steps of `okf-review` step 11's review page channel with this repository's paths (tracker item okf-1lj.4).
+* **Republish**: this repository's Knowledge Viewer, `https://claude.ai/artifact/Tuhiidxvb6RtxXEuUUzszE`, published from `just viewer` at commit 292597f (version 15), its 76 stored answers kept.
 * **Verification**: [ADR-0042](/base/decisions/architecture/ADR-0042-knowledge-viewer.md) verified by human:jisequilla at `generated.at` 2026-11-15T15:46:31Z, in answer to a structured question (SDR-0022), now `status: stable`; the question and the answer kept in [2026-11-15 · Verification of ADR-0042 in a structured question](/fragments/2026-11-15-verification-adr-0042.md).
 * **Creation**: [2026-11-15 · Verification of ADR-0042 in a structured question](/fragments/2026-11-15-verification-adr-0042.md): the structured question and the owner's answer, confirmed.
 * **Creation**: [ADR-0042: The Knowledge Viewer is a viewer setup: okf_viewer.py builds a page and its data from any knowledge/ directory, published as a Claude artifact](/base/decisions/architecture/ADR-0042-knowledge-viewer.md), accepted, distilled from [2026-11-15 · The Knowledge Viewer, a page built by a script from any knowledge/ directory](/fragments/2026-11-15-knowledge-viewer.md); decided by human:jisequilla in answer to structured questions (tracker epic okf-1lj, layer 0); supersedes nothing.
