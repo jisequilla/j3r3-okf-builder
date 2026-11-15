@@ -126,6 +126,31 @@ def strip_closing(text: str) -> str:
     return text
 
 
+# okf-review's review page is the Knowledge Viewer, built and checked by okf_viewer.py, which no M365 skill ships
+# (ADR-0042 decision 6): the list item of step 11 that runs a round on it becomes a note, the agent's text drops the
+# script's name, and the build stops when a shipped file names okf_viewer anywhere else
+VIEWER_RE = re.compile(r"^    - \*\*A review page private to the person\*\*.*?(?=^    - |^\d+\. |^#|\Z)", re.M | re.S)
+M365_NO_VIEWER = ("    - **A review page private to the person**: the Knowledge Viewer, the review page this channel uses, "
+                  "is not available in Microsoft 365 Copilot: this package does not ship the script that builds and "
+                  "checks it. Record the person's verification through a structured question, the channel above, or "
+                  "run the round from Claude Code.\n")
+AGENT_VIEWER = " (the Knowledge Viewer, built and checked with `okf_viewer.py`)"
+
+
+def viewer_named(root: Path) -> list[str]:
+    """The files under root that name okf_viewer."""
+    return sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and b"okf_viewer" in p.read_bytes())
+
+
+def strip_agent_viewer(instructions: str) -> str:
+    """The agent's instructions without the script's name, which sits only in AGENT_VIEWER."""
+    text = instructions.replace(AGENT_VIEWER, "", 1)
+    if "okf_viewer" in text:
+        raise SystemExit(f"{AGENT_SRC.name}: names okf_viewer outside {AGENT_VIEWER.strip()!r}, the one part the "
+                         "Microsoft 365 package removes")
+    return text
+
+
 def templates_of(skill: str) -> list[str]:
     """The templates the skill's M365 copy carries: those it needs, less the ones another skill is the home of."""
     return [name for name in NEEDS[skill]["templates"] or [] if TEMPLATE_HOMES.get(name, skill) == skill]
@@ -147,6 +172,8 @@ def rewrite(text: str, skill: str) -> str:
                              if parts else "", text)
     if skill == "okf-distill":
         text = strip_closing(text)
+    if skill == "okf-review":
+        text = VIEWER_RE.sub(M365_NO_VIEWER, text)
     if skill == "okf-standard":
         text = INVENTORY_RE.sub(M365_INVENTORY, text)
         text = text.replace("<skills>/okf-standard/references/", "references/")
@@ -234,6 +261,10 @@ def build_skill(skill_src: Path, dst: Path, author: str) -> int:
     missing = unshipped_paths(dst)
     if missing:
         raise SystemExit(f"{skill}: SKILL.md names files its M365 copy does not ship: {', '.join(missing)}")
+    named = viewer_named(dst)
+    if named:
+        raise SystemExit(f"{skill}: names okf_viewer, which this package does not ship, outside okf-review step 11's "
+                         f"review page item, the one part it replaces: {', '.join(named)}")
     return len(companions)
 
 
@@ -330,7 +361,7 @@ def build_agent_package(out: Path, built_skills: Path, base_manifest: dict) -> P
         "version": "v1.9",
         "name": "OKF Knowledge Architect",
         "description": agent["description"],
-        "instructions": agent["instructions"],
+        "instructions": strip_agent_viewer(agent["instructions"]),
         "agent_skills": [{"folder": f"./skills/{sk}"} for sk in agent["skills"]],
         "conversation_starters": agent["starters"],
     }

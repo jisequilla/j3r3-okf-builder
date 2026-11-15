@@ -177,7 +177,9 @@ def m365(tmp: Path) -> None:
     """M365 export: within the companion limit, okf-capture carrying decision.md and okf-distill pointing to that
     copy, each exported skill self-contained, its okf_migrate.py migrating
     the knowledge/2.0 fixture, its okf_projection.py checking the example bundle's projection, its okf-init
-    shipping a running okf_obsidian.py and its okf-lint reporting the fragment and question codes"""
+    shipping a running okf_obsidian.py and its okf-lint reporting the fragment and question codes; its okf-review
+    carrying the note in place of the review page item, okf_viewer named nowhere in the package, and the export
+    stopping on okf_viewer planted"""
     run("python3", "build/export_m365.py")
     init, migrate, lint_skill = M365 / "okf-init" / "scripts", M365 / "okf-migrate" / "scripts", M365 / "okf-lint"
     root = tmp / "m365"
@@ -272,12 +274,118 @@ def m365(tmp: Path) -> None:
            f"the exported okf-distill description is {description(distill)!r}")
     print("exported okf-distill: no okf_close.py, its Closing mode replaced by the note, its description without closing")
 
+    expect(export_m365.M365_NO_VIEWER == M365_NO_VIEWER, f"M365_NO_VIEWER is {export_m365.M365_NO_VIEWER!r}")
+    _review_note(M365 / "okf-review" / "SKILL.md", M365_NO_VIEWER)
+    leaks = names_viewer(ROOT / "dist" / "m365")
+    expect(not leaks, f"dist/m365 names okf_viewer: {leaks}")
+    expect(export_m365.AGENT_VIEWER in text(PLUGIN / "agents" / "knowledge-architect.md"),
+           "the source agent does not name the Knowledge Viewer's script in the part the M365 package removes")
+    agent_md = PLUGIN / "agents" / "knowledge-architect.md"
+    planted_agent = tmp / "planted-agent.md"
+    planted_agent.write_text(text(agent_md).replace("# Limits\n", "# Limits\n\nRun okf_viewer.py.\n"), encoding="utf-8")
+    for where, plant in _viewer_plants():
+        _expect_refused(export_m365, tmp, f"m365-{where}", plant)
+    _expect_refused(export_m365, tmp, "m365-agent", lambda plugin: None, agent=planted_agent)
+    print("exported okf-review: its review page item replaced by the note; dist/m365 names okf_viewer nowhere, and "
+          "the export stops on okf_viewer planted in a skill, in okf-review outside that item or in the agent")
+
+
+# The notes that replace okf-review step 11's review page item in the M365 package and the Copilot pack, exactly
+M365_NO_VIEWER = ("    - **A review page private to the person**: the Knowledge Viewer, the review page this channel uses, "
+                  "is not available in Microsoft 365 Copilot: this package does not ship the script that builds and "
+                  "checks it. Record the person's verification through a structured question, the channel above, or "
+                  "run the round from Claude Code.\n")
+COPILOT_NO_VIEWER = ("    - **A review page private to the person**: the Knowledge Viewer, the review page this channel "
+                     "uses, is not available in this GitHub Copilot pack: the pack does not ship the script that builds "
+                     "and checks it. Record the person's verification through a structured question, the channel above, "
+                     "or run the round from Claude Code.\n")
+
+
+def names_viewer(root: Path) -> list[str]:
+    """The files under root (or root, a file), and the members of the zips among them, that name okf_viewer."""
+    import zipfile
+
+    found = []
+    for p in sorted(root.rglob("*")) if root.is_dir() else [root]:
+        if not p.is_file():
+            continue
+        rel = p.relative_to(root).as_posix() if root.is_dir() else p.name
+        if p.suffix == ".zip":
+            with zipfile.ZipFile(p) as zf:
+                found += [f"{rel}:{n}" for n in zf.namelist() if b"okf_viewer" in zf.read(n)]
+        elif b"okf_viewer" in p.read_bytes():
+            found.append(rel)
+    return found
+
+
+def _review_note(skill_md: Path, note: str) -> None:
+    """The exported okf-review carries the note, once, where the review page item stood: after the structured question
+    and before the closing bullets of step 11."""
+    review = text(skill_md)
+    expect(review.count("**A review page private to the person**") == 1 and
+           f"`generated.at`.\n{note}    - If neither channel is available" in review,
+           f"{skill_md}: step 11 does not carry the note in place of the review page item")
+
+
+def _viewer_plants():
+    """Each plant of okf_viewer outside the part the exporters replace, on a copy of the plugin."""
+    def other_skill(plugin: Path) -> None:
+        md = plugin / "skills" / "okf-lint" / "SKILL.md"
+        md.write_text(md.read_text(encoding="utf-8") + "\nRun okf_viewer.py.\n", encoding="utf-8")
+
+    def review_outside(plugin: Path) -> None:
+        md = plugin / "skills" / "okf-review" / "SKILL.md"
+        src = md.read_text(encoding="utf-8")
+        step = "12. **Index and validate** after any change:"
+        expect(step in src, "okf-review has no step 12 to plant okf_viewer in")
+        md.write_text(src.replace(step, step[:-1] + " (okf_viewer.py builds nothing here):"), encoding="utf-8")
+
+    return (("skill", other_skill), ("review", review_outside))
+
+
+def _expect_refused(exporter, tmp: Path, name: str, plant, agent: Path | None = None) -> None:
+    """The exporter, run on a copy of the plugin with okf_viewer planted, stops the build naming okf_viewer."""
+    import contextlib
+
+    plugin = tmp / f"plugin-{name}"
+    shutil.copytree(ROOT / PLUGIN, plugin, ignore=shutil.ignore_patterns("__pycache__"))
+    plant(plugin)
+    saved = exporter.PLUGIN, getattr(exporter, "AGENT_SRC", None)
+    exporter.PLUGIN = plugin
+    if agent is not None:
+        exporter.AGENT_SRC = agent
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            exporter.main(["--out", str(tmp / f"out-{name}")])
+    except SystemExit as e:
+        expect("okf_viewer" in str(e.code), f"{name}: the export stopped for another reason: {e.code}")
+    else:
+        raise Fail(f"{exporter.__name__} exported okf_viewer planted ({name}) without stopping")
+    finally:
+        exporter.PLUGIN = saved[0]
+        if agent is not None:
+            exporter.AGENT_SRC = saved[1]
+
 
 def copilot(tmp: Path) -> None:
     """Copilot pack: every skill exported with its SKILL.md and the @okf agent naming each one; each SKILL.md's
-    frontmatter valid, its description within the limits and in the third person"""
-    run("python3", "build/export_copilot.py")
+    frontmatter valid, its description within the limits and in the third person; okf-review's review page item
+    replaced by the note, okf_viewer named nowhere in the pack, and the export stopping on okf_viewer planted"""
+    run("python3", "build/export_copilot.py", "--zip")
     pack = ROOT / "dist" / "copilot"
+    sys.path.insert(0, str(ROOT / "build"))
+    import export_copilot
+
+    expect(export_copilot.COPILOT_NO_VIEWER == COPILOT_NO_VIEWER,
+           f"COPILOT_NO_VIEWER is {export_copilot.COPILOT_NO_VIEWER!r}")
+    _review_note(Path("dist/copilot/.github/skills/okf-review/SKILL.md"), COPILOT_NO_VIEWER)
+    for where in (pack, ROOT / "dist" / "okf-copilot-pack.zip"):
+        leaks = names_viewer(where)
+        expect(not leaks, f"{where.relative_to(ROOT)} names okf_viewer: {leaks}")
+    for where, plant in _viewer_plants():
+        _expect_refused(export_copilot, tmp, f"copilot-{where}", plant)
+    print("exported okf-review: its review page item replaced by the note; the Copilot pack names okf_viewer "
+          "nowhere, and the export stops on okf_viewer planted in a skill or in okf-review outside that item")
     src = sorted(p.parent.name for p in (ROOT / PLUGIN / "skills").glob("*/SKILL.md"))
     out = sorted(p.parent.name for p in (pack / ".github" / "skills").glob("*/SKILL.md"))
     expect(out == src, f"exported skills differ: source {src}, pack {out}")
@@ -405,7 +513,8 @@ def viewer_files(root: Path) -> list[str]:
 def viewer(tmp: Path) -> None:
     """okf_viewer.py builds the page of this repository's knowledge/ and of the example bundle, its template byte for byte and one concept per file lint reads;
     the Claude plugin ships the script and the template, the Microsoft 365 package and the Copilot pack leave both out,
-    and the check finds either one planted back (ADR-0042 decision 6)"""
+    and the check finds either one planted back (ADR-0042 decision 6); okf-review runs a round with it inside one
+    review page item; just viewer rewrites dist/viewer/ on a second run"""
     import zipfile
 
     sys.path.insert(0, str(ROOT / S))
@@ -455,6 +564,23 @@ def viewer(tmp: Path) -> None:
     expect(viewer_files(planted) == [".github/skills/okf-standard/viewer/index.html", "okf_viewer.py"],
            f"the packaging check misses a planted viewer file: {viewer_files(planted)}")
     print("okf-builder.plugin ships okf_viewer.py and viewer/index.html; dist/m365 and the Copilot pack hold neither")
+
+    sys.path.insert(0, str(ROOT / "build"))
+    import export_m365
+
+    review = text(PLUGIN / "skills" / "okf-review" / "SKILL.md")
+    items = export_m365.VIEWER_RE.findall(review)
+    expect(len(items) == 1, f"okf-review holds {len(items)} review page items, not one")
+    for cmd in ('okf_viewer.py" <bundle> --out ', 'okf_viewer.py" <bundle> --answers '):
+        expect(cmd in items[0], f"okf-review's review page item does not run {cmd!r}")
+    expect("okf_viewer" not in export_m365.VIEWER_RE.sub("", review), "okf-review names okf_viewer outside its item")
+    print("okf-review step 11 builds and checks the page with okf_viewer.py, inside its one review page item")
+
+    concepts = ROOT / "dist" / "viewer" / "concepts.json"
+    run("just", "viewer")
+    second = run("just", "viewer")
+    expect(f"rewritten {concepts}" in second.splitlines(), f"a second just viewer did not rewrite {concepts}:\n{second}")
+    print("just viewer run twice rewrites dist/viewer/concepts.json the second time")
 
 
 def dogfood(tmp: Path) -> None:
