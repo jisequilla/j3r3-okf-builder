@@ -48,6 +48,7 @@ RANK = {"warn": 0, "error": 1}
 PROFILE_KEYS = ("extends", "types", "kinds", "families", "forbidden", "fixed", "by_type", "rules", "validator",
                 "questions", "aliases")
 TYPE_KEYS = {"extends", "description", "fields", "directory", "prefix", "note"}
+_BOOL_WORDS = {True: "YES, ON or TRUE", False: "NO, OFF or FALSE"}
 DECISION = "Decision"  # the type every decision type extends; only such a type declares a prefix (standard §4.1)
 PREFIX_RE = re.compile(r"^[A-Z]{2,5}$")
 KIND_KEYS = {"extends", "description", "directory", "states", "holds", "note"}
@@ -226,7 +227,10 @@ def validate_schema(fm: dict) -> list[str]:
                     errs.append(f"types.{tid}: unknown key(s) {', '.join(extra)}")
                 if "extends" in t and not (isinstance(t["extends"], str) and t["extends"].strip()):
                     errs.append(f"types.{tid}.extends: the id of one type")
-                if "prefix" in t and not (isinstance(t["prefix"], str) and PREFIX_RE.fullmatch(t["prefix"])):
+                if "prefix" in t and isinstance(t["prefix"], bool):
+                    errs.append(f"types.{tid}.prefix: YAML reads {_BOOL_WORDS[t['prefix']]} as a boolean; write the "
+                                "prefix in quotes (prefix: \"NO\")")
+                elif "prefix" in t and not (isinstance(t["prefix"], str) and PREFIX_RE.fullmatch(t["prefix"])):
                     errs.append(f"types.{tid}.prefix: 2 to 5 capital letters (SDR)")
                 _check_fields_map(t.get("fields"), f"types.{tid}.fields", errs)
     kinds = fm.get("kinds")
@@ -1249,7 +1253,7 @@ def in_force(r: Resolved, path: str = "/") -> dict:
             for key in ("required", "fixed", "forbidden"):
                 _raise_into(fi[key], f[key])
         types[t] = {"source": r.types[t]["source"], "extends": r.types[t].get("extends"),
-                    "prefix": prefix_in_force(r, t), **fi}
+                    "prefix": prefix_in_force(r, t), "directory": directory_in_force(r, t), **fi}
     return {"path": path, "sources": r.sources, "families": [{"dir": f["dir"], "types": f["types"], "source": f["source"]}
                                                              for f in fams],
             "types_allowed": allowed, "types": types,
@@ -1342,20 +1346,24 @@ def _extra_fields(description: str) -> list[str]:
 
 
 def standard_types(standard_text: str) -> dict:
-    """type → { directory, fields } from the §4 table: shared rows split, root as /, a file or — as no directory."""
+    """type → { directory, fields, prefix } from the §4 table: shared rows split, root as /, a file or — as no
+    directory, the prefix from 'Prefix `XXX`.' or None."""
     out = {}
     for row in _section_4_rows(standard_text):
         names = re.findall(r"`([^`]+)`", row[0])
         cell = row[1]
         path = re.fullmatch(r"`([^`]+/)`(?:\s*\(.*\))?", cell)
         directory = "/" if cell.startswith("root") else ("/" + path.group(1) if path else None)
+        prefix = re.search(r"\bPrefix `([A-Z]{2,5})`", row[2])
         for n in names:
-            out[n] = {"directory": directory, "fields": sorted(_extra_fields(row[2]))}
+            out[n] = {"directory": directory, "fields": sorted(_extra_fields(row[2])),
+                      "prefix": prefix.group(1) if prefix else None}
     return out
 
 
 def check_builtin(standard: Path, builtin: Path | None = None) -> list[str]:
-    """Every §4 type has an entry in the built-in profile, with its usual directory and extra fields, and no other."""
+    """Every §4 type has an entry in the built-in profile, with its usual directory, extra fields and prefix, and no
+    other."""
     text = builtin_text(builtin)
     fm, err = _fm_of(text) if text is not None else (None, "the built-in profile cannot be read")
     if fm is None:
@@ -1368,6 +1376,8 @@ def check_builtin(standard: Path, builtin: Path | None = None) -> list[str]:
         d = have[t] or {}
         if d.get("directory") != want[t]["directory"]:
             problems.append(f"{t}: directory {d.get('directory')!r}, §4 says {want[t]['directory']!r}")
+        if d.get("prefix") != want[t]["prefix"]:
+            problems.append(f"{t}: prefix {d.get('prefix')!r}, §4 says {want[t]['prefix']!r}")
         fields = sorted((d.get("fields") or {}))
         if fields != want[t]["fields"]:
             problems.append(f"{t}: fields {', '.join(fields) or '-'}, §4 names {', '.join(want[t]['fields']) or '-'}")
@@ -1594,6 +1604,34 @@ def test_a_prefix_that_is_not_2_to_5_capital_letters_is_invalid(tmp_path):
     assert found == {b: ["types.Standard Decision.prefix: 2 to 5 capital letters (SDR)"] for b in bad}
 
 
+def test_a_prefix_yaml_reads_as_a_boolean_is_named_as_one(tmp_path):
+    found = {b: _invalid(_on_the_shipped_builtin(tmp_path / b, _SDR.replace("prefix: SDR", f"prefix: {b}")))
+             for b in ("NO", "ON", "YES", "OFF")}
+    assert found == {"NO": [_BOOL_PREFIX.format("NO, OFF or FALSE")], "OFF": [_BOOL_PREFIX.format("NO, OFF or FALSE")],
+                     "ON": [_BOOL_PREFIX.format("YES, ON or TRUE")], "YES": [_BOOL_PREFIX.format("YES, ON or TRUE")]}
+    assert _on_the_shipped_builtin(tmp_path / "q", _SDR.replace("prefix: SDR", 'prefix: "NO"')).findings == []
+
+
+_BOOL_PREFIX = 'types.Standard Decision.prefix: YAML reads {} as a boolean; write the prefix in quotes (prefix: "NO")'
+
+
+def test_two_types_that_share_a_prefix_are_named_in_the_order_they_are_declared(tmp_path):
+    own = ("types:\n  Zeta: { extends: Decision, description: d, prefix: ZZ }\n"
+           "  Alpha: { extends: Decision, description: d, prefix: ZZ }\n")
+    assert _invalid(_on_the_shipped_builtin(tmp_path, own)) == ["types 'Zeta' and 'Alpha' share the prefix ZZ"]
+
+
+def test_a_local_type_named_decision_or_redeclaring_a_decision_field_breaks_a_profile_that_passed(tmp_path):
+    """The two breaking cases of okf-056.1: Decision is now a built-in type, and its fields are inherited."""
+    named = _on_the_shipped_builtin(tmp_path / "named", "types:\n  Decision: { description: Our decisions }\n")
+    assert _codes(named) == ["PROFILE_DUPLICATE_ID"]
+    for field in ("decision_id", "formerly"):
+        own = (f"types:\n  Product ADR:\n    extends: Architecture Decision\n    description: d\n"
+               f"    fields: {{ {field}: {{ type: string }} }}\n")
+        r = _on_the_shipped_builtin(tmp_path / field, own)
+        assert _codes(r) == ["PROFILE_REDEFINED"] and field in r.findings[0]["message"], r.findings
+
+
 def test_two_types_that_declare_the_same_prefix_are_invalid_naming_both(tmp_path):
     own = {"SDR": ("types:\n  A: { extends: Decision, description: d, prefix: SDR }\n"
                    "  B: { extends: Decision, description: d, prefix: SDR }\n"),
@@ -1666,6 +1704,10 @@ def test_lint_profiles_json_carries_the_prefix_in_force_of_every_type(tmp_path, 
     assert {t: d["prefix"] for t, d in types.items()} == {
         **{t: None for t in STANDARD_TYPE_NAMES}, "Decision": "DEC", "Architecture Decision": "ADR",
         "Standard Decision": "SDR", "Plain Decision": "DEC", "Product ADR": "ADR"}
+    decisions = {t: d["directory"] for t, d in types.items() if d["prefix"]}
+    assert decisions == {"Decision": "/base/decisions/", "Architecture Decision": "/base/decisions/architecture/",
+                         "Standard Decision": "/base/decisions/standard/", "Plain Decision": "/base/decisions/",
+                         "Product ADR": "/base/decisions/architecture/"}
 
 
 def test_check_builtin_names_each_type_or_field_that_differs_from_section_4(tmp_path):
@@ -1676,8 +1718,8 @@ def test_check_builtin_names_each_type_or_field_that_differs_from_section_4(tmp_
                    "`participants` (list), `distillation_status` (`pending` / `distilled`). Body: `# Record`. |\n"
                    "| `Conflict Log` | root (`conflict-log.md`) | The register. |\n| `Log` | — | log.md. |\n\n### 4.1 Next\n",
                    encoding="utf-8")
-    assert standard_types(std.read_text(encoding="utf-8"))["Conflict Log"] == {"directory": "/", "fields": []}
-    assert standard_types(std.read_text(encoding="utf-8"))["Log"] == {"directory": None, "fields": []}
+    assert standard_types(std.read_text(encoding="utf-8"))["Conflict Log"] == {"directory": "/", "fields": [], "prefix": None}
+    assert standard_types(std.read_text(encoding="utf-8"))["Log"] == {"directory": None, "fields": [], "prefix": None}
     problems = check_builtin(std, _builtin(tmp_path))
     assert "§4 type 'Glossary' has no entry in the built-in profile" in problems
     assert "§4 type 'Conflict Log' has no entry in the built-in profile" in problems
@@ -1686,6 +1728,18 @@ def test_check_builtin_names_each_type_or_field_that_differs_from_section_4(tmp_
     assert "Term: directory None, §4 says '/base/domain/'" in problems
     assert not any(p.startswith("Knowledge Fragment: fields") for p in problems)  # parentheses are not fields
     assert main(["--check-builtin", str(std)]) == 1
+
+
+def test_check_builtin_names_a_type_whose_prefix_differs_from_section_4(tmp_path):
+    std = tmp_path / "OKF-STANDARD.md"
+    std.write_text("## 4. Profile type vocabulary\n\n| `type` | Usual directory | Description |\n|---|---|---|\n"
+                   "| `Decision` | `base/decisions/` | A decision. Prefix `DEC`. |\n"
+                   "| `Term` | `base/domain/` | A term. |\n\n### 4.1 Next\n", encoding="utf-8")
+    builtin = tmp_path / "builtin.md"
+    builtin.write_text("---\ntype: Domain Profile\ntitle: B\ndescription: B.\ntypes:\n"
+                       "  Decision: { directory: /base/decisions/, prefix: DCS }\n"
+                       "  Term: { directory: /base/domain/, prefix: TRM }\n---\n\n# Why\n\nText.\n", encoding="utf-8")
+    assert check_builtin(std, builtin) == ["Decision: prefix 'DCS', §4 says 'DEC'", "Term: prefix 'TRM', §4 says None"]
 
 
 def test_inlined_copy_is_read_when_the_file_is_missing(tmp_path, monkeypatch):

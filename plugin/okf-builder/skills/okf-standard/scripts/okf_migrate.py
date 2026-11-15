@@ -121,10 +121,10 @@ from okf_profile import (  # noqa: E402
     DECISION,
     DOMAIN_BUNDLE,
     Resolved,
+    concept_type,
     directory_in_force,
     is_a,
     load_profile,
-    resolve_aliases,
     type_in_force,
 )
 
@@ -745,18 +745,11 @@ def profile_in_force(bundle: Path) -> Resolved:
     return load_profile(bundle, domain=tree.domain if tree is not None else None)
 
 
-def type_read(r: Resolved, fm: dict | None):
-    """The type of a concept as lint reads it: its frontmatter with the aliases of the Domain Profile in force
-    resolved (okf_profile.resolve_aliases), so a type written under a local key name (aliases.fields), under a local
-    type name (aliases.types) or given by a value alias (aliases.values) is the declared one."""
-    return resolve_aliases(r, fm).get("type") if isinstance(fm, dict) else None
-
-
 def keys_with_paths(r: Resolved, fm: dict | None) -> tuple[set[str], set[str]]:
     """(the keys whose values are paths, the keys that hold sources) of a concept: PATH_KEYS and every field its type
-    (type_read) declares as a path or a list of paths, each under its declared name and under the local names aliases
+    (okf_profile.concept_type) declares as a path or a list of paths, each under its declared name and under the local names aliases
     give it."""
-    t = type_read(r, fm)
+    t = concept_type(r, fm)
     fields = type_in_force(r, t)["fields"] if isinstance(t, str) and t in r.types else {}
     paths = set(PATH_KEYS) | {k for k, d in fields.items()
                               if d.get("type") == "path" or (d.get("type") == "list" and d.get("of") == "path")}
@@ -775,7 +768,7 @@ def decision_moves(bundle: Path, r: Resolved) -> dict[str, str]:
     for doc in bundle_docs(bundle):
         if doc.is_reserved or not isinstance(doc.frontmatter, dict):
             continue
-        t = type_read(r, doc.frontmatter)
+        t = concept_type(r, doc.frontmatter)
         if not isinstance(t, str) or not is_a(r, t, DECISION):
             continue
         home = (directory_in_force(r, t) or "").strip("/")

@@ -34,4 +34,4 @@ generated: { by: {{actor}}, at: {{now}} }
 
 # Post-incident
 
-- Record it in `log.md` and open an ADR if needed.
+- Record it in `log.md` and capture a decision if needed.
