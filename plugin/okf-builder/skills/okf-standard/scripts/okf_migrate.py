@@ -45,9 +45,9 @@ knowledge/2.0 → knowledge/3.0 (--profile; okf_version is not changed):
     move with it, and each .okfignore entry anchored under that directory follows them
     (decisions/drafts/ → base/decisions/drafts/); a nested bundle is migrated on its own
     (okf_migrate.py <its directory>)
-  - an anchored .okfignore entry whose first segment is a glob matching a moved directory
-    (*/drafts/) is kept as written and reported on a NOTICE line: it no longer matches the
-    moved paths, so it is fixed by hand
+  - an anchored .okfignore entry whose first segment is a glob (*/drafts/) is kept, for the
+    root directories that do not move, and gains directly after it one entry per moved
+    directory that segment matches (base/decisions/drafts/), so the last matching line still wins
   With --to as well, the profile step runs first and the version step walks its result.
 
 Decisions to the directory of their type (--move-decisions; knowledge/3.0 only, opt-in, a step
@@ -503,40 +503,32 @@ def rewrite_paths(text: str, doc_rel: str, move: Move) -> str:
 
 def rewrite_okfignore(text: str, dirs: list[str]) -> str:
     """Prefix base/ to each .okfignore entry anchored under a moved root directory, so the path it names stays
-    ignored at its new place (decisions/drafts/ → base/decisions/drafts/). An entry with no '/' but a trailing one
-    matches a name at any depth and is kept, as are comments, blank lines and entries whose first segment is a glob."""
-    def entry(line: str) -> str:
+    ignored at its new place (decisions/drafts/ → base/decisions/drafts/). An entry whose first segment is a glob
+    other than '**' (past its '!' or '\\' prefix and a leading '/', with a '/' before its trailing one) is kept, as it
+    still matches the root directories that do not move, and gains directly after it one entry per moved directory
+    its first segment matches, in the order of dirs (*/drafts/ → */drafts/, base/decisions/drafts/), so a later '!'
+    entry keeps its place. An entry with no '/' but a trailing one matches a name at any depth and is kept, as are
+    comments, blank lines and glob-first entries that match no moved directory."""
+    def entry(line: str) -> list[str]:
         body = line.rstrip()
         if not body or body.startswith("#"):
-            return line
+            return [line]
         prefix = body[0] if body[0] in "!\\" else ""
         pat = body[len(prefix):]
         lead = "/" if pat.startswith("/") else ""
         rest = pat[len(lead):]
+        tail = line[len(body):]
+        first, sep, after = rest.partition("/")
+        if "/" in rest.rstrip("/") and first != "**" and any(c in first for c in "*?["):
+            return [line, *(prefix + lead + BASE_DIR + "/" + d + sep + after + tail
+                             for d in dirs if fnmatch.fnmatchcase(d, first))]
         if "/" not in rest.rstrip("/") and not lead:
-            return line
-        if rest.split("/", 1)[0] not in dirs:
-            return line
-        return prefix + lead + BASE_DIR + "/" + rest + line[len(body):]
+            return [line]
+        if first not in dirs:
+            return [line]
+        return [prefix + lead + BASE_DIR + "/" + rest + tail]
 
-    return "\n".join(entry(line) for line in text.split("\n"))
-
-
-def glob_first_entries(text: str, dirs: list[str]) -> list[str]:
-    """The .okfignore entries, as written and in file order, that rewrite_okfignore keeps although they name a path
-    under a moved directory: past its '!' or '\\' prefix and a leading '/', the entry holds a '/' before its trailing
-    one, and its first segment is a glob other than '**' that matches the name of a moved directory."""
-    found = []
-    for line in text.split("\n"):
-        body = line.rstrip()
-        if not body or body.startswith("#"):
-            continue
-        pat = body[1:] if body[0] in "!\\" else body
-        first, sep, _ = pat.removeprefix("/").rstrip("/").partition("/")
-        if (sep and first != "**" and any(c in first for c in "*?[")
-                and any(fnmatch.fnmatchcase(d, first) for d in dirs)):
-            found.append(body)
-    return found
+    return "\n".join(out for line in text.split("\n") for out in entry(line))
 
 
 def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
@@ -565,9 +557,6 @@ def migrate_profile(bundle: Path, target: str, dry_run: bool) -> int:
         print(f"{dry}rewrote links in {move.new(rel)}")
     if new_ignore != ignore_text:
         print(f"{dry}rewrote {OKFIGNORE}")
-    for e in glob_first_entries(ignore_text, dirs):
-        print(f"NOTICE {OKFIGNORE} entry '{e}' starts with a glob: kept as written, it no longer matches the "
-              f"directories moved under {BASE_DIR}/; fix it by hand")
     if not dry_run:
         if new_ignore != ignore_text:
             ignore.write_text(new_ignore, encoding="utf-8")
@@ -1564,38 +1553,67 @@ def test_profile_moves_an_ignored_path_inside_a_moved_directory_with_its_okfigno
     assert "rewrote .okfignore" in lines
 
 
-_GLOBS = "*/drafts/\n**/wip/\n?ecisions/x/\nfr*/old/\n*.tmp\n!*/drafts/keep.md\n"
-_GLOB_NOTICES = [f"NOTICE .okfignore entry '{e}' starts with a glob: kept as written, it no longer matches the "
-                 "directories moved under base/; fix it by hand"
-                 for e in ("*/drafts/", "?ecisions/x/", "!*/drafts/keep.md")]
-
-
-def _notices(out: str) -> list[str]:
-    return [x for x in out.splitlines() if x.startswith("NOTICE .okfignore entry ")]
-
-
-def test_profile_keeps_and_reports_each_glob_first_okfignore_entry(tmp_path, capsys):
-    for extra in ([], ["--dry-run"]):
-        k = _bundle_20(tmp_path / (extra[0] if extra else "real"))
-        (k / ".okfignore").write_text(_GLOBS, encoding="utf-8")
-        before = _bytes(k)
-        capsys.readouterr()
-        assert main([str(k), "--profile", "knowledge/3.0", *extra]) == 0
-        assert _notices(capsys.readouterr().out) == _GLOB_NOTICES, extra
-        assert (k / ".okfignore").read_bytes() == _GLOBS.encode(), extra
-        if extra:
-            assert _bytes(k) == before
-
-
-def test_profile_reports_a_glob_first_entry_it_cannot_rewrite(tmp_path, capsys):
-    k = _bundle_20(tmp_path)
-    (k / ".okfignore").write_text("*/drafts/\n**/wip/\n", encoding="utf-8")
-    (k / "decisions" / "drafts").mkdir()
+def _glob_drafts(tmp: Path) -> Path:
+    """The reproduction of the glob-first .okfignore case: a knowledge/2.0 bundle whose only moved directory is
+    decisions/, holding an ignored decisions/drafts/."""
+    k = tmp / "knowledge"
+    (k / "decisions" / "drafts").mkdir(parents=True)
+    (k / "index.md").write_text('---\nokf_version: "0.2"\nokf_profile: "knowledge/2.0"\n---\n\n# Index\n',
+                                encoding="utf-8")
+    (k / "log.md").write_text("# Bundle history\n", encoding="utf-8")
+    (k / "decisions" / "index.md").write_text("# decisions\n\n_(empty)_\n", encoding="utf-8")
+    (k / ".okfignore").write_text("*/drafts/\n", encoding="utf-8")
     (k / "decisions" / "drafts" / "d.md").write_text(_D, encoding="utf-8")
+    return k
+
+
+def test_profile_expands_a_glob_first_okfignore_entry_per_moved_directory(tmp_path, capsys):
+    k = _glob_drafts(tmp_path)
     capsys.readouterr()
     assert main([str(k), "--profile", "knowledge/3.0"]) == 0
-    assert [x for x in capsys.readouterr().out.splitlines() if "NOTICE" in x] == _GLOB_NOTICES[:1]
-    assert (k / ".okfignore").read_bytes() == b"*/drafts/\n**/wip/\n"
+    out = capsys.readouterr().out
+    assert (k / ".okfignore").read_text(encoding="utf-8") == "*/drafts/\nbase/decisions/drafts/\n"
+    drafts = k / "base" / "decisions" / "drafts"
+    assert sorted(p.name for p in drafts.iterdir()) == ["d.md"]
+    assert (drafts / "d.md").read_text(encoding="utf-8") == _D
+    assert scan_bundle(k).ignored == ["base/decisions/drafts/"]
+    assert "rewrote .okfignore" in out.splitlines() and "NOTICE .okfignore" not in out
+
+
+def test_profile_and_version_in_one_run_leave_a_glob_ignored_directory_untouched(tmp_path, capsys):
+    k = _glob_drafts(tmp_path)
+    assert main([str(k), "--profile", "knowledge/3.0", "--to", "0.1"]) == 0
+    drafts = k / "base" / "decisions" / "drafts"
+    assert sorted(p.name for p in drafts.iterdir()) == ["d.md"]
+    assert (drafts / "d.md").read_text(encoding="utf-8") == _D
+
+
+def test_profile_dry_run_reports_a_glob_first_okfignore_rewrite_and_writes_nothing(tmp_path, capsys):
+    k = _glob_drafts(tmp_path)
+    before = _bytes(k)
+    assert "(dry) rewrote .okfignore" in _profile_lines(k, capsys, "--dry-run")
+    assert _bytes(k) == before
+
+
+def test_profile_keeps_which_paths_a_glob_first_okfignore_ignores(tmp_path, capsys):
+    k = _bundle_20(tmp_path)
+    (k / ".okfignore").write_text("*/drafts/*.md\n!*/drafts/keep.md\n", encoding="utf-8")
+    (k / "decisions" / "drafts").mkdir()
+    for name in ("a.md", "keep.md"):
+        (k / "decisions" / "drafts" / name).write_text(_D, encoding="utf-8")
+    before = set(scan_bundle(k).ignored)
+    assert "decisions/drafts/a.md" in before and "decisions/drafts/keep.md" not in before
+    assert main([str(k), "--profile", "knowledge/3.0"]) == 0
+    assert set(scan_bundle(k).ignored) == {BASE_DIR + "/" + p for p in before}
+
+
+def test_rewrite_okfignore_expands_a_glob_first_entry_after_itself_per_moved_directory():
+    text = "*/drafts/\n**/wip/\n?ecisions/x/\nfr*/old/\n*.tmp\n!*/drafts/keep.md\n"
+    assert rewrite_okfignore(text, ["decisions", "other"]) == (
+        "*/drafts/\nbase/decisions/drafts/\nbase/other/drafts/\n**/wip/\n?ecisions/x/\nbase/decisions/x/\n"
+        "fr*/old/\n*.tmp\n!*/drafts/keep.md\n!base/decisions/drafts/keep.md\n!base/other/drafts/keep.md\n")
+    assert rewrite_okfignore(text, []) == text
+    assert rewrite_okfignore("/*/drafts/  \n", ["decisions"]) == "/*/drafts/  \n/base/decisions/drafts/  \n"
 
 
 def test_profile_dry_run_writes_nothing_in_a_bundle_that_declares_a_kind(tmp_path, capsys):

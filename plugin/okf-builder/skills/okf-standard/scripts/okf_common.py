@@ -678,6 +678,12 @@ def root_frontmatter(bundle: Path) -> dict:
     return fm if isinstance(fm, dict) else {}
 
 
+def closed_domain_bundle(fm: dict) -> bool:
+    """A bundle's root frontmatter declares state: closed although it is a domain bundle (no kind, or kind Domain
+    Bundle): only an operational bundle has a state (standard §2.2; okf-lint reports BAD_STATE)."""
+    return fm.get("state") == "closed" and fm.get("kind") in (None, "Domain Bundle")
+
+
 def declared_version(bundle: Path) -> str | None:
     return _root_key(bundle, "okf_version")
 
