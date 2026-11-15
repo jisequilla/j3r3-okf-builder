@@ -1,0 +1,387 @@
+<title>Knowledge Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+/* Layout: a two-pane desk. Left, the round's ledger of concepts with its tally; right, the concept as written, with the version strip and the verdict beside it. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b2230; --muted: #5d6677; --line: #dde1e8;
+  --accent: #2547b8; --accent-soft: #e6ebfb; --ok: #1f7a4d; --ok-soft: #e3f3ea;
+  --no: #a33a2c; --no-soft: #f8e6e3; --warn: #8a5a00; --warn-soft: #fbf0d9;
+  --code-bg: #eef0f4;
+  --f-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151b; --panel: #1a1e26; --ink: #e5e8ee; --muted: #9aa3b2; --line: #2c323d;
+  --accent: #8aa4ff; --accent-soft: #232c45; --ok: #6fd3a0; --ok-soft: #17322a; --no: #f0907f; --no-soft: #3a2220;
+  --warn: #e8c070; --warn-soft: #33291a; --code-bg: #232833; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151b; --panel: #1a1e26; --ink: #e5e8ee; --muted: #9aa3b2; --line: #2c323d;
+  --accent: #8aa4ff; --accent-soft: #232c45; --ok: #6fd3a0; --ok-soft: #17322a; --no: #f0907f; --no-soft: #3a2220;
+  --warn: #e8c070; --warn-soft: #33291a; --code-bg: #232833; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px }
+h1 { font: 600 20px/1.2 var(--f-sans); margin: 0; letter-spacing: -.01em; text-wrap: balance }
+.sub { color: var(--muted); font-size: 13px }
+.mono { font-family: var(--f-mono); font-size: 12.5px }
+.notice { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 10px 14px; font-size: 13.5px; color: var(--muted) }
+.notice.warn { border-color: var(--warn); background: var(--warn-soft); color: var(--ink) }
+.desk { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 16px; align-items: start }
+@media (max-width: 860px) { .desk { grid-template-columns: minmax(0, 1fr) } }
+.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0 }
+.ledger { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 40px); display: flex; flex-direction: column }
+@media (max-width: 860px) { .ledger { position: static; max-height: none } }
+.tabs { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap }
+.tab { font: 500 13px var(--f-sans); border: 0; background: none; color: var(--muted); padding: 6px 10px; border-radius: 5px; cursor: pointer }
+.tab[aria-selected="true"] { background: var(--accent-soft); color: var(--accent) }
+.tab:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.tally { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; display: flex }
+.bar i { display: block; height: 100% }
+.bar .b-ok { background: var(--ok) } .bar .b-no { background: var(--no) }
+.tally-row { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums }
+.tally-row b { color: var(--ink); font-weight: 600 }
+.filter { padding: 8px 14px; border-bottom: 1px solid var(--line) }
+.filter input { width: 100%; font: 13.5px var(--f-sans); padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--ink) }
+.list { overflow-y: auto; padding: 6px; display: grid; gap: 2px }
+.group-h { font: 600 11px var(--f-sans); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 10px 8px 4px }
+.item { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 10px; align-items: start; text-decoration: none; color: inherit; padding: 8px; border-radius: 5px }
+.item:hover { background: var(--bg) }
+.item[aria-current="true"] { background: var(--accent-soft) }
+.dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; border: 2px solid var(--muted) }
+.dot.ok { background: var(--ok); border-color: var(--ok) } .dot.no { background: var(--no); border-color: var(--no) }
+.dot.stale { background: var(--warn); border-color: var(--warn) } .dot.done { background: var(--muted); border-color: var(--muted) }
+.item-t { font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere }
+.item-m { font-size: 11.5px; color: var(--muted); margin-top: 2px }
+.reader { padding: 22px 28px 32px; display: grid; gap: 18px }
+@media (max-width: 520px) { .reader { padding: 16px } }
+.crumb { font-family: var(--f-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere }
+.reader h2 { font: 600 24px/1.25 var(--f-serif); margin: 4px 0 0; text-wrap: balance }
+.desc { color: var(--muted); max-width: 68ch; margin: 0 }
+.chips { display: flex; gap: 6px; flex-wrap: wrap }
+.chip { font: 500 11.5px var(--f-sans); padding: 2px 8px; border-radius: 10px; background: var(--code-bg); color: var(--muted); border: 1px solid var(--line) }
+.chip.draft { background: var(--warn-soft); color: var(--warn); border-color: transparent }
+.chip.stable { background: var(--ok-soft); color: var(--ok); border-color: transparent }
+.chip.deprecated { background: var(--no-soft); color: var(--no); border-color: transparent }
+.verdict { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 12px; background: var(--bg) }
+.version { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 12.5px }
+.version dt { color: var(--muted) } .version dd { margin: 0; font-family: var(--f-mono); overflow-wrap: anywhere }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.btn { font: 500 13.5px var(--f-sans); padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer }
+.btn:disabled { opacity: .5; cursor: default }
+.btn.ok[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: var(--panel) }
+.btn.no[aria-pressed="true"] { background: var(--no); border-color: var(--no); color: var(--panel) }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted) }
+.state { font-size: 12.5px; color: var(--muted) }
+.state.stale { color: var(--warn) }
+.why { display: grid; gap: 6px }
+.why label { font-size: 12.5px; color: var(--muted) }
+.why textarea { width: 100%; min-height: 72px; resize: vertical; font: 14px/1.45 var(--f-sans); padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink) }
+.why textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.prose { font: 16.5px/1.62 var(--f-serif); max-width: 70ch; min-width: 0 }
+.prose h1, .prose h2, .prose h3 { font-family: var(--f-sans); line-height: 1.3; margin: 1.6em 0 .5em }
+.prose h1 { font-size: 18px } .prose h2 { font-size: 16px } .prose h3 { font-size: 15px }
+.prose > :first-child { margin-top: 0 }
+.prose p, .prose li { overflow-wrap: anywhere }
+.prose code { font: 13px var(--f-mono); background: var(--code-bg); padding: 1px 4px; border-radius: 3px }
+.fm { margin: 4px 0 14px } .fm summary { cursor: pointer; font-size: 13px; color: var(--muted, inherit); margin-bottom: 6px } .fm pre { background: var(--code-bg); padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 }
+.prose pre { background: var(--code-bg); padding: 12px; border-radius: 6px; overflow-x: auto }
+.prose pre code { background: none; padding: 0 }
+.prose a { color: var(--accent) } .prose a.broken { color: var(--muted); text-decoration: line-through } .prose a.unshown { color: inherit; text-decoration: none; font-weight: 600 }
+.prose .tbl { overflow-x: auto; margin: 1em 0 }
+.prose table { border-collapse: collapse; font: 13.5px/1.45 var(--f-sans) }
+.prose th, .prose td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top }
+.prose th { background: var(--code-bg) }
+.prose sup.fn { font: 600 11px var(--f-sans); color: var(--accent) }
+.prose .notes { border-top: 1px solid var(--line); margin-top: 2em; padding-top: .8em; font: 13px/1.5 var(--f-sans); color: var(--muted) }
+.empty { color: var(--muted); padding: 24px 14px; font-size: 13.5px }
+@media (prefers-reduced-motion: no-preference) { .item, .btn { transition: background-color .12s, color .12s } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Knowledge Viewer</h1>
+      <div class="sub" id="snapshot">Loading the bundle…</div>
+    </div>
+    <div class="sub" id="who"></div>
+  </header>
+  <div class="notice" id="rule">Confirming a concept records that you reviewed it as it stands at the commit and <span class="mono">generated.at</span> shown beside the verdict (ADR-0033). Claude applies your answers to the bundle only when you ask it to in a session, and skips any concept whose <span class="mono">generated.at</span> has changed since. When you don’t confirm one, you can say why or what should change; the comment is kept with your answer.</div>
+  <div class="notice warn" id="storeNote" hidden></div>
+  <div class="desk">
+    <aside class="pane ledger" aria-label="Concepts">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-round" data-view="round" aria-selected="true">This round</button>
+        <button class="tab" role="tab" id="tab-all" data-view="all" aria-selected="false">Concepts</button>
+        <button class="tab" role="tab" id="tab-fragments" data-view="fragments" aria-selected="false">Fragments</button>
+        <button class="tab" role="tab" id="tab-deprecated" data-view="deprecated" aria-selected="false">Deprecated</button>
+        <button class="tab" role="tab" id="tab-open" data-view="open" aria-selected="false">Questions &amp; conflicts</button>
+      </div>
+      <div class="tally" id="tally"></div>
+      <div class="filter"><input id="q" type="search" placeholder="Filter by title or path" aria-label="Filter concepts"></div>
+      <nav class="list" id="list"><div class="empty">Loading…</div></nav>
+    </aside>
+    <main class="pane reader" id="reader"><div class="empty">Pick a concept from the list.</div></main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+(() => {
+  const S = { data: null, byPath: new Map(), bySlug: new Map(), answers: new Map(), view: "round", current: null,
+              db: null, uid: null, owner: false, storeReady: false, saving: false, drafts: new Map() };
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const slug = (path) => "c-" + path.replace(/^\//, "").replace(/\.md$/, "").replace(/\//g, "--").replace(/[^A-Za-z0-9-]/g, "-");
+  const docId = (path) => path.replace(/^\//, "").replace(/\//g, "~");
+  const fmtTime = (t) => t ? t.replace("T", " ").replace("Z", " UTC") : "—";
+
+  function answerState(c) {
+    const a = S.answers.get(c.path);
+    if (!a) return c.verified_by ? "done" : "none";
+    if (a.generated_at !== c.generated_at) return "stale";
+    return a.choice === "confirmed" ? "ok" : "no";
+  }
+
+  // ---------- rendering ----------
+  function renderTally() {
+    const paths = S.data.round.paths;
+    let ok = 0, no = 0, stale = 0;
+    for (const p of paths) { const st = answerState(S.byPath.get(p)); if (st === "ok") ok++; else if (st === "no") no++; else if (st === "stale") stale++; }
+    const n = paths.length, left = n - ok - no;
+    $("tally").innerHTML = `
+      <div class="bar" aria-hidden="true"><i class="b-ok" style="width:${100 * ok / n}%"></i><i class="b-no" style="width:${100 * no / n}%"></i></div>
+      <div class="tally-row"><span><b>${ok}</b> confirmed</span><span><b>${no}</b> not confirmed</span><span><b>${left}</b> to review of ${n}</span>${stale ? `<span><b>${stale}</b> changed since answered</span>` : ""}</div>`;
+  }
+
+  function itemHtml(c) {
+    const st = answerState(c);
+    const meta = [c.type, c.status, c.generated_at ? c.generated_at.slice(0, 10) : null].filter(Boolean).join(" · ");
+    return `<a class="item" href="#${slug(c.path)}" ${S.current === c.path ? 'aria-current="true"' : ""}>
+      <span class="dot ${st === "none" ? "" : st}" title="${({ ok: "Confirmed", no: "Not confirmed", stale: "Changed since answered", done: "Already verified", none: "Not answered" })[st]}"></span>
+      <span><div class="item-t">${esc(c.title)}</div><div class="item-m">${esc(meta)}</div></span></a>`;
+  }
+
+  function renderList() {
+    const q = $("q").value.trim().toLowerCase();
+    const match = (c) => !q || c.title.toLowerCase().includes(q) || c.path.toLowerCase().includes(q);
+    const all = S.data.concepts;
+    let html = "";
+    if (S.view === "round") {
+      const items = S.data.round.paths.map((p) => S.byPath.get(p)).filter(match);
+      const pol = items.filter((c) => c.path.startsWith("/base/policies/"));
+      const adr = items.filter((c) => !c.path.startsWith("/base/policies/"));
+      if (pol.length) html += `<div class="group-h">Policies</div>` + pol.map(itemHtml).join("");
+      if (adr.length) html += `<div class="group-h">Decisions</div>` + adr.map(itemHtml).join("");
+    } else if (S.view === "fragments") {
+      const frs = all.filter((c) => c.layer === "fragments" && match(c)).sort((a, b) => b.path.localeCompare(a.path));
+      const pending = frs.filter((c) => c.distillation_status && c.distillation_status !== "distilled");
+      const done = frs.filter((c) => !pending.includes(c));
+      html += `<div class="empty" style="padding:6px 8px 2px">Fragments record what happened. They are read, never verified.</div>`;
+      if (pending.length) html += `<div class="group-h">Awaiting distillation · ${pending.length}</div>` + pending.map(itemHtml).join("");
+      html += `<div class="group-h">Distilled · ${done.length}</div>` + done.map(itemHtml).join("");
+    } else if (S.view === "deprecated") {
+      const dep = all.filter((c) => c.status === "deprecated" && match(c)).sort((a, b) => a.path.localeCompare(b.path));
+      html += `<div class="empty" style="padding:6px 8px 2px">Superseded history. Not verified: the concept that replaces each one carries its decision.</div>`;
+      html += `<div class="group-h">Deprecated · ${dep.length}</div>` + (dep.length ? dep.map(itemHtml).join("") : `<div class="empty">Nothing deprecated.</div>`);
+    } else if (S.view === "all") {
+      const groups = new Map();
+      for (const c of all.filter((c) => c.layer !== "fragments" && c.status !== "deprecated" && match(c))) {
+        const key = c.layer === "base" ? (c.type || "Untyped") : "Bundle root";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(c);
+      }
+      for (const [k, v] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) html += `<div class="group-h">${esc(k)} · ${v.length}</div>` + v.map(itemHtml).join("");
+    } else {
+      const qs = all.filter((c) => c.type === "Open Question" && match(c));
+      const log = all.filter((c) => c.type === "Conflict Log" && match(c));
+      html += `<div class="group-h">Open questions · ${qs.filter((c) => c.question_status === "open").length} open</div>` + (qs.length ? qs.map(itemHtml).join("") : `<div class="empty">No open questions in the bundle.</div>`);
+      html += `<div class="group-h">Conflict Log</div>` + (log.length ? log.map(itemHtml).join("") : `<div class="empty">No Conflict Log.</div>`);
+    }
+    $("list").innerHTML = html || `<div class="empty">Nothing matches “${esc(q)}”.</div>`;
+  }
+
+  function resolveLink(fromPath, href) {
+    if (/^[a-z]+:/i.test(href) || href.startsWith("#")) return null;
+    const [p] = href.split("#");
+    let target;
+    if (p.startsWith("/")) target = p;
+    else {
+      const parts = fromPath.split("/").slice(0, -1);
+      for (const seg of p.split("/")) { if (seg === "..") parts.pop(); else if (seg && seg !== ".") parts.push(seg); }
+      target = parts.join("/") || "/";
+    }
+    if (S.byPath.has(target)) return slug(target);
+    if (S.byPath.has(target.replace(/\/$/, "") + "/index.md")) return null;
+    if (/(^|\/)(index|log)\.md$/.test(target)) return "";
+    return false;
+  }
+
+  function renderBody(c) {
+    let md = c.body;
+    const notes = [];
+    md = md.replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, (_, id, text) => { notes.push([id, text]); return ""; });
+    md = md.replace(/\[\^([^\]]+)\]/g, (_, id) => `<sup class="fn">[${esc(id)}]</sup>`);
+    let html = DOMPurify.sanitize(marked.parse(md, { gfm: true }), { ADD_ATTR: ["target"] });
+    const box = document.createElement("div");
+    box.innerHTML = html;
+    if (notes.length) {
+      const n = document.createElement("div"); n.className = "notes";
+      n.innerHTML = notes.map(([id, t]) => `<div><b>[${esc(id)}]</b> ${DOMPurify.sanitize(marked.parseInline(t))}</div>`).join("");
+      box.appendChild(n);
+    }
+    for (const t of box.querySelectorAll("table")) { const w = document.createElement("div"); w.className = "tbl"; t.replaceWith(w); w.appendChild(t); }
+    for (const a of box.querySelectorAll("a[href]")) {
+      const href = a.getAttribute("href");
+      const r = resolveLink(c.path, href);
+      if (r) a.setAttribute("href", "#" + r);
+      else if (r === "") { a.classList.add("unshown"); a.removeAttribute("href"); a.title = "An index or log of the bundle: generated, not shown on this page"; }
+      else if (r === false) { a.classList.add("broken"); a.removeAttribute("href"); a.title = "Not in the bundle: " + href; }
+      else if (/^https?:/i.test(href)) { a.target = "_blank"; a.rel = "noopener"; }
+    }
+    return box.innerHTML;
+  }
+
+  function verdictHtml(c) {
+    const inRound = S.data.round.paths.includes(c.path);
+    const a = S.answers.get(c.path);
+    const st = answerState(c);
+    const verifiable = c.layer === "base" || c.type === "Project";
+    const canAnswer = S.storeReady && S.owner && !S.saving && verifiable && c.status !== "deprecated";
+    let status = "";
+    if (c.verified_by) status = `Verified by ${esc(c.verified_by)} at ${esc(fmtTime(c.verified_at))}.`;
+    if (a) {
+      const when = esc(fmtTime(a.answered_at));
+      status = st === "stale"
+        ? `You answered “${a.choice === "confirmed" ? "confirm" : "not confirmed"}” on ${when} for generated.at ${esc(a.generated_at)}; the concept has changed since. Answer again for this version.`
+        : `You answered “${a.choice === "confirmed" ? "confirm" : "not confirmed"}” on ${when}. Not yet applied to the bundle.`;
+    }
+    const note = !verifiable ? "Fragments and the Conflict Log are never verified." :
+      c.status === "deprecated" ? "Deprecated concepts are not verified; the concept that supersedes it carries the decision." :
+      !S.storeReady ? "Answers can’t be saved in this view." : !S.owner ? "Only the artifact’s owner can answer." : "";
+    const pressed = (ch) => (st === "ok" && ch === "confirmed") || (st === "no" && ch === "not_confirmed") ? "true" : "false";
+    return `<section class="verdict" aria-label="Your verdict">
+      <dl class="version">
+        <dt>Bundle path</dt><dd>${esc(c.path)}</dd>
+        <dt>Commit</dt><dd>${esc(S.data.commit)}</dd>
+        <dt>generated.at</dt><dd>${esc(c.generated_at || "—")}</dd>
+        <dt>Written by</dt><dd>${esc(c.generated_by || "—")}</dd>
+      </dl>
+      ${c.frontmatter ? `<details class="fm" open><summary>Frontmatter (part of what you verify)</summary><pre>${esc(c.frontmatter)}</pre></details>` : ""}
+      ${verifiable && c.status !== "deprecated" ? `<div class="actions">
+        <button class="btn ok" id="v-confirm" data-choice="confirmed" aria-pressed="${pressed("confirmed")}" ${canAnswer ? "" : "disabled"}>Confirm this version</button>
+        <button class="btn no" id="v-not" data-choice="not_confirmed" aria-pressed="${pressed("not_confirmed")}" ${canAnswer ? "" : "disabled"}>Not confirmed</button>
+        ${a ? `<button class="btn ghost" id="v-clear" data-choice="clear" ${canAnswer ? "" : "disabled"}>Clear my answer</button>` : ""}
+      </div>
+      ${st === "no" ? `<div class="why">
+        <label for="v-comment">Why, or what should change (optional)</label>
+        <textarea id="v-comment" rows="3" ${canAnswer ? "" : "disabled"}>${esc(S.drafts.get(c.path) ?? a.comment ?? "")}</textarea>
+        <div class="actions"><button class="btn" data-choice="comment" ${canAnswer ? "" : "disabled"}>Save comment</button>
+          <span class="state">${a.comment ? `Comment saved ${esc(fmtTime(a.commented_at))}.` : "No comment saved."}</span></div>
+      </div>` : ""}` : ""}
+      <div class="state ${st === "stale" ? "stale" : ""}">${status || (note ? "" : "Not answered yet.")} ${esc(note)}</div>
+    </section>`;
+  }
+
+  function renderReader() {
+    const c = S.current && S.byPath.get(S.current);
+    if (!c) { $("reader").innerHTML = `<div class="empty">Pick a concept from the list. “This round” holds the ${S.data.round.paths.length} concepts of ${esc(S.data.round.name)}: ${esc(S.data.round.title.toLowerCase())}.</div>`; return; }
+    const chips = [c.type, c.status && `<span class="chip ${esc(c.status)}">${esc(c.status)}</span>`, c.decision_status, c.question_status, c.distillation_status, c.owner && "owner " + c.owner]
+      .filter(Boolean).map((x) => x.startsWith("<span") ? x : `<span class="chip">${esc(x)}</span>`).join("");
+    const sup = [c.supersedes && `Supersedes <a href="#${slug(c.supersedes)}">${esc(c.supersedes)}</a>`, c.superseded_by && `Superseded by <a href="#${slug(c.superseded_by)}">${esc(c.superseded_by)}</a>`].filter(Boolean).join(" · ");
+    $("reader").innerHTML = `
+      <div><div class="crumb">${esc(c.path)}</div><h2>${esc(c.title)}</h2></div>
+      ${c.description ? `<p class="desc">${esc(c.description)}</p>` : ""}
+      <div class="chips">${chips}</div>
+      ${sup ? `<div class="sub">${sup}</div>` : ""}
+      ${verdictHtml(c)}
+      <article class="prose">${renderBody(c)}</article>`;
+  }
+
+  function renderAll() { renderTally(); renderList(); renderReader(); }
+
+  // ---------- routing ----------
+  function route() {
+    const h = location.hash.slice(1);
+    if (["round", "all", "fragments", "deprecated", "open"].includes(h)) { setView(h, false); return; }
+    const p = S.bySlug.get(h);
+    S.current = p || S.current;
+    renderList(); renderReader();
+    if (p) window.scrollTo({ top: 0 });
+  }
+  function setView(v, push = true) {
+    S.view = v;
+    for (const t of document.querySelectorAll(".tab")) t.setAttribute("aria-selected", String(t.dataset.view === v));
+    if (push && location.hash.slice(1) !== v && !S.bySlug.has(location.hash.slice(1))) history.replaceState(null, "", "#" + v);
+    renderList();
+  }
+  for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => setView(t.dataset.view));
+  $("q").addEventListener("input", renderList);
+  window.addEventListener("hashchange", route);
+
+  // ---------- answers ----------
+  $("reader").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-choice]");
+    if (!b || !S.db || !S.current) return;
+    const c = S.byPath.get(S.current);
+    const ref = S.db.collection("answers").doc(docId(c.path));
+    const choice = b.dataset.choice;
+    const prev = S.answers.get(c.path);
+    const sameNo = prev && prev.choice === "not_confirmed" && prev.generated_at === c.generated_at;
+    const text = ($("v-comment")?.value ?? "").trim();
+    const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+    if (choice === "comment" && !sameNo) return;
+    S.saving = true; renderReader();
+    try {
+      if (choice === "clear") await ref.delete();
+      else if (choice === "comment") {
+        const { comment, commented_at, ...rest } = prev;
+        await ref.set(text ? { ...rest, comment: text, commented_at: now } : rest);
+      }
+      else await ref.set({ path: c.path, commit: S.data.commit, generated_at: c.generated_at, choice,
+                           answered_at: now, by: S.uid, page_built_at: S.data.built_at,
+                           round: S.data.round.paths.includes(c.path) ? S.data.round.name : null,
+                           ...(choice === "not_confirmed" && sameNo && prev.comment ? { comment: prev.comment, commented_at: prev.commented_at } : {}) });
+      if (choice !== "not_confirmed") S.drafts.delete(c.path);
+      $("storeNote").hidden = true;
+    } catch (err) {
+      $("storeNote").hidden = false;
+      $("storeNote").textContent = err && err.code === "quota_exceeded" ? "The answer store is full, so this answer was not saved." :
+        "This answer was not saved (" + (err && err.code || "error") + "). Try again in a moment.";
+    } finally { S.saving = false; renderReader(); }
+  });
+
+  $("reader").addEventListener("input", (e) => { if (e.target.id === "v-comment" && S.current) S.drafts.set(S.current, e.target.value); });
+
+  async function connectStore() {
+    const [db, user] = await Promise.all([window.claude?.use?.("db") ?? null, window.claude?.use?.("user") ?? null]);
+    S.owner = user ? await user.isOwner() : false;
+    S.uid = user ? await user.id() : null;
+    $("who").textContent = S.owner ? "Signed in as the owner" : (user ? "Read only: answers are the owner’s" : "");
+    if (!db) { $("storeNote").hidden = false; $("storeNote").textContent = "Answers can’t be saved or shown in this view. Open the artifact on claude.ai while signed in."; renderReader(); return; }
+    S.db = db;
+    let settled = false;
+    const timer = setTimeout(() => { if (!settled) { $("storeNote").hidden = false; $("storeNote").textContent = "Saved answers can’t be reached yet; what’s shown may be out of date."; } }, 10000);
+    db.collection("answers").onSnapshot((snap) => {
+      S.answers = new Map(snap.docs.map((d) => [d.data().path, d.data()]));
+      if (!snap.metadata.fromCache) { settled = true; clearTimeout(timer); $("storeNote").hidden = true; S.storeReady = true; }
+      else S.storeReady = true;
+      renderAll();
+    }, (err) => { settled = true; clearTimeout(timer); $("storeNote").hidden = false; $("storeNote").textContent = "Saved answers stopped updating (" + err.code + "). Reload the page to reconnect."; S.storeReady = false; renderAll(); });
+  }
+
+  // ---------- boot ----------
+  fetch("concepts.json").then((r) => r.json()).then((data) => {
+    S.data = data;
+    for (const c of data.concepts) { S.byPath.set(c.path, c); S.bySlug.set(slug(c.path), c.path); }
+    $("snapshot").innerHTML = `Bundle <span class="mono">knowledge/</span> at commit <span class="mono">${esc(data.commit.slice(0, 7))}</span>${data.dirty ? " (with uncommitted changes)" : ""} · ${data.concepts.length} concepts · built ${esc(fmtTime(data.built_at))}`;
+    route(); renderAll();
+    connectStore();
+  }).catch(() => { $("snapshot").textContent = "The bundle data could not be loaded."; $("list").innerHTML = `<div class="empty">concepts.json is missing from this page.</div>`; });
+})();
+</script>

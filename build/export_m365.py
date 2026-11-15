@@ -202,9 +202,10 @@ def ensure_frontmatter(text: str, skill: str, author: str) -> str:
 def build_skill(skill_src: Path, dst: Path, author: str) -> int:
     skill = skill_src.name
     shutil.copytree(skill_src, dst, ignore=shutil.ignore_patterns("__pycache__", ".*"))
-    # 20-companion limit: scripts and templates go into the skills that use them, the built-in profile into okf_profile.py
+    # 20-companion limit: scripts and templates go into the skills that use them, the built-in profile into okf_profile.py;
+    # the Knowledge Viewer's template is not shipped, nor okf_viewer.py, which no skill needs here (ADR-0042 decision 6)
     if skill == "okf-standard":
-        for sub in ("scripts", "templates", "profiles"):
+        for sub in ("scripts", "templates", "profiles", "viewer"):
             if (dst / sub).exists():
                 shutil.rmtree(dst / sub)
     need = NEEDS[skill]

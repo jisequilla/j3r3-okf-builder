@@ -38,7 +38,7 @@ EX = Path("examples/knowledge")
 FIXTURES = Path("examples/fixtures")
 M365 = Path("dist/m365/package/skills")
 SCRIPTS = ("okf_init", "okf_index", "okf_lint", "okf_profile", "okf_migrate", "okf_audit", "okf_projection",
-           "okf_obsidian", "okf_close")
+           "okf_obsidian", "okf_close", "okf_viewer")
 CLOSING = FIXTURES / "closing-instance" / "knowledge"
 # The note that replaces okf-distill's Closing mode in the M365 package, exactly
 M365_NO_CLOSING = ("## Closing mode\n\nClosing an operational instance is not available in Microsoft 365 Copilot: it needs "
@@ -387,6 +387,76 @@ def obsidian_setup(tmp: Path) -> None:
     print("knowledge/ viewer setup matches okf_obsidian.py")
 
 
+def _viewer_file(name: str) -> bool:
+    return name.endswith("okf_viewer.py") or "okf-standard/viewer/" in name
+
+
+def viewer_files(root: Path) -> list[str]:
+    """The Knowledge Viewer's files under root, inside its zips too: okf_viewer.py and okf-standard/viewer/."""
+    import zipfile
+
+    found = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and _viewer_file(p.relative_to(root).as_posix())]
+    for z in root.rglob("*.zip"):
+        with zipfile.ZipFile(z) as zf:
+            found += [f"{z.relative_to(root).as_posix()}:{n}" for n in zf.namelist() if _viewer_file(n)]
+    return sorted(found)
+
+
+def viewer(tmp: Path) -> None:
+    """okf_viewer.py builds the page of this repository's knowledge/ and of the example bundle, its template byte for byte and one concept per file lint reads;
+    the Claude plugin ships the script and the template, the Microsoft 365 package and the Copilot pack leave both out,
+    and the check finds either one planted back (ADR-0042 decision 6)"""
+    import zipfile
+
+    sys.path.insert(0, str(ROOT / S))
+    from okf_common import scan_bundle
+    from okf_lint import find_tree, profile_structure, Report
+    from okf_profile import concept_type, resolve_aliases
+
+    head = run("git", "rev-parse", "HEAD").strip()
+    template = ROOT / REF / "viewer" / "index.html"
+    for bundle in (Path("knowledge"), EX):
+        out = tmp / "viewer" / bundle.as_posix().replace("/", "-")
+        uv(S / "okf_viewer.py", bundle, "--out", out)
+        expect((out / "index.html").read_bytes() == template.read_bytes(), "the built index.html differs from the template")
+        data = json.loads((out / "concepts.json").read_text(encoding="utf-8"))
+        built = [c["path"] for c in data["concepts"]]
+        sc = scan_bundle(ROOT / bundle)
+        tree = find_tree(ROOT / bundle, Report())
+        prof = profile_structure(ROOT / bundle, sc.docs, tree.domain if tree is not None else None)[0]
+        docs = sorted("/" + d.rel for d in sc.docs
+                      if d.path.name not in ("index.md", "log.md") and isinstance(d.frontmatter, dict) and d.has_fm_block
+                      and concept_type(None, resolve_aliases(prof, d.frontmatter)) != "Conflict Log")
+        expect(built == docs, f"{bundle}: concepts.json lists {len(built)} concepts, lint reads {len(docs)}")
+        dirty = bool(run("git", "status", "--porcelain", "--", bundle).strip())
+        expect((data["commit"], data["dirty"]) == (head, dirty),
+               f"{bundle}: concepts.json names {data['commit']} dirty {data['dirty']}, git {head} dirty {dirty}")
+        print(f"{bundle}: {len(built)} concepts, commit {head[:7]}{' (dirty)' if dirty else ''}")
+
+    run("just", "plugin")
+    with zipfile.ZipFile(ROOT / "okf-builder.plugin") as zf:
+        names = set(zf.namelist())
+    for want in ("skills/okf-standard/scripts/okf_viewer.py", "skills/okf-standard/viewer/index.html"):
+        expect(want in names, f"okf-builder.plugin does not hold {want}")
+    run("python3", "build/export_m365.py")
+    run("python3", "build/export_copilot.py", "--zip")
+    for pkg in (ROOT / "dist" / "m365", ROOT / "dist" / "copilot", ROOT / "dist" / "okf-copilot-pack.zip"):
+        if pkg.is_file():
+            with zipfile.ZipFile(pkg) as zf:
+                leaks = [n for n in zf.namelist() if _viewer_file(n)]
+        else:
+            leaks = viewer_files(pkg)
+        expect(not leaks, f"the Knowledge Viewer reaches {pkg.relative_to(ROOT)}: {leaks}")
+    planted = tmp / "planted"
+    shutil.copytree(ROOT / "dist" / "copilot", planted)
+    (planted / ".github" / "skills" / "okf-standard" / "viewer").mkdir()
+    (planted / ".github" / "skills" / "okf-standard" / "viewer" / "index.html").write_text("x", encoding="utf-8")
+    (planted / "okf_viewer.py").write_text("x", encoding="utf-8")
+    expect(viewer_files(planted) == [".github/skills/okf-standard/viewer/index.html", "okf_viewer.py"],
+           f"the packaging check misses a planted viewer file: {viewer_files(planted)}")
+    print("okf-builder.plugin ships okf_viewer.py and viewer/index.html; dist/m365 and the Copilot pack hold neither")
+
+
 def dogfood(tmp: Path) -> None:
     """dogfood state of examples/knowledge: only its 3 known warnings; every fragment is a Knowledge Fragment
     with a distillation_status, aliases resolved; the mapped question Runbook.owner has exactly one gap; its one
@@ -668,7 +738,7 @@ def closing(tmp: Path) -> None:
 STEPS = {"unit": unit, "init-0.2": init_02, "decision-template": decision_template, "init-0.1": init_01, "google-fixtures": google_fixtures,
          "migration": migration, "profile-migration": profile_migration, "m365": m365, "copilot": copilot,
          "builtin-profile": builtin_profile, "copies": copies, "m365-agent": m365_agent, "bundles": bundles, "index": index,
-         "workflows": workflows, "obsidian-setup": obsidian_setup, "dogfood": dogfood,
+         "workflows": workflows, "obsidian-setup": obsidian_setup, "viewer": viewer, "dogfood": dogfood,
          "closing": closing}
 
 
