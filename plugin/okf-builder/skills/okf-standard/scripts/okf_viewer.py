@@ -14,19 +14,21 @@ Usage:
   DIR/concepts.json, a snapshot of the bundle the page reads:
   {commit, dirty, built_at, round: {name, title, paths}, concepts: [...]}.
 - Reads the bundle as okf-lint does (scan_bundle): the paths .okfignore matches, projections/ and nested bundles are
-  left out, each nested bundle named on one NOTICE line. Each Markdown file with a frontmatter is one concept, but
-  each index.md, log.md and the Conflict Log; fragments, project.md and base/profile.md included.
+  left out, the nested bundles named on one NOTICE line. Each Markdown file with a frontmatter is one concept, but
+  each index.md, log.md and the Conflict Log (by its type); fragments, project.md and base/profile.md included. A
+  frontmatter that cannot be parsed (lint's BAD_YAML) is left out and named on one NOTICE line.
 - Each concept: path (bundle path), type, title, description, status, decision_status, question_status,
   distillation_status, owner, generated_by, generated_at, verified_by, verified_at (the last entry when verified is
   a list), stale_after, supersedes, superseded_by, layer (base, fragments or root), frontmatter (the raw YAML between
   the '---' lines), body, and links: the bundle paths of the concepts its body links to, read with the link reader
   lint uses, in order of first appearance, with no external, broken or non-concept target. The keys are read with
-  the aliases of the Domain Profile in force resolved (knowledge/3.0); frontmatter stays as written.
+  the aliases of the Domain Profile lint has in force resolved, also when that profile has findings (one NOTICE line
+  says so); frontmatter stays as written.
 - commit is the repository's HEAD and dirty says whether git reports a change under the bundle; outside git, commit
   is null and dirty false. built_at is now.
 - The round: --round NAME with --paths gives those concepts (each must be one); with no --paths, or no --round, the
-  round is every base/ concept in status draft and not verified at its current generated.at. --round-title defaults
-  to the name.
+  round is every base/ concept in status draft that no person verified at its current generated.at, read as lint's
+  VERIFIED_STALE reads it (human: actors, the latest by time). --round-title defaults to the name.
 - Never overwrites an existing file unless given --force; prints `created <path>`, `rewritten <path>` (with --force)
   or `skipped (exists) <path>` for each file.
 - Exit: 2, writing nothing, when the bundle has no index.md, --out is the bundle or inside it, --paths names no
@@ -46,16 +48,22 @@ sys.path.insert(0, str(Path(__file__).parent))
 from okf_common import (  # noqa: E402
     BASE_DIR,
     FRAGMENTS_DIR,
-    PROFILE_30,
-    declared_profile,
+    Scan,
     extract_links,
     now_iso,
     resolve_link,
     scan_bundle,
     split_frontmatter,
 )
-from okf_lint import Report, check_secrets  # noqa: E402
-from okf_profile import Resolved, load_profile, resolve_aliases  # noqa: E402
+from okf_lint import (  # noqa: E402
+    Report,
+    check_secrets,
+    find_tree,
+    last_human_verification,
+    profile_structure,
+    verified_stale,
+)
+from okf_profile import Resolved, concept_type, resolve_aliases  # noqa: E402
 
 TEMPLATE = Path(__file__).resolve().parent.parent / "viewer" / "index.html"
 KEYS = ("type", "title", "description", "status", "decision_status", "question_status", "distillation_status",
@@ -83,15 +91,19 @@ def _entry(v) -> dict:
     return v if isinstance(v, dict) else {}
 
 
-def bundle_profile(root: Path) -> Resolved | None:
-    """The Domain Profile in force, or None (not knowledge/3.0, or a profile that cannot be read: keys as written)."""
-    if declared_profile(root) != PROFILE_30:
-        return None
+def bundle_profile(root: Path, sc: Scan) -> tuple[Resolved | None, str | None]:
+    """The Domain Profile lint has in force for the bundle (profile_structure, the tree's domain for an instance), and
+    the NOTICE line to print when it has findings: lint keeps such a profile in force and reports them beside it, so
+    the keys are still read through it. A profile whose loading raises leaves the keys as written, with its NOTICE."""
+    tree = find_tree(root, Report())
     try:
-        r = load_profile(root)
-    except Exception:  # noqa: BLE001
-        return None
-    return None if r.findings else r
+        prof, findings, _ = profile_structure(root, sc.docs, tree.domain if tree is not None else None)
+    except Exception as e:  # noqa: BLE001
+        return None, f"NOTICE the Domain Profile cannot be loaded ({e}): every key is read as written"
+    if findings:
+        return prof, (f"NOTICE the Domain Profile in force has {len(findings)} finding(s), read as lint reads it: "
+                      "see okf_lint.py --profiles")
+    return prof, None
 
 
 def git_state(root: Path) -> tuple[str | None, bool]:
@@ -119,19 +131,22 @@ def body_of(text: str) -> str:
     return "".join(lines[end + 1:]).lstrip("\n")
 
 
-def build(root: Path, prof: Resolved | None) -> tuple[list[dict], list[str]]:
-    """The concepts of the bundle, sorted by path, and the nested bundles left out."""
-    sc = scan_bundle(root)
-    docs = []
+def build(root: Path, sc: Scan, prof: Resolved | None) -> tuple[list[dict], list[str], list[str]]:
+    """The concepts of the bundle, sorted by path; the bundle paths of the default round; the files whose frontmatter
+    cannot be parsed (lint's BAD_YAML), which are left out."""
+    docs, bad = [], []
     for d in sc.docs:
-        if d.path.name in ("index.md", "log.md") or not d.has_fm_block or not isinstance(d.frontmatter, dict):
+        if d.path.name in ("index.md", "log.md") or not d.has_fm_block:
+            continue
+        if not isinstance(d.frontmatter, dict):
+            bad.append(d.rel)
             continue
         fm = resolve_aliases(prof, d.frontmatter) if prof is not None else d.frontmatter
-        if fm.get("type") == "Conflict Log":
+        if concept_type(None, fm) == "Conflict Log":
             continue
         docs.append((d, fm))
     concepts = {d.path.resolve(): "/" + d.rel for d, _ in docs}
-    out = []
+    out, round_paths = [], []
     for d, fm in sorted(docs, key=lambda x: x[0].rel):
         text = d.path.read_text(encoding="utf-8")
         raw, body = split_frontmatter(text)
@@ -147,12 +162,16 @@ def build(root: Path, prof: Resolved | None) -> tuple[list[dict], list[str]]:
              "verified_by": _text(ver.get("by")), "verified_at": _text(ver.get("at")),
              "layer": layer_of(d.rel), "frontmatter": raw, "body": body_of(text), "links": links}
         out.append(c)
-    return out, sc.nested
+        if unverified(c, fm):
+            round_paths.append(c["path"])
+    return out, round_paths, bad
 
 
-def unverified(c: dict) -> bool:
+def unverified(c: dict, fm: dict) -> bool:
+    """In the default round: a base/ concept in status draft that no person verified at its current generated.at, read
+    as VERIFIED_STALE reads it (human: actors only, the latest by time)."""
     return (c["layer"] == BASE_DIR and c["status"] == "draft"
-            and not (c["verified_at"] and c["generated_at"] and str(c["verified_at"]) >= str(c["generated_at"])))
+            and (last_human_verification(fm) is None or verified_stale(fm) is not None))
 
 
 def write(path: Path, content: bytes, force: bool) -> str:
@@ -194,7 +213,8 @@ def main(argv: list[str] | None = None) -> int:
         for i in leaks:
             sys.stderr.write(f"okf_viewer: SECRET_IN_BUNDLE {i['path']}: {i['message']}\n")
         return fail("the page's data leaves the machine, so a bundle lint finds a credential in is not built", 1)
-    concepts, nested = build(root, bundle_profile(root))
+    prof, notice = bundle_profile(root, sc)
+    concepts, default_round, bad = build(root, sc, prof)
     paths = {c["path"] for c in concepts}
     if args.round and args.paths:
         missing = [p for p in args.paths if p not in paths]
@@ -202,13 +222,17 @@ def main(argv: list[str] | None = None) -> int:
             return fail(f"--paths names no concept of the bundle: {', '.join(missing)}")
         round_paths = list(args.paths)
     else:
-        round_paths = [c["path"] for c in concepts if unverified(c)]
+        round_paths = default_round
     name, title = (args.round, args.round_title or args.round) if args.round else DEFAULT_ROUND
     commit, dirty = git_state(root)
     data = {"commit": commit, "dirty": dirty, "built_at": now_iso(),
             "round": {"name": name, "title": title, "paths": round_paths}, "concepts": concepts}
-    if nested:
-        print(f"NOTICE nested bundles left out: {', '.join(nested)}")
+    if notice:
+        print(notice)
+    if sc.nested:
+        print(f"NOTICE nested bundles left out: {', '.join(sc.nested)}")
+    if bad:
+        print(f"NOTICE frontmatter that cannot be parsed (BAD_YAML), left out: {', '.join(bad)}")
     print(write(out / "index.html", TEMPLATE.read_bytes(), args.force))
     print(write(out / "concepts.json", (json.dumps(data, ensure_ascii=False, indent=1) + "\n").encode(), args.force))
     print(f"{len(concepts)} concepts, commit {commit or '(not in git)'}{' (dirty)' if dirty else ''}, "
@@ -267,8 +291,8 @@ def test_builds_the_page_and_one_concept_per_file_lint_reads(tmp_path, capsys):
     out = tmp_path / "viewer"
     assert _run(b, out) == 0
     assert (out / "index.html").read_bytes() == TEMPLATE.read_bytes()
-    expected = sorted("/" + d.rel for d in scan_bundle(b).docs
-                      if d.path.name not in ("index.md", "log.md") and d.rel != "conflict-log.md")
+    expected = sorted("/" + d.rel for d in scan_bundle(b).docs if d.path.name not in ("index.md", "log.md")
+                      and concept_type(None, d.frontmatter) != "Conflict Log")
     assert [c["path"] for c in _data(out)["concepts"]] == expected
     c = _by_path(out)
     assert (c["/project.md"]["layer"], c["/base/terms/a.md"]["layer"], c["/fragments/2026-11-01-m.md"]["layer"]) == (
@@ -303,6 +327,61 @@ def test_the_default_round_is_every_base_draft_not_verified_at_its_version(tmp_p
     assert _run(b, tmp_path / "x", "--round", "r1", "--paths", "/nope.md") == 2
     assert _run(b, tmp_path / "x", "--paths", "/project.md") == 2
     assert not (tmp_path / "x").exists()
+
+
+def _base_term(b: Path, name: str, generated_at: str, verified: str) -> None:
+    (b / "base" / "terms" / f"{name}.md").write_text(
+        f"---\ntype: Term\ntitle: {name}\ndescription: d\nstatus: draft\n"
+        f"generated: {{ by: human:a, at: {generated_at} }}\nverified: {verified}\n---\n\nx\n", encoding="utf-8")
+
+
+def test_the_default_round_reads_verification_times_as_lint_does(tmp_path, capsys):
+    b = _bundle(tmp_path)
+    (b / "base" / "terms" / "b.md").unlink()
+    one = "[{ by: human:a, at: 2026-11-01T10:30:00Z }]"
+    _base_term(b, "before", "2026-11-01T12:00:00+02:00", one)
+    _base_term(b, "after", "2026-11-01T09:00:00-03:00", one)
+    _base_term(b, "machine", "2026-11-01T12:00:00Z",
+               "[{ by: human:a, at: 2026-11-01T11:00:00Z }, { by: okf-builder/m, at: 2026-11-01T13:00:00Z }]")
+    _base_term(b, "early", "2026-11-01T12:00:00Z",
+               "[{ by: human:a, at: 2026-11-01T13:00:00Z }, { by: human:c, at: 2026-11-01T09:00:00Z }]")
+    assert _run(b, tmp_path / "v") == 0
+    assert _data(tmp_path / "v")["round"]["paths"] == [
+        "/base/terms/a.md", "/base/terms/after.md", "/base/terms/machine.md"]
+
+
+def test_an_aliased_bundle_whose_profile_has_a_finding_still_resolves_its_aliases(tmp_path, capsys):
+    b = _bundle(tmp_path)
+    (b / "base" / "profile.md").write_text(
+        "---\ntype: Domain Profile\ntitle: Profile\ndescription: d\n"
+        "aliases:\n  fields: { tipo: type }\n  types: { Termino: Term, Registro: Conflict Log }\n"
+        "types:\n  Rara: { extends: Nope, description: d }\n"
+        "generated: { by: human:a, at: 2026-11-01T10:00:00Z }\n---\n\n# What this bundle holds\n\nx\n",
+        encoding="utf-8")
+    (b / "conflict-log.md").write_text(
+        "---\ntipo: Registro\ntitle: Conflicts\ndescription: d\nstatus: draft\n"
+        "generated: { by: human:a, at: 2026-11-01T10:00:00Z }\n---\n\nx\n", encoding="utf-8")
+    (b / "base" / "terms" / "c.md").write_text(
+        "---\ntipo: Termino\ntitle: C\ndescription: d\nstatus: draft\n"
+        "generated: { by: human:a, at: 2026-11-01T10:00:00Z }\n---\n\nx\n", encoding="utf-8")
+    sc = scan_bundle(b)
+    assert profile_structure(b, sc.docs)[1], "the planted profile has no finding"
+    capsys.readouterr()
+    assert _run(b, tmp_path / "v") == 0
+    out = capsys.readouterr().out
+    assert any(x.startswith("NOTICE the Domain Profile in force has ") for x in out.splitlines())
+    c = _by_path(tmp_path / "v")
+    assert c["/base/terms/c.md"]["type"] == "Term" and "/conflict-log.md" not in c
+
+
+def test_a_frontmatter_that_cannot_be_parsed_is_named_on_a_notice(tmp_path, capsys):
+    b = _bundle(tmp_path)
+    (b / "base" / "terms" / "broken.md").write_text("---\ntitle: [unclosed\n---\n\nx\n", encoding="utf-8")
+    capsys.readouterr()
+    assert _run(b, tmp_path / "v") == 0
+    assert "NOTICE frontmatter that cannot be parsed (BAD_YAML), left out: base/terms/broken.md" in (
+        capsys.readouterr().out.splitlines())
+    assert "/base/terms/broken.md" not in _by_path(tmp_path / "v")
 
 
 def test_ignored_paths_and_nested_bundles_are_left_out(tmp_path, capsys):

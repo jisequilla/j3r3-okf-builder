@@ -387,17 +387,18 @@ def obsidian_setup(tmp: Path) -> None:
     print("knowledge/ viewer setup matches okf_obsidian.py")
 
 
+def _viewer_file(name: str) -> bool:
+    return name.endswith("okf_viewer.py") or "okf-standard/viewer/" in name
+
+
 def viewer_files(root: Path) -> list[str]:
     """The Knowledge Viewer's files under root, inside its zips too: okf_viewer.py and okf-standard/viewer/."""
     import zipfile
 
-    def hit(name: str) -> bool:
-        return name.endswith("okf_viewer.py") or "okf-standard/viewer/" in name
-
-    found = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and hit(p.relative_to(root).as_posix())]
+    found = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and _viewer_file(p.relative_to(root).as_posix())]
     for z in root.rglob("*.zip"):
         with zipfile.ZipFile(z) as zf:
-            found += [f"{z.relative_to(root).as_posix()}:{n}" for n in zf.namelist() if hit(n)]
+            found += [f"{z.relative_to(root).as_posix()}:{n}" for n in zf.namelist() if _viewer_file(n)]
     return sorted(found)
 
 
@@ -409,6 +410,8 @@ def viewer(tmp: Path) -> None:
 
     sys.path.insert(0, str(ROOT / S))
     from okf_common import scan_bundle
+    from okf_lint import find_tree, profile_structure, Report
+    from okf_profile import concept_type, resolve_aliases
 
     head = run("git", "rev-parse", "HEAD").strip()
     template = ROOT / REF / "viewer" / "index.html"
@@ -418,8 +421,12 @@ def viewer(tmp: Path) -> None:
         expect((out / "index.html").read_bytes() == template.read_bytes(), "the built index.html differs from the template")
         data = json.loads((out / "concepts.json").read_text(encoding="utf-8"))
         built = [c["path"] for c in data["concepts"]]
-        docs = sorted("/" + d.rel for d in scan_bundle(ROOT / bundle).docs
-                      if d.path.name not in ("index.md", "log.md") and d.has_fm_block and d.rel != "conflict-log.md")
+        sc = scan_bundle(ROOT / bundle)
+        tree = find_tree(ROOT / bundle, Report())
+        prof = profile_structure(ROOT / bundle, sc.docs, tree.domain if tree is not None else None)[0]
+        docs = sorted("/" + d.rel for d in sc.docs
+                      if d.path.name not in ("index.md", "log.md") and isinstance(d.frontmatter, dict) and d.has_fm_block
+                      and concept_type(None, resolve_aliases(prof, d.frontmatter)) != "Conflict Log")
         expect(built == docs, f"{bundle}: concepts.json lists {len(built)} concepts, lint reads {len(docs)}")
         dirty = bool(run("git", "status", "--porcelain", "--", bundle).strip())
         expect((data["commit"], data["dirty"]) == (head, dirty),
@@ -436,7 +443,7 @@ def viewer(tmp: Path) -> None:
     for pkg in (ROOT / "dist" / "m365", ROOT / "dist" / "copilot", ROOT / "dist" / "okf-copilot-pack.zip"):
         if pkg.is_file():
             with zipfile.ZipFile(pkg) as zf:
-                leaks = [n for n in zf.namelist() if n.endswith("okf_viewer.py") or "okf-standard/viewer/" in n]
+                leaks = [n for n in zf.namelist() if _viewer_file(n)]
         else:
             leaks = viewer_files(pkg)
         expect(not leaks, f"the Knowledge Viewer reaches {pkg.relative_to(ROOT)}: {leaks}")

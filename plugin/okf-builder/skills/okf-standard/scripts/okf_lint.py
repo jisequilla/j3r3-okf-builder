@@ -753,18 +753,29 @@ def check_section_empty(doc: Doc, t: str, rep: Report) -> None:
                     "or holds only placeholder text: fill it, or remove it until its content is known", line=n)
 
 
-def check_verified_stale(doc: Doc, fm: dict, rep: Report) -> None:
-    """generated.at later than the last (latest) verification by a human: actor. Machine and process verifications,
-    and a v0.1 concept (timestamp, no generated), are not read."""
-    gen = fm.get("generated")
-    at = to_dt(gen.get("at")) if isinstance(gen, dict) else None
+def last_human_verification(fm: dict):
+    """The latest time a human: actor verified the concept (verified read as a list, by time, not by position), or
+    None. Machine and process verifications are not read."""
     humans = [to_dt(v.get("at")) for v in as_list(fm.get("verified"))
               if isinstance(v, dict) and str(v.get("by") or "").startswith("human:")]
     humans = [h for h in humans if h is not None]
-    if at is None or not humans:
-        return
-    last = max(humans)
-    if at > last:
+    return max(humans) if humans else None
+
+
+def verified_stale(fm: dict) -> tuple | None:
+    """(generated.at, the last human verification) when generated.at is later than it, else None: VERIFIED_STALE's
+    test. A concept no human verified, or with no generated.at (v0.1: timestamp, no generated), is not stale."""
+    gen = fm.get("generated")
+    at = to_dt(gen.get("at")) if isinstance(gen, dict) else None
+    last = last_human_verification(fm)
+    return (at, last) if at is not None and last is not None and at > last else None
+
+
+def check_verified_stale(doc: Doc, fm: dict, rep: Report) -> None:
+    """generated.at later than the last (latest) verification by a human: actor (verified_stale)."""
+    stale = verified_stale(fm)
+    if stale:
+        at, last = stale
         rep.add("WARN", "VERIFIED_STALE", doc.rel, f"edited after a person verified it: generated.at {at.isoformat()} "
                 f"is later than the last human verification, {last.isoformat()}; ask for a new verification (okf-review)")
 
