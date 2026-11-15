@@ -89,6 +89,16 @@ def rewrite(text: str, skills_dir: str) -> str:
     return text.replace("<skills>/", f"{skills_dir}/").replace("${CLAUDE_PLUGIN_ROOT}/skills", skills_dir)
 
 
+# The Knowledge Viewer's script and page are for a Claude artifact, so this pack leaves them out (ADR-0042 decision 6)
+VIEWER = ("okf-standard/scripts/okf_viewer.py", "okf-standard/viewer")
+
+
+def not_shipped(directory: str, names: list[str]) -> set[str]:
+    """copytree's ignore: __pycache__, and the Knowledge Viewer's files under a skill."""
+    here = Path(directory).resolve().relative_to((PLUGIN / "skills").resolve()).as_posix()
+    return {n for n in names if n == "__pycache__" or f"{here}/{n}" in VIEWER}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="dist/copilot", help="output directory (relative to the repo)")
@@ -109,7 +119,7 @@ def main(argv=None) -> int:
         if not (skill / "SKILL.md").exists():
             continue
         target = dst_skills / skill.name
-        shutil.copytree(skill, target, ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(skill, target, ignore=not_shipped)
         for md in target.rglob("*.md"):
             md.write_text(rewrite(md.read_text(encoding="utf-8"), skills_dir), encoding="utf-8")
         n += 1
