@@ -19,7 +19,8 @@ Usage:
 - The views read the bundle's Domain Profile in force (knowledge/3.0: the built-in one, the profiles it extends and
   base/profile.md). A view column or filter on a field the profile gives local names to (field aliases, value aliases
   whose `to` sets it) reads the formula okf_<field>: the declared field, else each local name in sorted order, each
-  value alias written as a test (`==`, strict, unlike lint's string match); a value alias whose `from` holds the field
+  value alias written as a test (`==`, strict, unlike lint's string match) of its `from` as resolved at load, each
+  key read through its local names (SDR-0027); a value alias whose `from` holds the field
   itself is tested before it, as lint replaces it. Decisions takes every type that is a Decision: Decision, the
   types that extend it (Architecture Decision, a bundle's local decision types) and the type aliases of each; By
   type and the type columns read okf_type, which maps each type alias to its declared type. generated.by and
@@ -178,8 +179,20 @@ def _chain(steps: list[tuple[str, str]], last: str = '""') -> str:
     return out
 
 
-def _test(frm: dict) -> str:
-    return " && ".join(f"{_note(k)} == {_lit(v)}" for k, v in frm.items())
+def _read(r: Resolved, key: str) -> str:
+    """The field key as resolve_aliases reads it before the value aliases: the declared key, else each local name in
+    sorted order; under the type key, a local type name read as the type it stands for."""
+    local = sorted(n for n, a in r.aliases["fields"].items() if a["to"] == key)
+    expr = _chain([(_note(x), _note(x)) for x in (key, *local)]) if local else _note(key)
+    if key == "type" and r.aliases["types"]:
+        expr = _chain([(f"{expr} == {_js(n)}", _js(a["to"])) for n, a in sorted(r.aliases["types"].items())], last=expr)
+    return expr
+
+
+def _test(r: Resolved, frm: dict) -> str:
+    """A value alias's `from`, resolved at load (SDR-0027), as a test of the note: each key read through its local
+    names (_read)."""
+    return " && ".join(f"{_read(r, k)} == {_lit(v)}" for k, v in frm.items())
 
 
 def view_names(r: Resolved | None) -> tuple[dict, dict, str, list[str]]:
@@ -193,8 +206,8 @@ def view_names(r: Resolved | None) -> tuple[dict, dict, str, list[str]]:
         values = [va for va in r.aliases["values"] if f in va["to"]]
         if not local and not values:
             continue
-        own = [(_test(va["from"]), _lit(va["to"][f])) for va in values if f in va["from"]]
-        rest = [(_test(va["from"]), _lit(va["to"][f])) for va in values if f not in va["from"]]
+        own = [(_test(r, va["from"]), _lit(va["to"][f])) for va in values if f in va["from"]]
+        rest = [(_test(r, va["from"]), _lit(va["to"][f])) for va in values if f not in va["from"]]
         formulas[f"okf_{f}"] = _chain(own + [(x, x) for x in (f, *map(_note, local))] + rest)
     as_written = formulas.get("okf_type", "type")
     type_aliases = sorted(r.aliases["types"].items())
@@ -493,6 +506,18 @@ def test_value_aliases_map_to_the_declared_values(tmp_path, capsys):
     base2, _ = _base_of(b2, capsys)
     assert base2["formulas"]["okf_decision_status"] == (
         'if(note["decision_status"] == "aceptado", "accepted", if(decision_status, decision_status, ""))')
+
+
+def test_a_value_alias_from_is_tested_through_the_local_names_of_its_keys(tmp_path, capsys):
+    """SDR-0027: a from written in local names is resolved at load, and the note is tested as lint reads it."""
+    b = _with_profile(tmp_path, "aliases:\n  types: { Norma: Architecture Decision }\n  fields: { tipo: type, fase: stage }\n"
+                                "  values: [{ from: { tipo: Norma, fase: 2 }, to: { decision_status: accepted } }]\n")
+    base, _ = _base_of(b, capsys)
+    as_written = 'if(note["type"], note["type"], if(note["tipo"], note["tipo"], ""))'
+    read_type = f'if({as_written} == "Norma", "Architecture Decision", {as_written})'
+    assert base["formulas"]["okf_decision_status"] == (
+        f'if(decision_status, decision_status, if({read_type} == "Architecture Decision" && '
+        'if(note["stage"], note["stage"], if(note["fase"], note["fase"], "")) == 2, "accepted", ""))')
 
 
 def test_type_aliases_and_local_subtypes_join_decisions_and_by_type(tmp_path, capsys):
