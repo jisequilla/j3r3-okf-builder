@@ -65,6 +65,7 @@ from okf_common import (  # noqa: E402
     TABLE_SEP_RE,
     Doc,
     as_list,
+    closed_domain_bundle,
     extract_links,
     is_iso,
     now_iso,
@@ -186,8 +187,10 @@ def blockers(inst: Bundle, parent: Bundle | None) -> list[dict]:
     if inst.fm.get("state") == "closed":
         out.append(b("ALREADY_CLOSED", "index.md", f"it is already closed (closed_at {inst.fm.get('closed_at')})"))
     if parent.fm.get("state") == "closed":
-        out.append(b("PARENT_CLOSED", os.path.relpath(parent.root / "index.md", inst.root),
-                     "its parent is closed: a closed bundle is never edited, so nothing can be distilled into it"))
+        why = ("its parent is a domain bundle that declares state: closed; only an operational bundle has a state "
+               "(standard §2.2): remove it from the parent's index.md first" if closed_domain_bundle(parent.fm) else
+               "its parent is closed: a closed bundle is never edited, so nothing can be distilled into it")
+        out.append(b("PARENT_CLOSED", os.path.relpath(parent.root / "index.md", inst.root), why))
     for rel in inst.nested:
         cfm = root_frontmatter(inst.root / rel.rstrip("/"))
         if kind_of(cfm, None) is not None and cfm.get("state") != "closed":
@@ -666,10 +669,27 @@ def test_already_closed(tmp_path, capsys):
     assert _blockers(capsys, inst) == [{"code": "ALREADY_CLOSED", "path": "index.md"}]
 
 
-def test_parent_closed(tmp_path, capsys):
+def test_a_domain_parent_that_declares_state_closed_names_the_key_to_remove(tmp_path, capsys):
     k = _fixture(tmp_path)
     _edit(k / "index.md", 'okf_profile: "knowledge/3.0"\n', 'okf_profile: "knowledge/3.0"\nstate: closed\n')
-    assert _blockers(capsys, k / _REQ) == [{"code": "PARENT_CLOSED", "path": "../../index.md"}]
+    code, rep = _report(capsys, k / _REQ)
+    assert (code, rep["blockers"]) == (1, [{
+        "code": "PARENT_CLOSED", "path": "../../index.md",
+        "message": "its parent is a domain bundle that declares state: closed; only an operational bundle has a state "
+                   "(standard §2.2): remove it from the parent's index.md first"}])
+
+
+def test_a_closed_operational_parent_is_frozen(tmp_path, capsys):
+    inst = _fixture(tmp_path) / _REQ
+    _edit(inst / "index.md", "state: open\n", "state: closed\nclosed_at: 2026-11-08T10:00:00Z\n")
+    (inst / "requests" / "req-0043").mkdir(parents=True)
+    (inst / "requests" / "req-0043" / "index.md").write_text(
+        '---\nokf_version: "0.2"\nokf_profile: "knowledge/3.0"\nkind: Request\nstate: open\nparent: ../..\n---\n',
+        encoding="utf-8")
+    code, rep = _report(capsys, inst / "requests" / "req-0043")
+    assert (code, rep["blockers"]) == (1, [{
+        "code": "PARENT_CLOSED", "path": "../../index.md",
+        "message": "its parent is closed: a closed bundle is never edited, so nothing can be distilled into it"}])
 
 
 def test_child_open(tmp_path, capsys):

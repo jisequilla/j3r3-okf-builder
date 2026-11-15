@@ -52,6 +52,7 @@ from okf_common import (  # noqa: E402
     PROJECTIONS_DIR,
     TABLE_SEP_RE,
     body_sections,
+    closed_domain_bundle,
     content_lines,
     declared_profile,
     now_iso,
@@ -182,7 +183,7 @@ def instance_target(holder: Path, kind: str, ident: str) -> tuple[Path, str]:
         raise Refusal(f"--in {holder} is not a bundle (no index.md declaring okf_version)")
     domain, fm = holder, hfm
     for _ in range(32):
-        if fm.get("state") == "closed" and fm.get("kind") in (None, "Domain Bundle"):
+        if closed_domain_bundle(fm):
             where = "is" if domain == holder else f"is inside {domain},"
             raise Refusal(f"--in {holder} {where} a domain bundle that declares state: closed; only an operational "
                           "bundle has a state (standard §2.2): remove it from its index.md first")
