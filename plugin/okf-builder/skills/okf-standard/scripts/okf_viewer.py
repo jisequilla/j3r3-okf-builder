@@ -42,8 +42,9 @@ not verified (SDR-0022 decision 3). It takes none of --out, --round, --round-tit
   each, as the platform's database export writes them. An answer: {path, commit, generated_at, choice (confirmed |
   not_confirmed), answered_at, by, page_built_at, round, comment?, commented_at?}, plus the store's `id` and
   `version` when the list carries them; in a directory, `id` defaults to the file name without `.json`.
-- One row per answer, newest first by answered_at; an answer whose answered_at is not later than --since is not
-  listed. The path checks come first, then the version, then the choice:
+- One row per answer, newest first by answered_at; an answer is listed when its answered_at or its commented_at is
+  later than --since (the page keeps answered_at when a comment is added later). The path checks come first, then
+  the version, then the choice:
   UNKNOWN         the path names no concept of the bundle (an index.md, a log.md, a file lint leaves out, none);
   NOT_VERIFIABLE  a fragment, the Conflict Log or a concept in status deprecated;
   STALE           generated_at is not the concept's current generated.at, whatever the choice: ask again;
@@ -275,12 +276,14 @@ def classify(rel: str | None, fm: dict | None, answer: dict, prof: Resolved | No
 
 
 def check_answers(sc: Scan, prof: Resolved | None, answers: list[tuple[dict, dict]], since) -> list[dict]:
-    """One row per answer later than since (every answer when None), newest first by answered_at."""
+    """One row per answer whose answered_at or commented_at is later than since (every answer when None), newest
+    first by answered_at."""
     docs = {"/" + d.rel: d for d in sc.docs
             if d.path.name not in ("index.md", "log.md") and d.has_fm_block and isinstance(d.frontmatter, dict)}
     rows = []
     for a, ident in answers:
-        if since is not None and to_dt(a["answered_at"]) <= since:
+        if since is not None and not any(t is not None and t > since
+                                         for t in (to_dt(a["answered_at"]), to_dt(a.get("commented_at")))):
             continue
         path = "/" + a["path"].lstrip("/")
         d = docs.get(path)
@@ -687,6 +690,20 @@ def test_answers_give_one_row_of_each_kind_newest_first_and_leave_the_bundle_as_
     code, rows, _ = _answers_run(capsys, b, answers, tmp_path)
     assert len(rows) == 8 and rows[-1]["answered_at"] == "2026-10-31T10:00:00Z"
     assert _tree(b) == before
+
+
+def test_since_lists_an_older_answer_whose_comment_came_after_it(tmp_path, capsys):
+    b = _bundle(tmp_path)
+    answers = [
+        _answer("/base/terms/a.md", GEN, "2026-10-30T10:00:00Z", "not_confirmed", comment="Name the *owner*.\nTwo lines",
+                commented_at="2026-11-03T10:00:00+01:00"),
+        _answer("/base/terms/b.md", GEN, "2026-10-30T10:00:00Z", "not_confirmed", comment="old",
+                commented_at="2026-11-01T01:00:00+01:00"),
+    ]
+    code, rows, _ = _answers_run(capsys, b, answers, tmp_path, "--since", "2026-11-01T00:00:00Z")
+    assert code == 0
+    assert [(r["row"], r["path"], r["comment"]) for r in rows] == [
+        ("NOT_CONFIRMED", "/base/terms/a.md", "Name the *owner*.\nTwo lines")]
 
 
 def test_the_conflict_log_a_deprecated_concept_and_an_index_are_never_applied(tmp_path, capsys):
