@@ -38,9 +38,9 @@ m365:
 obsidian *args:
     uv run -q {{scripts}}/okf_obsidian.py knowledge {{args}}
 
-# This repo's Knowledge Viewer page and data in dist/viewer/ (ADR-0042); pass --force to rewrite them
+# This repo's Knowledge Viewer page and data in dist/viewer/ (ADR-0042), rewritten on every run: a build output
 viewer *args:
-    uv run -q {{scripts}}/okf_viewer.py knowledge --out dist/viewer {{args}}
+    uv run -q {{scripts}}/okf_viewer.py knowledge --out dist/viewer --force {{args}}
 
 # Root copies, every check, then every platform package
 all: copies test plugin copilot m365

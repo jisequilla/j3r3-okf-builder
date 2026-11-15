@@ -11,7 +11,7 @@ A Claude Code / Cowork plugin that manages a project's knowledge as an **OKF bun
 | `okf-capture` | Adds a concept (decision, ADR, runbook, system, API, table, metric, term, policy…) with its template, log and index. |
 | `okf-fragment` | Captures a meeting, transcript, chat or slide deck as a knowledge fragment, recorded as it happened. |
 | `okf-distill` | Proposes what one fragment changes in the bundle (additions, confirmations, updates, refutations, conflicts) and applies only what the person approves; also closes an operational instance into its parent through `okf_close.py` (not in the Microsoft 365 package). |
-| `okf-review` | The double check: changes since the last review, open conflicts and unverified drafts; records the person's decision on each conflict. |
+| `okf-review` | The double check: changes since the last review, open conflicts and unverified drafts; records the person's decision on each conflict, and each person's verification from a structured question or from a round on the Knowledge Viewer, a review page built and checked with `okf_viewer.py` (not in the Microsoft 365 package or the Copilot pack). |
 | `okf-lint` | Validates conformance with the spec and the profile. |
 | `okf-index` | Regenerates the `index.md` files from the frontmatter. |
 | `okf-ask` | Answers questions about the project by navigating the bundle and citing sources and trust level. |

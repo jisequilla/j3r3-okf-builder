@@ -93,10 +93,24 @@ def rewrite(text: str, skills_dir: str) -> str:
 VIEWER = ("okf-standard/scripts/okf_viewer.py", "okf-standard/viewer")
 
 
+# okf-review's review page is the Knowledge Viewer: the list item of step 11 that runs a round on it becomes a note, and
+# the build stops when a file of the pack names okf_viewer anywhere else
+VIEWER_RE = re.compile(r"^    - \*\*A review page private to the person\*\*.*?(?=^    - |^\d+\. |^#|\Z)", re.M | re.S)
+COPILOT_NO_VIEWER = ("    - **A review page private to the person**: the Knowledge Viewer, the review page this channel "
+                     "uses, is not available in this GitHub Copilot pack: the pack does not ship the script that builds "
+                     "and checks it. Record the person's verification through a structured question, the channel above, "
+                     "or run the round from Claude Code.\n")
+
+
 def not_shipped(directory: str, names: list[str]) -> set[str]:
     """copytree's ignore: __pycache__, and the Knowledge Viewer's files under a skill."""
     here = Path(directory).resolve().relative_to((PLUGIN / "skills").resolve()).as_posix()
     return {n for n in names if n == "__pycache__" or f"{here}/{n}" in VIEWER}
+
+
+def viewer_named(root: Path) -> list[str]:
+    """The files under root that name okf_viewer."""
+    return sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and b"okf_viewer" in p.read_bytes())
 
 
 def main(argv=None) -> int:
@@ -121,7 +135,10 @@ def main(argv=None) -> int:
         target = dst_skills / skill.name
         shutil.copytree(skill, target, ignore=not_shipped)
         for md in target.rglob("*.md"):
-            md.write_text(rewrite(md.read_text(encoding="utf-8"), skills_dir), encoding="utf-8")
+            text = md.read_text(encoding="utf-8")
+            if skill.name == "okf-review":
+                text = VIEWER_RE.sub(COPILOT_NO_VIEWER, text)
+            md.write_text(rewrite(text, skills_dir), encoding="utf-8")
         n += 1
     # license in the skill that ships the Google spec
     lic = dst_skills / "okf-standard" / "references" / "OKF-SPEC-LICENSE.md"
@@ -150,6 +167,10 @@ and PyYAML: `uv run` installs it, or plain `python3` works where it is installed
 
 Generated from the okf-builder plugin with `build/export_copilot.py`; do not edit here: edit the plugin and export again.
 """, encoding="utf-8")
+    named = viewer_named(out)
+    if named:
+        raise SystemExit(f"the Copilot pack names okf_viewer, which it does not ship, outside okf-review step 11's "
+                         f"review page item, the one part it replaces: {', '.join(named)}")
 
     print(f"{n} skills exported to {out} ({skills_dir})")
     if args.zip:
