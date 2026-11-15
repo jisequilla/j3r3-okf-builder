@@ -538,8 +538,12 @@ def test_the_dependency_rule_is_proj_dependency(tmp_path):
         "del-can-del": p("deliverable", "[/projections/can, /projections/del]"),
         "tra-all": p("transient", "[/projections/can, /projections/del, /projections/tra]"),
     }, files={"projections/tra/content.md": "x\n"})
-    assert sorted(_codes(check(k))) == [("PROJ_DEPENDENCY", "can-del"), ("PROJ_DEPENDENCY", "can-tra"),
-                                        ("PROJ_DEPENDENCY", "del-tra")]
+    r = check(k)
+    assert sorted(_codes(r)) == [("PROJ_DEPENDENCY", "can-del"), ("PROJ_DEPENDENCY", "can-tra"),
+                                 ("PROJ_DEPENDENCY", "del-tra")]
+    [msg] = [f["message"] for f in r["findings"] if f["slug"] == "del-tra"]
+    assert msg == "refs[0] /projections/tra: a deliverable projection cannot reference the transient projection 'tra' " \
+                  "(SDR-0015 decision 3)"
 
 
 def test_composed_drift_is_a_proj_drift_warning_naming_the_ref(tmp_path, capsys):

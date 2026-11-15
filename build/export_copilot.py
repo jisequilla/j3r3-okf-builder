@@ -27,7 +27,7 @@ PLUGIN = ROOT / "plugin" / "okf-builder"
 
 AGENT_MD = """---
 name: okf
-description: OKF (Open Knowledge Format) knowledge manager for this repository. Use it to initialize knowledge/, capture ADRs/runbooks/systems, capture meetings as fragments and distill them, run the double check, validate, regenerate indexes, migrate between OKF 0.1 and 0.2, check and refresh knowledge projections, set up the bundle for Obsidian, and answer questions about the project from knowledge/.
+description: OKF (Open Knowledge Format) knowledge manager for this repository. Use it to initialize knowledge/, capture decisions/runbooks/systems, capture meetings as fragments and distill them, run the double check, validate, regenerate indexes, migrate between OKF 0.1 and 0.2, check and refresh knowledge projections, set up the bundle for Obsidian, and answer questions about the project from knowledge/.
 tools: ["read", "edit", "search", "shell"]
 ---
 
@@ -64,7 +64,7 @@ Skills available in `{skills_dir}/` (Agent Skills standard, also valid for Claud
 |---|---|
 | okf-standard | OKF v0.1/v0.2 standard, knowledge/3.0 profile, templates and scripts |
 | okf-init | Create `knowledge/`; set it up to read in Obsidian |
-| okf-capture | Add an ADR, runbook, system, API, table, metric, term, policy |
+| okf-capture | Add a decision, ADR, runbook, system, API, table, metric, term, policy |
 | okf-fragment | Keep a meeting, transcript or chat as a fragment in `fragments/` |
 | okf-distill | Distill a fragment into concepts; nothing is applied before the person approves |
 | okf-review | Double check: changes, open conflicts, concepts awaiting human review |

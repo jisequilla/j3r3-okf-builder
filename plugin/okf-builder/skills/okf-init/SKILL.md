@@ -45,7 +45,7 @@ No `.okfignore` is created; when `knowledge/` holds paths that are not part of t
    ```
 6. Run `okf-lint` (`uv run "<skills>/okf-standard/scripts/okf_lint.py" <root>/knowledge`) and show the result. `INDEX_EMPTY` warnings in empty directories are expected.
 7. Offer the Obsidian viewer setup (ADR-0032): `uv run "<skills>/okf-standard/scripts/okf_obsidian.py" <root>/knowledge` writes `.obsidian/app.json` (Markdown links in relative form, updated on rename), `.obsidian/.gitignore` (git keeps only `app.json` and itself, not each reader's window state) and `knowledge.base` (Bases views: Decisions, Awaiting human review, By type, Going stale over `base/`, Fragments over `fragments/`, reading the fields, values and types the bundle's Domain Profile names through aliases and every type that is a `Decision`, the bundle's local decision types included), so `knowledge/` opens in Obsidian as a vault whose bundle-absolute links resolve. Run it only if the person accepts. It works on an existing bundle too: when the person asks for it on one, run this step alone and skip the others. It never overwrites an existing file without `--force`; show its `created`, `rewritten` and `skipped (exists)` lines.
-8. Summarize in 3–5 lines what was created and suggest the first capture (usually `okf-capture` with an ADR or the context architecture view).
+8. Summarize in 3–5 lines what was created and suggest the first capture (usually `okf-capture` with a decision or the context architecture view).
 
 ## Open a unit of work
 

@@ -76,7 +76,7 @@ from okf_common import (  # noqa: E402
 )
 from okf_lint import Report, _is_fragment, find_tree, kind_of, profile_structure, read_ledger  # noqa: E402
 from okf_migrate import blocks_to_raw, fm_blocks, get_block  # noqa: E402
-from okf_profile import Resolved, concept_type, resolve_aliases  # noqa: E402
+from okf_profile import Resolved, concept_type, is_a, resolve_aliases  # noqa: E402
 
 OPEN_CONFLICT = ("open", "proposed")
 CLOSING_KINDS = ("promote", "conflict", "stays")
@@ -214,11 +214,17 @@ def concepts(inst: Bundle, parent: Bundle | None) -> list[dict]:
     return out
 
 
+def _is_question(inst: Bundle, fm: dict) -> bool:
+    """The concept, its aliases resolved, is an Open Question or a local type that extends it."""
+    t = fm.get("type")
+    return isinstance(t, str) and is_a(inst.prof, t, "Open Question")
+
+
 def open_questions(inst: Bundle) -> list[dict]:
     out = []
     for d in sorted(inst.docs, key=lambda x: x.rel):
         fm = inst.fm_of(d)
-        if fm.get("type") == "Open Question" and fm.get("question_status") == "open":
+        if _is_question(inst, fm) and fm.get("question_status") == "open":
             out.append({"path": "/" + d.rel, "owner": fm.get("owner")})
     return out
 
@@ -891,6 +897,14 @@ def test_a_parent_row_not_open_fails_check_4(tmp_path, capsys):
         _edit(k / "conflict-log.md", "| sources disagree | | open | — |", "| sources disagree | | resolved | human:ana |")
     assert _failures(tmp_path, capsys, plant) == [
         (4, "C-001", "carried to C-002, which is no open row of the parent's Conflict Log")]
+
+
+def test_an_open_question_of_a_local_type_that_extends_it_is_reported(tmp_path, capsys):
+    k = _fixture(tmp_path)
+    _edit(k / "base/profile.md", "kinds:\n", "types:\n  Duda: { extends: Open Question, description: A doubt }\nkinds:\n")
+    _edit(k / _REQ / _QUESTION, "type: Open Question\n", "type: Duda\n")
+    code, rep = _report(capsys, k / _REQ)
+    assert code == 0 and rep["questions"] == [{"path": "/" + _QUESTION, "owner": "human:maria"}]
 
 
 def test_an_open_question_without_carry_fails_check_4(tmp_path, capsys):

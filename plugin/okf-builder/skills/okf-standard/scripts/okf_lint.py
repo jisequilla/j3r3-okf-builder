@@ -1492,8 +1492,8 @@ def check_bundle_kind(bundle: Path, fm: dict, prof: Resolved, tree: Tree | None,
                 rep.error("BAD_CLOSED_AT", "index.md", "a closed bundle declares closed_at, ISO 8601 with an offset")
             elif not is_iso(closed_at):
                 rep.error("BAD_CLOSED_AT", "index.md", f"closed_at '{closed_at}' is not ISO 8601 with an offset")
-            questions = [d.rel for d in docs if (fm_q := resolve_aliases(prof, d.frontmatter or {})).get("type")
-                         == "Open Question" and fm_q.get("question_status") == "open"]
+            questions = [d.rel for d in docs if isinstance(t_q := (fm_q := resolve_aliases(prof, d.frontmatter or {}))
+                         .get("type"), str) and is_a(prof, t_q, "Open Question") and fm_q.get("question_status") == "open"]
             for q in questions:
                 rep.error("CLOSED_LOOSE_END", q, "a closed bundle holds an open question: answer or drop it, or carry it "
                           "up into the parent with a link back (standard §2.2)")
@@ -4230,6 +4230,7 @@ def test_a_changed_material_file_is_an_error_that_fails_lint_without_strict(tmp_
     assert (item["level"], item["code"], item["path"], item["layer"]) == (
         "ERROR", "FRAGMENT_MATERIAL_CHANGED", _FRAGMENT, "okf-profile")
     assert _MATERIAL_REL in item["message"] and _MATERIAL_SHA in item["message"]
+    assert "the record's source was altered after capture (SDR-0017); restore the file as it was captured" in item["message"]
     capsys.readouterr()
     assert main([str(k)]) == 1
     assert "FRAGMENT_MATERIAL_CHANGED" in capsys.readouterr().out
@@ -4627,6 +4628,9 @@ def test_an_open_question_in_a_closed_instance_is_read_through_the_aliases(tmp_p
     assert _rule16(rep) == [] and rep.items == [], rep.items
     rep = lint(_closed_with_question(tmp_path / "dropped", value, "abierta: false\n"))[0]
     assert _rule16(rep) == [] and rep.items == [], rep.items
+    sub = "types:\n  Duda: { extends: Open Question, description: A doubt }\naliases:\n  types: { Incertidumbre: Duda }\n"
+    for typ in ("Duda", "Incertidumbre"):  # a local type that extends Open Question, and an alias of it
+        assert _rule16(lint(_closed_with_question(tmp_path / typ, sub, "question_status: open\n", typ))[0]) == loose
 
 
 def test_a_domain_bundle_declares_no_state_parent_or_closed_at(tmp_path):

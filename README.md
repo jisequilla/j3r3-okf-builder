@@ -36,7 +36,7 @@ Every file belongs to one of four homes ([DEC-0003](knowledge/base/decisions/DEC
 | Product build | `justfile`, `build/`, `.github/workflows/`, `release-please-config.json` | Builds the packages and the root copies (`just copies`), and checks everything (`just test`, each check a named step of `build/checks.py`, and `just lint`); CI runs the checks on every pull request, and release-please proposes each release from the squash-merged pull request titles ([DEC-0005](knowledge/base/decisions/DEC-0005-release-please.md)). |
 | Product build | `build/` | Platform package exporters (Copilot, M365) and the M365 agent's configuration. |
 | Product build | `tests/`, `examples/` | Test fixtures, the Google fixtures and a conformant example bundle (`examples/knowledge/`). |
-| Knowledge | `knowledge/` | The project's own knowledge (a conformant OKF bundle with the ADRs behind every decision). |
+| Knowledge | `knowledge/` | The project's own knowledge (a conformant OKF bundle with a record behind every decision: about the standard, the plugin's architecture and how the repo works). |
 | Workspace | `.claude/`, `.agents/`, `.beads/`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | How agents operate in this repo: the skill links, the issue tracker and the context files. |
 
 ## Installing the plugin

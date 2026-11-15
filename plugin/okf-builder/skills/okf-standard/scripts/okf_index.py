@@ -8,9 +8,10 @@
 Usage:
     uv run okf_index.py [path/to/bundle] [--check] [--dir SUBDIR]
 
-- Groups concepts by `type` inside each directory, each under the declared name of the type it stands for: a
-  local type name, a local name of the type key and a value alias that gives the type (the aliases of the Domain
-  Profile in force) are read as that type. A type that extends another keeps its own section.
+- Groups concepts by `type` inside each directory, each under the heading of the type it stands for (the plural of
+  a standard type's name, `Architecture decisions`; a local type's declared name as written): a local type name,
+  a local name of the type key and a value alias that gives the type (the aliases of the Domain Profile in force)
+  are read as that type. A type that extends another keeps its own section.
 - Lists subdirectories with the first sentence of their own index.md, or their name.
 - A directory with no index.md yet is described by the built-in text of a layer or typed directory of the
   standard (fragments/, base/, base/<name>/), else by the description of the first type of the Domain Profile
@@ -35,7 +36,9 @@ Usage:
 - --dir SUBDIR: regenerates the index.md of SUBDIR and of every directory above it up to the
   bundle root, deepest first, so each parent reads its child's new first sentence and lists a
   directory that is new; no directory below SUBDIR and no other directory is written. With
-  --check it checks those same directories.
+  --check it checks those same directories. A SUBDIR that does not exist, or that holds nothing
+  to index (no Markdown file lint reads, no nested bundle: holds_content), exits 2 naming it and
+  writes nothing.
 - --check: writes nothing; exit 1 if any index.md would change.
 """
 from __future__ import annotations
@@ -378,6 +381,12 @@ def main(argv=None) -> int:
             print(f"ERROR: {_rel(bundle, d)}/ is not part of this bundle ({why}); okf-index does not write there.",
                   file=sys.stderr)
             return 2
+        if not d.is_dir():
+            print(f"ERROR: {_rel(bundle, d)}/ does not exist; nothing to index.", file=sys.stderr)
+            return 2
+        if not holds_content(bundle, sc, d):
+            print(f"ERROR: {_rel(bundle, d)}/ holds nothing to index; check the path.", file=sys.stderr)
+            return 2
         targets = dir_targets(bundle, sc, d)
     else:
         targets = index_targets(bundle)
@@ -624,13 +633,28 @@ def test_dir_regenerates_the_directories_above_it(tmp_path, capsys):
             in (k / "base/decisions/index.md").read_text(encoding="utf-8"))
     assert main([str(k), "--check"]) == 0
     assert [f for f in _lint_view(k)[0] if f[0] == "INDEX_STALE"] == []
-    # each parent reads its child's new first sentence: the child is written before the directory above it
+    # each parent reads its child's new first sentence (the order of the WROTE lines above shows the child is
+    # written before the directory above it)
     idx = adr.parent / "index.md"
     idx.write_text(idx.read_text(encoding="utf-8").replace("> A decision about how a system is built (ADR).", "> Our ADRs."),
                    encoding="utf-8")
     assert main([str(k), "--dir", "base/decisions/architecture"]) == 0
     assert "* [architecture](architecture/index.md) - Our ADRs.\n" in (k / "base/decisions/index.md").read_text(encoding="utf-8")
     assert main([str(k), "--check"]) == 0
+
+
+def test_dir_that_does_not_exist_or_holds_nothing_to_index_exits_2_naming_it_and_writes_nothing(tmp_path, capsys):
+    k = _init_without_architecture(tmp_path)
+    (k / "base" / "empty" / "sub").mkdir(parents=True)
+    before = _tree(k)
+    capsys.readouterr()
+    for rel, why in (("base/nope", "does not exist; nothing to index"),
+                     ("base/empty", "holds nothing to index; check the path")):
+        for extra in ([], ["--check"]):
+            assert main([str(k), "--dir", rel, *extra]) == 2
+            out = capsys.readouterr()
+            assert out.out == "" and out.err == f"ERROR: {rel}/ {why}.\n"
+    assert _tree(k) == before
 
 
 def test_dir_check_reports_a_directory_above_it(tmp_path, capsys):
@@ -786,9 +810,11 @@ def test_hidden_paths_and_what_lies_below_a_non_okf_directory_get_no_index(tmp_p
     assert lint_before == ([], ["base/x/vendor/ is not OKF: 1 Markdown file without OKF frontmatter and no index.md, "
                                 "skipped"])
     capsys.readouterr()
-    for extra in ([], ["--dir", "base/hid"], ["--dir", "base/x"]):
-        rc = main([str(k), *extra, "--check"])
-        assert (capsys.readouterr().out.splitlines(), rc) == (["0 index.md out of date"], 0), extra
+    assert main([str(k), "--check"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["0 index.md out of date"]
+    for d in ("base/hid", "base/x"):  # what they hold is hidden or not OKF: nothing to index
+        assert main([str(k), "--dir", d, "--check"]) == 2, d
+        assert capsys.readouterr().err == f"ERROR: {d}/ holds nothing to index; check the path.\n"
     before = _tree(k)
     for d, why in (("base/hid/.cache", "hidden"), ("base/x/vendor/deep", "inside the non-OKF directory base/x/vendor/"),
                    ("base/x/vendor", "not OKF")):
@@ -922,7 +948,7 @@ def test_lint_clean_after_index(tmp_path):
     assert _lint_view(k) == before
 
 
-# --- a section is headed by the declared name of the type its concepts stand for ---
+# --- a section is headed by the type its concepts stand for (plural_heading) ---
 _LOCAL_NAMES = (_STANDARD_DECISION + "aliases:\n  types: { Norma: Standard Decision }\n  fields: { tipo: type }\n"
                 "  values:\n    - { from: { clase: adr }, to: { type: Architecture Decision } }\n"
                 "    - { from: { clase: norma }, to: { type: Standard Decision } }\n")
