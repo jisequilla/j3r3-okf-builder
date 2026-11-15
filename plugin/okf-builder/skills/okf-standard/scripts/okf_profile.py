@@ -763,6 +763,43 @@ def _field_change(old: dict, new: dict) -> str:
     return (": " + "; ".join(parts)) if parts else ""
 
 
+def _resolved_side(r: Resolved, side: dict) -> tuple[dict, str | None]:
+    """The `from` or `to` of a value alias read through the field and type aliases of every layer (SDR-0027): a
+    local field name as the declared field, a local type name under the type key as the declared type; and what is
+    wrong when two of its keys name one field with different values."""
+    out: dict = {}
+    written: dict = {}
+    for k, v in side.items():
+        key = r.aliases["fields"][k]["to"] if k in r.aliases["fields"] else k
+        if key == "type":
+            v = canonical_type(r, v)
+        if key in out and not _same(out[key], v):
+            return out, f"'{written[key]}: {side[written[key]]}' and '{k}: {side[k]}' both name {key}, with different values"
+        out[key], written[key] = v, k
+    return out, None
+
+
+def _add_value_aliases(r: Resolved, value_aliases: list[tuple[dict, str]]) -> None:
+    """Add the value aliases of every layer, once the field and type aliases of all are known, with `from` and `to`
+    resolved (_resolved_side). A side that names one field twice with different values is PROFILE_INVALID; two
+    aliases whose resolved `from` is equal are PROFILE_DUPLICATE_ID."""
+    seen: dict = {}
+    for v, src in value_aliases:
+        written = json.dumps(v["from"], sort_keys=True, default=str, ensure_ascii=False)
+        (frm, bad_from), (to, bad_to) = _resolved_side(r, v["from"]), _resolved_side(r, v["to"])
+        if bad_from or bad_to:
+            r.add("PROFILE_INVALID", src, f"value alias {written}: its {'from' if bad_from else 'to'} names "
+                  f"{bad_from or bad_to}, so it can never hold")
+            continue
+        k = json.dumps(frm, sort_keys=True, default=str, ensure_ascii=False)
+        if k in seen:
+            r.add("PROFILE_DUPLICATE_ID", src, f"value alias {written} declared by {seen[k]} and by {src}"
+                  + (f", read as {k}" if k != written else ""))
+            continue
+        seen[k] = src
+        r.aliases["values"].append({**v, "from": frm, "to": to, "source": src})
+
+
 def _stamp(m: dict | None, src: str) -> dict:
     return {k: {**(v or {}), "source": src} for k, v in (m or {}).items()}
 
@@ -770,6 +807,7 @@ def _stamp(m: dict | None, src: str) -> dict:
 def _merge(r: Resolved, layers: list[Layer]) -> None:
     r.sources = [lay.source for lay in layers]
     # 1. own declarations, layer by layer: types, forbidden, fixed, rules, validators, questions, aliases
+    value_aliases: list[tuple[dict, str]] = []
     for lay in layers:
         d, src = lay.data, lay.source
         for tid, t in (d.get("types") or {}).items():
@@ -815,14 +853,8 @@ def _merge(r: Resolved, layers: list[Layer]) -> None:
                     r.add("PROFILE_DUPLICATE_ID", src, f"alias '{name}' declared by {cur['source']} and by {src}")
                     continue
                 r.aliases[kind][name] = {"to": target, "source": src}
-        seen = {json.dumps(v["from"], sort_keys=True, default=str): v["source"] for v in r.aliases["values"]}
-        for v in al.get("values") or []:
-            k = json.dumps(v["from"], sort_keys=True, default=str)
-            if k in seen:
-                r.add("PROFILE_DUPLICATE_ID", src, f"value alias {k} declared by {seen[k]} and by {src}")
-                continue
-            seen[k] = src
-            r.aliases["values"].append({**v, "source": src})
+        value_aliases += [(v, src) for v in al.get("values") or []]
+    _add_value_aliases(r, value_aliases)
     # the types each one extends; a local type re-declaring an inherited field
     for tid, t in r.types.items():
         ext = t.get("extends")
@@ -1165,8 +1197,9 @@ def resolve_aliases(r: Resolved, fm: dict) -> dict:
     """The frontmatter as the profile reads it (§4.1 What lint checks), in this order: a local field name becomes
     the declared field, then a local type name becomes the type it stands for, then a value alias whose `from`
     holds in full is replaced by its `to`. So a type written under a local name of the type key is resolved too,
-    and a value alias is matched against the declared names. A key the concept also carries under its declared
-    name keeps the concept's own value."""
+    and a value alias, its `from` and `to` resolved at load (SDR-0027), is matched against the declared names. The
+    alias removes each key of its `from` but the type, which it removes only when its `to` gives one. A key the
+    concept also carries under its declared name keeps the concept's own value."""
     out = dict(fm)
     for name, a in r.aliases["fields"].items():
         if name in out:
@@ -1176,7 +1209,8 @@ def resolve_aliases(r: Resolved, fm: dict) -> dict:
     for va in r.aliases["values"]:
         if all(k in out and _same(out[k], v) for k, v in va["from"].items()):
             for k in va["from"]:
-                out.pop(k)
+                if k != "type" or "type" in va["to"]:
+                    out.pop(k)
             for k, v in va["to"].items():
                 out.setdefault(k, v)
     return out
@@ -2258,17 +2292,58 @@ def test_concept_type_is_the_type_with_every_alias_resolved_and_the_type_as_writ
     assert [concept_type(x, fm) for x in (r, None) for fm in ({}, {"title": "T"}, None, ["type"], "type")] == [None] * 10
 
 
-def test_a_value_alias_is_matched_against_the_declared_key_and_type_names(tmp_path):
-    """Value aliases run last, on the frontmatter with its local key and type names already resolved: one whose
-    `from` names the type a concept stands for holds for every spelling of it, and one whose `from` names a local
-    type name or a local name of the type key holds for none."""
-    values = ("  values:\n    - { from: { type: Norma }, to: { type: Standard Decision, tags: [local-type-name] } }\n"
-              "    - { from: { tipo: Norma }, to: { type: Standard Decision, tags: [local-key-name] } }\n"
-              "    - { from: { type: Standard Decision }, to: { type: Standard Decision, tags: [declared] } }\n")
+def test_a_value_alias_reads_local_names_in_its_from_and_to(tmp_path):
+    """SDR-0027, decision 1: a from written with a local type name or a local name of the type key holds for every
+    spelling of the type, and a to that gives a local type name gives the type it stands for."""
+    for i, frm in enumerate(("{ type: Norma }", "{ tipo: Norma }", "{ tipo: Standard Decision }", "{ type: Standard Decision }")):
+        values = f"  values:\n    - {{ from: {frm}, to: {{ tipo: Norma, tags: [norm] }} }}\n"
+        r = load_profile(_bundle(tmp_path / str(i), _NORMA + values), builtin=_builtin(tmp_path / str(i)))
+        assert r.findings == [] and r.aliases["values"][0]["from"] == {"type": "Standard Decision"}
+        assert r.aliases["values"][0]["to"] == {"type": "Standard Decision", "tags": ["norm"]}
+        for spelled in ({"type": "Standard Decision"}, {"type": "Norma"}, {"tipo": "Standard Decision"}, {"tipo": "Norma"}):
+            assert resolve_aliases(r, spelled) == {"type": "Standard Decision", "tags": ["norm"]}, (frm, spelled)
+
+
+def test_a_value_alias_on_a_local_field_name_holds(tmp_path):
+    keys = ("aliases:\n  fields: { estado: decision_status }\n"
+            "  values: [{ from: { estado: aceptado }, to: { estado: accepted } }]\n")
+    r = load_profile(_bundle(tmp_path, keys), builtin=_builtin(tmp_path))
+    assert r.findings == []
+    fm = {"type": "Architecture Decision", "estado": "aceptado"}
+    assert resolve_aliases(r, fm) == {"type": "Architecture Decision", "decision_status": "accepted"}
+    assert resolve_aliases(r, {**fm, "estado": "rechazado"})["decision_status"] == "rechazado"
+
+
+def test_a_value_alias_keeps_the_type_unless_its_to_gives_one(tmp_path):
+    """SDR-0027, decision 2: every key of from is removed but the type, removed only when to gives a type."""
+    values = ("  values:\n    - { from: { tipo: Norma, clase: vieja }, to: { status: deprecated } }\n"
+              "    - { from: { tipo: Norma, clase: rara }, to: { type: Term } }\n")
     r = load_profile(_bundle(tmp_path, _NORMA + values), builtin=_builtin(tmp_path))
     assert r.findings == []
-    for spelled in ({"type": "Standard Decision"}, {"type": "Norma"}, {"tipo": "Standard Decision"}, {"tipo": "Norma"}):
-        assert resolve_aliases(r, spelled) == {"type": "Standard Decision", "tags": ["declared"]}, spelled
+    assert resolve_aliases(r, {"tipo": "Norma", "clase": "vieja"}) == {"type": "Standard Decision", "status": "deprecated"}
+    assert resolve_aliases(r, {"type": "Norma", "clase": "rara"}) == {"type": "Term"}
+    ingerido = load_profile(_bundle(tmp_path / "i", "aliases:\n  values: [{ from: { ingerido: true }, to: { "
+                                                    "distillation_status: distilled } }]\n"), builtin=_builtin(tmp_path / "i"))
+    assert resolve_aliases(ingerido, {"type": "Knowledge Fragment", "ingerido": True}) == {
+        "type": "Knowledge Fragment", "distillation_status": "distilled"}
+
+
+def test_a_value_alias_that_can_never_hold_is_invalid_and_two_that_read_alike_are_duplicates(tmp_path):
+    """SDR-0027, decision 3."""
+    values = ("  values:\n    - { from: { tipo: Norma, type: Policy }, to: { tags: [x] } }\n"
+              "    - { from: { clase: a }, to: { tipo: Term, type: Policy } }\n"
+              "    - { from: { tipo: Norma, type: Standard Decision }, to: { tags: [same] } }\n"
+              "    - { from: { type: Norma }, to: { tags: [y] } }\n")
+    r = load_profile(_bundle(tmp_path, _NORMA + values), builtin=_builtin(tmp_path))
+    got = [(f["code"], f["message"]) for f in r.findings]
+    assert got == [
+        ("PROFILE_INVALID", 'value alias {"tipo": "Norma", "type": "Policy"}: its from names \'tipo: Norma\' and '
+                            "'type: Policy' both name type, with different values, so it can never hold"),
+        ("PROFILE_INVALID", 'value alias {"clase": "a"}: its to names \'tipo: Term\' and \'type: Policy\' both name '
+                            "type, with different values, so it can never hold"),
+        ("PROFILE_DUPLICATE_ID", 'value alias {"type": "Norma"} declared by base/profile.md and by base/profile.md, '
+                                 'read as {"type": "Standard Decision"}')]
+    assert [va["to"] for va in r.aliases["values"]] == [{"tags": ["same"]}]
 
 
 def test_a_type_alias_in_a_family_a_rule_or_a_validator_stands_for_the_declared_type(tmp_path):
