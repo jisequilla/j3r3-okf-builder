@@ -3,12 +3,13 @@ type: Decision
 title: "DEC-0006: Two sessions maintain this repository, a router that plans and reviews and a worker that builds, and each of three kinds of change has its own review"
 description: A router session plans with the owner, writes the tickets and reviews each code change before its merge; a worker session builds; a small knowledge change is built inline and verified by the owner, a code change under plugin/ or build/ goes through the okf-layer-ticket workflow and then the router's review, which runs it and opens what it builds, and a decision or a change to the standard is settled with the owner first; CI on main is the check after a merge; supersedes DEC-0002.
 tags: [adr, process, agents, review]
-status: draft
+status: stable
 decision_id: DEC-0006
 decision_status: accepted
 supersedes: /base/decisions/DEC-0002-build-in-layers-and-tickets.md
 superseded_by:
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-17T21:32:20Z }
+verified: [{ by: human:jisequilla, at: 2026-11-17T21:33:22Z }]
 sources:
   - { id: fragment, resource: /fragments/2026-11-17-maintenance-harness.md, title: "Fragment: the maintenance harness" }
   - { id: dec-0002, resource: /base/decisions/DEC-0002-build-in-layers-and-tickets.md }

@@ -1,6 +1,8 @@
 # Bundle history
 
 ## 2026-11-17
+* **Verification**: [DEC-0006](/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md) verified by human:jisequilla at `generated.at` 2026-11-17T21:32:20Z, on the Knowledge Viewer (SDR-0022), now `status: stable`; its first version was not confirmed and its Context was shortened; both stored answers kept in [2026-11-17 · Verification of DEC-0006 on the Knowledge Viewer, after a first version was not confirmed](/fragments/2026-11-17-verification-dec-0006.md).
+* **Creation**: [2026-11-17 · Verification of DEC-0006 on the Knowledge Viewer, after a first version was not confirmed](/fragments/2026-11-17-verification-dec-0006.md): the owner's two answers as the page stored them, confirmed.
 * **Deprecation**: [DEC-0002](/base/decisions/DEC-0002-build-in-layers-and-tickets.md) is superseded by DEC-0006: `status: deprecated`, `decision_status: superseded` and `superseded_by` in its frontmatter, its body unchanged.
 * **Creation**: [DEC-0006: Two sessions maintain this repository, a router that plans and reviews and a worker that builds, and each of three kinds of change has its own review](/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md), accepted, distilled from [2026-11-17 · The maintenance harness, two sessions and three kinds of change](/fragments/2026-11-17-maintenance-harness.md); decided by human:jisequilla in answer to structured questions (tracker epic okf-m41, layer 0); supersedes DEC-0002.
 * **Creation**: [2026-11-17 · The maintenance harness, two sessions and three kinds of change](/fragments/2026-11-17-maintenance-harness.md): the owner's answers of 2026-11-15 and 2026-11-17 in the router session, distilled into DEC-0006.
