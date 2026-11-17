@@ -466,7 +466,9 @@ def index(tmp: Path) -> None:
 
 def workflows(tmp: Path) -> None:
     """each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways
-    (DEC-0003 decision 5)"""
+    (DEC-0003 decision 5); each session's prompt file in build/sessions/ names the other session, DEC-0006 and the
+    runbook, only paths that exist, in 25 lines at most, and just router and just worker pass files that exist
+    (DEC-0006 decisions 1 and 7)"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -479,6 +481,65 @@ def workflows(tmp: Path) -> None:
             if r == f"/{w}" and f"knowledge/{c}" not in (ROOT / w).read_text(encoding="utf-8")]
     expect(not bad, "; ".join(bad))
     print(len(found), "workflows linked both ways with", len(concepts), "concepts")
+    _sessions()
+
+
+SESSIONS = {"router": "okf-router-session", "worker": "okf-worker-session"}
+METHOD = ("knowledge/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md", "knowledge/base/runbooks/build-in-layers.md")
+SESSION_LINES = 25
+ROUTER_SETTINGS = "build/sessions/router.settings.json"
+ROUTER_DENY = "Edit(./**)"
+
+
+def _in_repo(name: str) -> bool:
+    path = (ROOT / name.lstrip("/")).resolve()
+    return path.exists() and path.is_relative_to(ROOT)
+
+
+def _sessions() -> None:
+    """A repository path in a prompt file is any run of path characters holding a slash, in backticks or not."""
+    bad = []
+    for recipe, session in SESSIONS.items():
+        prompt = f"build/sessions/{recipe}.md"
+        dry = subprocess.run(["just", "--dry-run", recipe, "--resume"], cwd=ROOT, capture_output=True, text=True)
+        expect(dry.returncode == 0, f"just --dry-run {recipe} exited {dry.returncode}\n{dry.stderr.strip()}")
+        words = dry.stderr.split()
+        flags = dict(zip(words, words[1:]))
+        if words[:1] != ["claude"] or flags.get("-n") != session:
+            bad.append(f"just {recipe}: does not start claude -n {session}")
+        if words[-1:] != ["--resume"]:
+            bad.append(f"just {recipe}: its arguments do not reach claude")
+        passed = {"--append-system-prompt-file": prompt}
+        if recipe == "router":
+            passed["--settings"] = ROUTER_SETTINGS
+        for flag, file in passed.items():
+            named = flags.get(flag)
+            if named != file:
+                bad.append(f"just {recipe}: {flag} names {named}, not {file}")
+            if named and not (ROOT / named).is_file():
+                bad.append(f"just {recipe}: names {named}, missing")
+        if not (ROOT / prompt).is_file():
+            bad.append(f"{prompt}: missing")
+            continue
+        body = (ROOT / prompt).read_text(encoding="utf-8")
+        lines = len(body.splitlines())
+        if lines > SESSION_LINES:
+            bad.append(f"{prompt}: {lines} lines, over {SESSION_LINES}")
+        if session not in body:
+            bad.append(f"{prompt}: does not name its own session {session}")
+        bad += [f"{prompt}: does not name the other session {other}" for other in SESSIONS.values()
+                if other != session and other not in body]
+        bad += [f"{prompt}: does not name {m}" for m in METHOD if m not in body]
+        paths = sorted({m.rstrip(".") for m in re.findall(r"[\w.~-]*(?:/[\w.~-]*)+", body)})
+        bad += [f"{prompt}: names {p}, missing from the repository" for p in paths if not _in_repo(p)]
+    settings = ROOT / ROUTER_SETTINGS
+    if settings.is_file():
+        deny = json.loads(settings.read_text(encoding="utf-8")).get("permissions", {}).get("deny", [])
+        if ROUTER_DENY not in deny:
+            bad.append(f"{ROUTER_SETTINGS}: does not deny {ROUTER_DENY}")
+    expect(not bad, "; ".join(bad))
+    print(len(SESSIONS), "session prompt files name each other and paths that exist; just", " and just ".join(SESSIONS),
+          "pass them, the router's with a settings file that denies", ROUTER_DENY)
 
 
 def obsidian_setup(tmp: Path) -> None:

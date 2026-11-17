@@ -42,6 +42,14 @@ obsidian *args:
 viewer *args:
     uv run -q {{scripts}}/okf_viewer.py knowledge --out dist/viewer --force {{args}}
 
+# The router session (DEC-0006): it plans and reviews, with its prompt file and a settings file that denies the file-editing tools inside the repository
+router *args:
+    claude -n okf-router-session --append-system-prompt-file build/sessions/router.md --settings build/sessions/router.settings.json {{args}}
+
+# The worker session (DEC-0006): it builds, with its prompt file
+worker *args:
+    claude -n okf-worker-session --append-system-prompt-file build/sessions/worker.md {{args}}
+
 # Root copies, every check, then every platform package
 all: copies test plugin copilot m365
 
