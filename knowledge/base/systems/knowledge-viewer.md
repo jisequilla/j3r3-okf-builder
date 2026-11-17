@@ -7,8 +7,8 @@ tags: [system, viewer, review, verification]
 status: stable
 owner: human:jisequilla
 runtime: claude-artifact
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-15T21:48:55Z }
-verified: [{ by: human:jisequilla, at: 2026-11-17T20:53:27Z }]
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-17T21:01:56Z }
+verified: [{ by: human:jisequilla, at: 2026-11-17T20:53:27Z }, { by: human:jisequilla, at: 2026-11-17T21:02:41Z }]
 sources:
   - { id: adr-0042, resource: /base/decisions/architecture/ADR-0042-knowledge-viewer.md }
   - { id: template, resource: plugin/okf-builder/skills/okf-standard/viewer/index.html, title: "The page template" }
@@ -27,7 +27,7 @@ The Knowledge Viewer is the review page of [SDR-0022](/base/decisions/standard/S
 | Concepts | Every concept outside `fragments/` that is not deprecated, grouped by type for `base/` and as Bundle root for the root |
 | Fragments | The fragments, newest first, split into awaiting distillation and distilled; they are read, never verified |
 | Deprecated | The concepts in status deprecated, by path |
-| Questions & conflicts | The Open Questions with the number still open, then the Conflict Log |
+| Questions & conflicts | The Open Questions with the number still open, then a Conflict Log section, which today always reads "No Conflict Log" (see what the page does not do yet) |
 
 Each item carries a dot for its state: confirmed, not confirmed, changed since answered, already verified, or not answered.
 

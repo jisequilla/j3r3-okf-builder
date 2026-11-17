@@ -1,6 +1,9 @@
 # Bundle history
 
 ## 2026-11-17
+* **Verification**: [Knowledge Viewer](/base/systems/knowledge-viewer.md) verified again by human:jisequilla at `generated.at` 2026-11-17T21:01:56Z, in answer to a structured question (SDR-0022); the question and the answer kept in [2026-11-17 · Verification of the Knowledge Viewer concept after its Questions & conflicts row in a structured question](/fragments/2026-11-17-verification-knowledge-viewer-row.md).
+* **Creation**: [2026-11-17 · Verification of the Knowledge Viewer concept after its Questions & conflicts row in a structured question](/fragments/2026-11-17-verification-knowledge-viewer-row.md): the structured question and the owner's answer, confirmed.
+* **Update**: [Knowledge Viewer](/base/systems/knowledge-viewer.md): the Questions & conflicts row says its Conflict Log section always reads "No Conflict Log" today, as the known gaps do (tracker item okf-1lj.8), so the two no longer contradict each other.
 * **Verification**: [Knowledge Viewer](/base/systems/knowledge-viewer.md), [Run a verification round](/base/runbooks/run-a-verification-round.md), [OKF scripts](/base/systems/scripts-okf.md), [okf-builder plugin](/base/systems/plugin-okf-builder.md) verified by human:jisequilla at `generated.at` 2026-11-15T21:48:55Z, on the Knowledge Viewer (SDR-0022), now `status: stable`; the stored answers kept in [2026-11-17 · Verification round okf-1lj.4 on the Knowledge Viewer](/fragments/2026-11-17-verification-round-okf-1lj-4.md).
 * **Creation**: [2026-11-17 · Verification round okf-1lj.4 on the Knowledge Viewer](/fragments/2026-11-17-verification-round-okf-1lj-4.md): the owner's four answers as the page stored them, each `APPLY` in `okf_viewer.py --answers`, confirmed.
 
