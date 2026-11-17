@@ -3,10 +3,11 @@ type: Decision
 title: "DEC-0002: Build multi-stage changes in layers and delegated tickets"
 description: Changes that touch several layers of the repo are split into verifiable tickets that agents build in isolated worktrees, and the main session only judges, verifies and merges.
 tags: [adr, process, agents]
-status: stable
+status: deprecated
 decision_id: DEC-0002
 formerly: ADR-0009
-decision_status: accepted
+decision_status: superseded
+superseded_by: /base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md
 generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
 verified: [{ by: human:jisequilla, at: 2026-11-07T09:15:30Z }, { by: human:jisequilla, at: 2026-11-14T16:36:10Z }]
 ---
