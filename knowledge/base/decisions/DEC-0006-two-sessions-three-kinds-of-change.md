@@ -8,7 +8,7 @@ decision_id: DEC-0006
 decision_status: accepted
 supersedes: /base/decisions/DEC-0002-build-in-layers-and-tickets.md
 superseded_by:
-generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-17T21:22:01Z }
+generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-17T21:32:20Z }
 sources:
   - { id: fragment, resource: /fragments/2026-11-17-maintenance-harness.md, title: "Fragment: the maintenance harness" }
   - { id: dec-0002, resource: /base/decisions/DEC-0002-build-in-layers-and-tickets.md }
@@ -18,11 +18,7 @@ sources:
 
 # Context
 
-[DEC-0002](/base/decisions/DEC-0002-build-in-layers-and-tickets.md) made one session judge and never implement: every ticket went through pre-flight, a builder in a worktree, fresh-context reviewers and a rerun of the tests on the merged main, and every prose ticket carried a mechanical check and a meaning-drift pass[^dec-0002].
-
-In November 2026 the work ran in two Claude Code sessions instead: one planned with the owner and wrote the tickets, the other built them. Two things showed in that run. A code change built inline with no reviewer passed its tests, lint and CI, and a second session that ran it on a bundle outside the repository found a defect before the merge; the owner asked for that review to become permanent, with a recipe and a prompt file to start each session[^fragment]. And a one-row reword of a concept went through a review, the owner's verification and a second review, which the owner called too much ceremony for a small change: "we should be able to focus on bringin value with order"[^fragment].
-
-The first plan kept DEC-0002 and added the two sessions beside it. It let a change only under `knowledge/` be built inline, which contradicts DEC-0002 decisions 3 and 5. The owner, human:jisequilla, then chose in structured questions on 2026-11-17 to replace DEC-0002 with one rule that sorts changes into three kinds[^fragment].
+[DEC-0002](/base/decisions/DEC-0002-build-in-layers-and-tickets.md) gave every change one path: pre-flight, a builder in a worktree, fresh-context reviewers and a rerun of the tests on main[^dec-0002]. Maintenance now runs in two sessions, and that one path proved too little for a code change and too much for a one-row reword. The owner's answers are in the fragment[^fragment].
 
 **Worked examples.**
 
