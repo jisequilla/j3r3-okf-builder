@@ -467,8 +467,8 @@ def index(tmp: Path) -> None:
 def workflows(tmp: Path) -> None:
     """each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways
     (DEC-0003 decision 5); each session's prompt file in build/sessions/ names the other session, DEC-0006 and the
-    runbook, only paths that exist, in 25 lines at most, and just router and just worker pass files that exist
-    (DEC-0006 decisions 1 and 7)"""
+    runbook, only paths that exist, in 25 lines at most, just router and just worker pass files that exist, and
+    just sessions runs both in a herdr workspace labelled okf-builder (DEC-0006 decisions 1 and 7)"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -489,6 +489,7 @@ METHOD = ("knowledge/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.
 SESSION_LINES = 25
 ROUTER_SETTINGS = "build/sessions/router.settings.json"
 ROUTER_DENY = "Edit(./**)"
+WORKSPACE = "okf-builder"
 
 
 def _in_repo(name: str) -> bool:
@@ -537,9 +538,28 @@ def _sessions() -> None:
         deny = json.loads(settings.read_text(encoding="utf-8")).get("permissions", {}).get("deny", [])
         if ROUTER_DENY not in deny:
             bad.append(f"{ROUTER_SETTINGS}: does not deny {ROUTER_DENY}")
+    bad += _herdr_workspace()
     expect(not bad, "; ".join(bad))
     print(len(SESSIONS), "session prompt files name each other and paths that exist; just", " and just ".join(SESSIONS),
           "pass them, the router's with a settings file that denies", ROUTER_DENY)
+    print("just sessions runs just", " and just ".join(SESSIONS), "in a herdr workspace labelled", WORKSPACE)
+
+
+def _herdr_workspace() -> list[str]:
+    """Read from just --dry-run sessions, which prints the recipe and runs nothing: herdr is neither needed nor called."""
+    dry = subprocess.run(["just", "--dry-run", "sessions"], cwd=ROOT, capture_output=True, text=True)
+    expect(dry.returncode == 0, f"just --dry-run sessions exited {dry.returncode}\n{dry.stderr.strip()}")
+    runs = sorted(re.findall(r"^\s*herdr pane run .*\)\" (.+?)(?: >/dev/null)?$", dry.stderr, re.M))
+    created = re.findall(r"herdr workspace create\b.*?--label (\S+)", dry.stderr)
+    looked_up = re.findall(r"^\s*existing=.* (\S+) <<<", dry.stderr, re.M)
+    bad = []
+    if runs != sorted(f"just {recipe}" for recipe in SESSIONS):
+        bad.append(f"just sessions: its panes run {runs}, not just {' and just '.join(SESSIONS)} once each")
+    if created != [WORKSPACE]:
+        bad.append(f"just sessions: creates the workspace labelled {created}, not {WORKSPACE}")
+    if looked_up != [WORKSPACE]:
+        bad.append(f"just sessions: looks for an existing workspace labelled {looked_up}, not {WORKSPACE}")
+    return bad
 
 
 def obsidian_setup(tmp: Path) -> None:
