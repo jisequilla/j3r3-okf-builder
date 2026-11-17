@@ -1,6 +1,9 @@
 # Bundle history
 
 ## 2026-11-17
+* **Deprecation**: [DEC-0002](/base/decisions/DEC-0002-build-in-layers-and-tickets.md) is superseded by DEC-0006: `status: deprecated`, `decision_status: superseded` and `superseded_by` in its frontmatter, its body unchanged.
+* **Creation**: [DEC-0006: Two sessions maintain this repository, a router that plans and reviews and a worker that builds, and each of three kinds of change has its own review](/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md), accepted, distilled from [2026-11-17 · The maintenance harness, two sessions and three kinds of change](/fragments/2026-11-17-maintenance-harness.md); decided by human:jisequilla in answer to structured questions (tracker epic okf-m41, layer 0); supersedes DEC-0002.
+* **Creation**: [2026-11-17 · The maintenance harness, two sessions and three kinds of change](/fragments/2026-11-17-maintenance-harness.md): the owner's answers of 2026-11-15 and 2026-11-17 in the router session, distilled into DEC-0006.
 * **Verification**: [Knowledge Viewer](/base/systems/knowledge-viewer.md) verified again by human:jisequilla at `generated.at` 2026-11-17T21:01:56Z, in answer to a structured question (SDR-0022); the question and the answer kept in [2026-11-17 · Verification of the Knowledge Viewer concept after its Questions & conflicts row in a structured question](/fragments/2026-11-17-verification-knowledge-viewer-row.md).
 * **Creation**: [2026-11-17 · Verification of the Knowledge Viewer concept after its Questions & conflicts row in a structured question](/fragments/2026-11-17-verification-knowledge-viewer-row.md): the structured question and the owner's answer, confirmed.
 * **Update**: [Knowledge Viewer](/base/systems/knowledge-viewer.md): the Questions & conflicts row says its Conflict Log section always reads "No Conflict Log" today, as the known gaps do (tracker item okf-1lj.8), so the two no longer contradict each other.
