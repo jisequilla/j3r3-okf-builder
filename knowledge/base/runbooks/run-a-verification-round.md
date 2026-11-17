@@ -3,10 +3,11 @@ type: Runbook
 title: Run a verification round
 description: Steps to have a person verify concepts on the Knowledge Viewer in this repository, from building the page with okf_viewer.py to writing verified from the APPLY rows of okf_viewer.py --answers, as okf-review step 11 runs them.
 tags: [runbook, verification, review, viewer]
-status: draft
+status: stable
 owner: human:jisequilla
 stale_after: 2027-05-15T00:00:00Z
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-15T21:48:55Z }
+verified: [{ by: human:jisequilla, at: 2026-11-17T20:56:50Z }]
 sources:
   - { id: skill, resource: plugin/okf-builder/skills/okf-review/SKILL.md, title: "okf-review, step 11" }
   - { id: sdr-0022, resource: /base/decisions/standard/SDR-0022-verification-recorded-by-question-or-review-page.md }

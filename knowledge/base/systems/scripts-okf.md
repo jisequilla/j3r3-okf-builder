@@ -4,11 +4,11 @@ title: OKF scripts
 description: okf_init, okf_lint, okf_profile, okf_index, okf_migrate, okf_audit, okf_close, okf_projection, okf_obsidian and okf_viewer (Python ≥ 3.9 and PyYAML, run with uv) in okf-standard/scripts.
 resource: /plugin/okf-builder/skills/okf-standard/scripts
 tags: [system, scripts, python]
-status: draft
+status: stable
 owner: human:jisequilla
 runtime: uv
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-15T21:48:55Z }
-verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:54Z }, { by: human:jisequilla, at: 2026-11-11T22:45:26Z }, { by: human:jisequilla, at: 2026-11-12T22:36:32Z }, { by: human:jisequilla, at: 2026-11-13T05:58:42Z }, { by: human:jisequilla, at: 2026-11-14T11:04:51Z }, { by: human:jisequilla, at: 2026-11-14T13:20:25Z }, { by: human:jisequilla, at: 2026-11-14T17:40:47Z }, { by: human:jisequilla, at: 2026-11-14T21:57:34Z }, { by: human:jisequilla, at: 2026-11-15T04:56:35Z }, { by: human:jisequilla, at: 2026-11-15T05:10:56Z }, { by: human:jisequilla, at: 2026-11-15T15:29:41Z }]
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:54Z }, { by: human:jisequilla, at: 2026-11-11T22:45:26Z }, { by: human:jisequilla, at: 2026-11-12T22:36:32Z }, { by: human:jisequilla, at: 2026-11-13T05:58:42Z }, { by: human:jisequilla, at: 2026-11-14T11:04:51Z }, { by: human:jisequilla, at: 2026-11-14T13:20:25Z }, { by: human:jisequilla, at: 2026-11-14T17:40:47Z }, { by: human:jisequilla, at: 2026-11-14T21:57:34Z }, { by: human:jisequilla, at: 2026-11-15T04:56:35Z }, { by: human:jisequilla, at: 2026-11-15T05:10:56Z }, { by: human:jisequilla, at: 2026-11-15T15:29:41Z }, { by: human:jisequilla, at: 2026-11-17T20:57:01Z }]
 ---
 
 # Responsibility

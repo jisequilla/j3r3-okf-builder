@@ -1,5 +1,9 @@
 # Bundle history
 
+## 2026-11-17
+* **Verification**: [Knowledge Viewer](/base/systems/knowledge-viewer.md), [Run a verification round](/base/runbooks/run-a-verification-round.md), [OKF scripts](/base/systems/scripts-okf.md), [okf-builder plugin](/base/systems/plugin-okf-builder.md) verified by human:jisequilla at `generated.at` 2026-11-15T21:48:55Z, on the Knowledge Viewer (SDR-0022), now `status: stable`; the stored answers kept in [2026-11-17 · Verification round okf-1lj.4 on the Knowledge Viewer](/fragments/2026-11-17-verification-round-okf-1lj-4.md).
+* **Creation**: [2026-11-17 · Verification round okf-1lj.4 on the Knowledge Viewer](/fragments/2026-11-17-verification-round-okf-1lj-4.md): the owner's four answers as the page stored them, each `APPLY` in `okf_viewer.py --answers`, confirmed.
+
 ## 2026-11-15
 * **Update**: [OKF scripts](/base/systems/scripts-okf.md) and the [okf-builder plugin](/base/systems/plugin-okf-builder.md) describe `okf_viewer.py` as merged in tracker items okf-1lj.2 and okf-1lj.3: the page and its data, `--answers` and its rows, and that it writes no `verified`.
 * **Creation**: [Knowledge Viewer](/base/systems/knowledge-viewer.md), the page built by `okf_viewer.py`, its views, its data file, its answers and what it does not do yet (tracker items okf-1lj.5, okf-1lj.6, okf-1lj.8), written from the merged template and script (tracker item okf-1lj.4).

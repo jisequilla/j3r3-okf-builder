@@ -4,10 +4,11 @@ title: Knowledge Viewer
 description: A page private to its owner, built by okf_viewer.py from a bundle and published as a Claude artifact, on which the owner reads the concepts, follows their links, and confirms or does not confirm each one at the version shown; okf_viewer.py --answers checks the stored answers against the bundle, and only the agent writes verified.
 resource: /plugin/okf-builder/skills/okf-standard/viewer
 tags: [system, viewer, review, verification]
-status: draft
+status: stable
 owner: human:jisequilla
 runtime: claude-artifact
 generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-15T21:48:55Z }
+verified: [{ by: human:jisequilla, at: 2026-11-17T20:53:27Z }]
 sources:
   - { id: adr-0042, resource: /base/decisions/architecture/ADR-0042-knowledge-viewer.md }
   - { id: template, resource: plugin/okf-builder/skills/okf-standard/viewer/index.html, title: "The page template" }
