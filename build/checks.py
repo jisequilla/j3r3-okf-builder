@@ -470,7 +470,8 @@ def workflows(tmp: Path) -> None:
     (DEC-0003 decision 5); each session's prompt file in build/sessions/ names the other session, DEC-0006 and the
     runbook, only paths that exist, in 25 lines at most (DEC-0006 decisions 1 and 7); just router and just worker
     start claude under the session's name with files that exist and each session's model and effort, and just
-    sessions starts both recipes once each with hc run, in the background, without a parent and under those names"""
+    sessions starts both recipes once each with hc run, in the background, without a parent and under those names,
+    with the caller's PATH and just's absolute path"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -550,20 +551,33 @@ def _sessions() -> None:
           "pass them, the router's with a settings file that denies", ROUTER_DENY)
     print("; ".join(f"just {recipe} passes --model {model} --effort {effort}" for recipe, (model, effort) in SESSION_MODEL.items()))
     print("just sessions starts just", " and just ".join(SESSIONS), "once each with hc run --bg --no-parent, named",
-          " and ".join(SESSIONS.values()))
+          " and ".join(SESSIONS.values()) + ", through", " ".join(HC_ENV), "and just's absolute path")
+
+
+HC_ENV = ["/usr/bin/env", "PATH=$PATH"]
 
 
 def _hc_sessions() -> list[str]:
-    """Read from just --dry-run sessions, which prints the recipe and runs nothing: hc is neither needed nor called."""
+    """Read from just --dry-run sessions, which prints the recipe and runs nothing: hc is neither needed nor called.
+    hc looks a program up on its server's PATH, so each terminal is given env by its absolute path, the caller's
+    PATH and just by its absolute path; the recipe refuses to start when claude is not on that PATH."""
     dry = subprocess.run(["just", "--dry-run", "sessions"], cwd=ROOT, capture_output=True, text=True)
     expect(dry.returncode == 0, f"just --dry-run sessions exited {dry.returncode}\n{dry.stderr.strip()}")
     started, bad = [], []
     for line in re.findall(r"^\s*(hc run\b.*)$", dry.stderr, re.M):
         words = [w for w in shlex.split(line) if not w.startswith(">")]
-        at = words.index("just") if "just" in words else len(words)
-        options, command = words[:at], " ".join(words[at:])
+        at = 2
+        while at < len(words) and words[at].startswith("--"):
+            at += 2 if words[at] in ("--name", "--cwd") else 1
+        options, argv = words[:at], words[at:]
         flags = dict(zip(options, options[1:]))
+        program = Path(argv[2]) if len(argv) == 4 else Path()
+        resolvable = argv[:2] == HC_ENV and program.is_absolute() and program.name == "just" and program.is_file()
+        command = f"just {argv[3]}" if resolvable else " ".join(argv)
         started.append((flags.get("--name"), command))
+        if not resolvable:
+            bad.append(f"just sessions: hc run for {flags.get('--name')} starts {command or 'no command'}, not "
+                       f"{' '.join(HC_ENV)} and just by its absolute path: hc looks a program up on its server's PATH")
         bad += [f"just sessions: hc run for {command or 'no command'} lacks {flag}" for flag in ("--bg", "--no-parent")
                 if flag not in options]
         if Path(flags.get("--cwd", "")).resolve() != ROOT.resolve():
@@ -571,6 +585,8 @@ def _hc_sessions() -> list[str]:
     expected = sorted((session, f"just {recipe}") for recipe, session in SESSIONS.items())
     if sorted(started, key=str) != expected:
         bad.append(f"just sessions: hc run starts {started}, not {expected} once each")
+    if not re.search(r"^\s*if ! command -v claude\b", dry.stderr, re.M):
+        bad.append("just sessions: does not refuse to start when claude is not on the PATH it hands to hc")
     if re.search(r"\bherdr\b", dry.stderr):
         bad.append("just sessions: still names herdr")
     return bad

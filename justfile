@@ -50,7 +50,7 @@ router *args:
 worker *args:
     claude -n okf-worker-session --append-system-prompt-file build/sessions/worker.md --model claude-opus-5-5 --effort medium {{args}}
 
-# Both sessions, each in an hc terminal named after it that outlives this one; a session already live under its name is reported and not started again
+# Both sessions, each in an hc terminal named after it that outlives this one, started with this shell's PATH and just's own path because hc looks programs up on its server's PATH; a session already live under its name is reported and not started again
 sessions:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -62,17 +62,21 @@ sessions:
         echo "sessions: hc's server is not running; start it with hc server start, then run just sessions again" >&2
         exit 1
     fi
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "sessions: claude is not on PATH, and the sessions hc starts get this PATH" >&2
+        exit 1
+    fi
     live() { hc get --json "$1" 2>/dev/null | grep -Eq '"state": *"live"'; }
     if live okf-router-session; then
         echo "sessions: okf-router-session is already running"
     else
-        hc run --bg --no-parent --name okf-router-session --cwd "{{justfile_directory()}}" just router >/dev/null
+        hc run --bg --no-parent --name okf-router-session --cwd "{{justfile_directory()}}" /usr/bin/env PATH="$PATH" "{{just_executable()}}" router >/dev/null
         echo "sessions: okf-router-session started"
     fi
     if live okf-worker-session; then
         echo "sessions: okf-worker-session is already running"
     else
-        hc run --bg --no-parent --name okf-worker-session --cwd "{{justfile_directory()}}" just worker >/dev/null
+        hc run --bg --no-parent --name okf-worker-session --cwd "{{justfile_directory()}}" /usr/bin/env PATH="$PATH" "{{just_executable()}}" worker >/dev/null
         echo "sessions: okf-worker-session started"
     fi
     if ! live okf-router-session || ! live okf-worker-session; then
