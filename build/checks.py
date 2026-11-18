@@ -21,6 +21,7 @@ import ast
 import io
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -467,8 +468,9 @@ def index(tmp: Path) -> None:
 def workflows(tmp: Path) -> None:
     """each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways
     (DEC-0003 decision 5); each session's prompt file in build/sessions/ names the other session, DEC-0006 and the
-    runbook, only paths that exist, in 25 lines at most, just router and just worker pass files that exist, and
-    just sessions runs both in a herdr workspace labelled okf-builder (DEC-0006 decisions 1 and 7)"""
+    runbook, only paths that exist, in 25 lines at most (DEC-0006 decisions 1 and 7); just router and just worker
+    start claude under the session's name with files that exist and each session's model and effort, and just
+    sessions starts both recipes once each with hc run, in the background, without a parent and under those names"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -489,7 +491,7 @@ METHOD = ("knowledge/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.
 SESSION_LINES = 25
 ROUTER_SETTINGS = "build/sessions/router.settings.json"
 ROUTER_DENY = "Edit(./**)"
-WORKSPACE = "okf-builder"
+SESSION_MODEL = {"router": ("claude-fable-5-2", "low"), "worker": ("claude-opus-5-5", "medium")}
 
 
 def _in_repo(name: str) -> bool:
@@ -508,6 +510,10 @@ def _sessions() -> None:
         flags = dict(zip(words, words[1:]))
         if words[:1] != ["claude"] or flags.get("-n") != session:
             bad.append(f"just {recipe}: does not start claude -n {session}")
+        model, effort = SESSION_MODEL[recipe]
+        if (flags.get("--model"), flags.get("--effort")) != (model, effort):
+            bad.append(f"just {recipe}: passes --model {flags.get('--model')} --effort {flags.get('--effort')}, "
+                       f"not --model {model} --effort {effort}")
         if words[-1:] != ["--resume"]:
             bad.append(f"just {recipe}: its arguments do not reach claude")
         passed = {"--append-system-prompt-file": prompt}
@@ -538,27 +544,35 @@ def _sessions() -> None:
         deny = json.loads(settings.read_text(encoding="utf-8")).get("permissions", {}).get("deny", [])
         if ROUTER_DENY not in deny:
             bad.append(f"{ROUTER_SETTINGS}: does not deny {ROUTER_DENY}")
-    bad += _herdr_workspace()
+    bad += _hc_sessions()
     expect(not bad, "; ".join(bad))
     print(len(SESSIONS), "session prompt files name each other and paths that exist; just", " and just ".join(SESSIONS),
           "pass them, the router's with a settings file that denies", ROUTER_DENY)
-    print("just sessions runs just", " and just ".join(SESSIONS), "in a herdr workspace labelled", WORKSPACE)
+    print("; ".join(f"just {recipe} passes --model {model} --effort {effort}" for recipe, (model, effort) in SESSION_MODEL.items()))
+    print("just sessions starts just", " and just ".join(SESSIONS), "once each with hc run --bg --no-parent, named",
+          " and ".join(SESSIONS.values()))
 
 
-def _herdr_workspace() -> list[str]:
-    """Read from just --dry-run sessions, which prints the recipe and runs nothing: herdr is neither needed nor called."""
+def _hc_sessions() -> list[str]:
+    """Read from just --dry-run sessions, which prints the recipe and runs nothing: hc is neither needed nor called."""
     dry = subprocess.run(["just", "--dry-run", "sessions"], cwd=ROOT, capture_output=True, text=True)
     expect(dry.returncode == 0, f"just --dry-run sessions exited {dry.returncode}\n{dry.stderr.strip()}")
-    runs = sorted(re.findall(r"^\s*herdr pane run .*\)\" (.+?)(?: >/dev/null)?$", dry.stderr, re.M))
-    created = re.findall(r"herdr workspace create\b.*?--label (\S+)", dry.stderr)
-    looked_up = re.findall(r"^\s*existing=.* (\S+) <<<", dry.stderr, re.M)
-    bad = []
-    if runs != sorted(f"just {recipe}" for recipe in SESSIONS):
-        bad.append(f"just sessions: its panes run {runs}, not just {' and just '.join(SESSIONS)} once each")
-    if created != [WORKSPACE]:
-        bad.append(f"just sessions: creates the workspace labelled {created}, not {WORKSPACE}")
-    if looked_up != [WORKSPACE]:
-        bad.append(f"just sessions: looks for an existing workspace labelled {looked_up}, not {WORKSPACE}")
+    started, bad = [], []
+    for line in re.findall(r"^\s*(hc run\b.*)$", dry.stderr, re.M):
+        words = [w for w in shlex.split(line) if not w.startswith(">")]
+        at = words.index("just") if "just" in words else len(words)
+        options, command = words[:at], " ".join(words[at:])
+        flags = dict(zip(options, options[1:]))
+        started.append((flags.get("--name"), command))
+        bad += [f"just sessions: hc run for {command or 'no command'} lacks {flag}" for flag in ("--bg", "--no-parent")
+                if flag not in options]
+        if Path(flags.get("--cwd", "")).resolve() != ROOT.resolve():
+            bad.append(f"just sessions: hc run for {command or 'no command'} has --cwd {flags.get('--cwd')}, not the repository root")
+    expected = sorted((session, f"just {recipe}") for recipe, session in SESSIONS.items())
+    if sorted(started, key=str) != expected:
+        bad.append(f"just sessions: hc run starts {started}, not {expected} once each")
+    if re.search(r"\bherdr\b", dry.stderr):
+        bad.append("just sessions: still names herdr")
     return bad
 
 

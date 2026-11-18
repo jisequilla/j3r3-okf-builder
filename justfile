@@ -42,40 +42,43 @@ obsidian *args:
 viewer *args:
     uv run -q {{scripts}}/okf_viewer.py knowledge --out dist/viewer --force {{args}}
 
-# The router session (DEC-0006): it plans and reviews, with its prompt file and a settings file that denies the file-editing tools inside the repository
+# The router session (DEC-0006): it plans and reviews, with its prompt file and a settings file that denies the file-editing tools inside the repository; a --model or --effort in the arguments replaces the recipe's
 router *args:
-    claude -n okf-router-session --append-system-prompt-file build/sessions/router.md --settings build/sessions/router.settings.json {{args}}
+    claude -n okf-router-session --append-system-prompt-file build/sessions/router.md --settings build/sessions/router.settings.json --model claude-fable-5-2 --effort low {{args}}
 
-# The worker session (DEC-0006): it builds, with its prompt file
+# The worker session (DEC-0006): it builds, with its prompt file; a --model or --effort in the arguments replaces the recipe's
 worker *args:
-    claude -n okf-worker-session --append-system-prompt-file build/sessions/worker.md {{args}}
+    claude -n okf-worker-session --append-system-prompt-file build/sessions/worker.md --model claude-opus-5-5 --effort medium {{args}}
 
-# Both sessions in one herdr workspace labelled okf-builder, a tab each; if that workspace exists it is focused and nothing starts
+# Both sessions, each in an hc terminal named after it that outlives this one; a session already live under its name is reported and not started again
 sessions:
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! command -v herdr >/dev/null 2>&1; then
-        echo "sessions: herdr is not on PATH; without it, run just router and just worker in a terminal each" >&2
+    if ! command -v hc >/dev/null 2>&1; then
+        echo "sessions: hc is not on PATH; without it, run just router and just worker in a terminal each" >&2
         exit 1
     fi
-    if ! listed=$(herdr workspace list 2>/dev/null); then
-        echo "sessions: herdr's server is not running; start herdr, then run just sessions again" >&2
+    if ! hc server status >/dev/null 2>&1; then
+        echo "sessions: hc's server is not running; start it with hc server start, then run just sessions again" >&2
         exit 1
     fi
-    id() { python3 -c 'import json, sys; print(json.load(sys.stdin)["result"][sys.argv[1]][sys.argv[2]])' "$@"; }
-    existing=$(python3 -c 'import json, sys; print(next((w["workspace_id"] for w in json.load(sys.stdin)["result"]["workspaces"] if w["label"] == sys.argv[1]), ""))' okf-builder <<<"$listed")
-    if [ -n "$existing" ]; then
-        herdr workspace focus "$existing" >/dev/null
-        echo "sessions: the herdr workspace okf-builder exists ($existing): focused, nothing started"
-        exit 0
+    live() { hc get --json "$1" 2>/dev/null | grep -Eq '"state": *"live"'; }
+    if live okf-router-session; then
+        echo "sessions: okf-router-session is already running"
+    else
+        hc run --bg --no-parent --name okf-router-session --cwd "{{justfile_directory()}}" just router >/dev/null
+        echo "sessions: okf-router-session started"
     fi
-    created=$(herdr workspace create --cwd "{{justfile_directory()}}" --label okf-builder --focus)
-    workspace=$(id workspace workspace_id <<<"$created")
-    herdr tab rename "$(id tab tab_id <<<"$created")" router >/dev/null
-    herdr pane run "$(id root_pane pane_id <<<"$created")" just router >/dev/null
-    tab=$(herdr tab create --workspace "$workspace" --cwd "{{justfile_directory()}}" --label worker --no-focus)
-    herdr pane run "$(id root_pane pane_id <<<"$tab")" just worker >/dev/null
-    echo "sessions: herdr workspace okf-builder ($workspace) opened with the tabs router and worker"
+    if live okf-worker-session; then
+        echo "sessions: okf-worker-session is already running"
+    else
+        hc run --bg --no-parent --name okf-worker-session --cwd "{{justfile_directory()}}" just worker >/dev/null
+        echo "sessions: okf-worker-session started"
+    fi
+    if ! live okf-router-session || ! live okf-worker-session; then
+        echo "sessions: hc does not show both okf-router-session and okf-worker-session as live" >&2
+        exit 1
+    fi
 
 # Root copies, every check, then every platform package
 all: copies test plugin copilot m365
