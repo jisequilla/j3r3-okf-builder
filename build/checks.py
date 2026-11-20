@@ -471,7 +471,8 @@ def workflows(tmp: Path) -> None:
     runbook, only paths that exist, in 25 lines at most (DEC-0006 decisions 1 and 7); just router and just worker
     start claude under the session's name with files that exist and each session's model and effort, and just
     sessions starts both recipes once each with hc run, in the background, without a parent and under those names,
-    with the caller's PATH and just's absolute path"""
+    with the caller's PATH and just's absolute path, and shows each in the Herdr.app space okf-builder in a tab named
+    after its recipe"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -552,9 +553,18 @@ def _sessions() -> None:
     print("; ".join(f"just {recipe} passes --model {model} --effort {effort}" for recipe, (model, effort) in SESSION_MODEL.items()))
     print("just sessions starts just", " and just ".join(SESSIONS), "once each with hc run --bg --no-parent, named",
           " and ".join(SESSIONS.values()) + ", through", " ".join(HC_ENV), "and just's absolute path")
+    print("just sessions shows both in the Herdr.app space", SPACE + ", in the tabs", " and ".join(SESSIONS))
 
 
 HC_ENV = ["/usr/bin/env", "PATH=$PATH"]
+SPACE = "okf-builder"
+HERDR_APP_STEPS = {
+    rf"herdr-app do space\.new --name {SPACE}\b": f"create the Herdr.app space {SPACE} when it is missing",
+    r'hc label "\$1" herdr\.space="\$space"': "label each session's terminal with herdr.space",
+    r"herdr-app do tab\.rename\b": "name each session's tab",
+    rf"\bplace {SESSIONS['router']} router\b": "place okf-router-session in the tab router",
+    rf"\bplace {SESSIONS['worker']} worker\b": "place okf-worker-session in the tab worker",
+}
 
 
 def _hc_sessions() -> list[str]:
@@ -587,8 +597,11 @@ def _hc_sessions() -> list[str]:
         bad.append(f"just sessions: hc run starts {started}, not {expected} once each")
     if not re.search(r"^\s*if ! command -v claude\b", dry.stderr, re.M):
         bad.append("just sessions: does not refuse to start when claude is not on the PATH it hands to hc")
-    if re.search(r"\bherdr\b", dry.stderr):
-        bad.append("just sessions: still names herdr")
+    if re.search(r"\bherdr (?:workspace|tab|pane)\b", dry.stderr):
+        bad.append("just sessions: still drives herdr 0.9")
+    for step, text in HERDR_APP_STEPS.items():
+        if not re.search(step, dry.stderr):
+            bad.append(f"just sessions: does not {text}")
     return bad
 
 

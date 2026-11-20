@@ -50,7 +50,7 @@ router *args:
 worker *args:
     claude -n okf-worker-session --append-system-prompt-file build/sessions/worker.md --model claude-opus-5-5 --effort medium {{args}}
 
-# Both sessions, each in an hc terminal named after it that outlives this one, started with this shell's PATH and just's own path because hc looks programs up on its server's PATH; a session already live under its name is reported and not started again
+# Both sessions, each in an hc terminal named after it that outlives this one, started with this shell's PATH and just's own path because hc looks programs up on its server's PATH; a session already live under its name is reported and not started again; with Herdr.app open, each is shown in its space okf-builder, created if missing, in a tab named router or worker
 sessions:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -83,6 +83,40 @@ sessions:
         echo "sessions: hc does not show both okf-router-session and okf-worker-session as live" >&2
         exit 1
     fi
+    if ! command -v herdr-app >/dev/null 2>&1 || ! listed=$(herdr-app ls 2>/dev/null); then
+        echo "sessions: Herdr.app is not open, so neither session is in its window; reach them with hc attach okf-router-session and hc attach okf-worker-session"
+        exit 0
+    fi
+    field() { python3 -c 'import json, sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
+    space=$(python3 -c 'import json, sys; print(next((s["id"] for s in json.load(sys.stdin)["spaces"] if s["name"] == sys.argv[1]), ""))' okf-builder <<<"$listed")
+    placeholder=""
+    if [ -z "$space" ]; then
+        created=$(herdr-app do space.new --name okf-builder --folder "{{justfile_directory()}}" --tab placeholder --focus false)
+        space=$(field space <<<"$created")
+        placeholder=$(field tab <<<"$created")
+    fi
+    tab_of() { herdr-app ls | python3 -c 'import json, sys; print(next((t["id"] for s in json.load(sys.stdin)["spaces"] if s["id"] == sys.argv[1] for t in s["tabs"] if any(x["terminal"] == sys.argv[2] for x in t["terminals"])), ""))' "$space" "$1"; }
+    place() {
+        hc label "$1" herdr.space="$space" >/dev/null
+        address=$(hc get --json "$1" | field address)
+        tab=""
+        for _ in $(seq 20); do
+            tab=$(tab_of "$address")
+            [ -n "$tab" ] && break
+            sleep 0.25
+        done
+        if [ -z "$tab" ]; then
+            echo "sessions: $1 is not in the Herdr.app space okf-builder; reach it with hc attach $1" >&2
+            return 0
+        fi
+        herdr-app do tab.rename --id "$tab" --name "$2" >/dev/null
+    }
+    place okf-router-session router
+    place okf-worker-session worker
+    if [ -n "$placeholder" ]; then
+        herdr-app do tab.close --id "$placeholder" --confirmed true >/dev/null
+    fi
+    echo "sessions: both are in the Herdr.app space okf-builder, in the tabs router and worker"
 
 # Root copies, every check, then every platform package
 all: copies test plugin copilot m365
