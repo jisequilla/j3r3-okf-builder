@@ -21,6 +21,7 @@ import ast
 import io
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -466,7 +467,12 @@ def index(tmp: Path) -> None:
 
 def workflows(tmp: Path) -> None:
     """each workflow in .claude/workflows/ and the knowledge concept naming it in resource link both ways
-    (DEC-0003 decision 5)"""
+    (DEC-0003 decision 5); each session's prompt file in build/sessions/ names the other session, DEC-0006 and the
+    runbook, only paths that exist, in 25 lines at most (DEC-0006 decisions 1 and 7); just router and just worker
+    start claude under the session's name with files that exist and each session's model and effort, and just
+    sessions starts both recipes once each with hc run, in the background, without a parent and under those names,
+    with the caller's PATH and just's absolute path, and shows each in the Herdr.app space okf-builder in a tab named
+    after its recipe"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -479,6 +485,124 @@ def workflows(tmp: Path) -> None:
             if r == f"/{w}" and f"knowledge/{c}" not in (ROOT / w).read_text(encoding="utf-8")]
     expect(not bad, "; ".join(bad))
     print(len(found), "workflows linked both ways with", len(concepts), "concepts")
+    _sessions()
+
+
+SESSIONS = {"router": "okf-router-session", "worker": "okf-worker-session"}
+METHOD = ("knowledge/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md", "knowledge/base/runbooks/build-in-layers.md")
+SESSION_LINES = 25
+ROUTER_SETTINGS = "build/sessions/router.settings.json"
+ROUTER_DENY = "Edit(./**)"
+SESSION_MODEL = {"router": ("claude-fable-5-2", "low"), "worker": ("claude-opus-5-5", "medium")}
+
+
+def _in_repo(name: str) -> bool:
+    path = (ROOT / name.lstrip("/")).resolve()
+    return path.exists() and path.is_relative_to(ROOT)
+
+
+def _sessions() -> None:
+    """A repository path in a prompt file is any run of path characters holding a slash, in backticks or not."""
+    bad = []
+    for recipe, session in SESSIONS.items():
+        prompt = f"build/sessions/{recipe}.md"
+        dry = subprocess.run(["just", "--dry-run", recipe, "--resume"], cwd=ROOT, capture_output=True, text=True)
+        expect(dry.returncode == 0, f"just --dry-run {recipe} exited {dry.returncode}\n{dry.stderr.strip()}")
+        words = dry.stderr.split()
+        flags = dict(zip(words, words[1:]))
+        if words[:1] != ["claude"] or flags.get("-n") != session:
+            bad.append(f"just {recipe}: does not start claude -n {session}")
+        model, effort = SESSION_MODEL[recipe]
+        if (flags.get("--model"), flags.get("--effort")) != (model, effort):
+            bad.append(f"just {recipe}: passes --model {flags.get('--model')} --effort {flags.get('--effort')}, "
+                       f"not --model {model} --effort {effort}")
+        if words[-1:] != ["--resume"]:
+            bad.append(f"just {recipe}: its arguments do not reach claude")
+        passed = {"--append-system-prompt-file": prompt}
+        if recipe == "router":
+            passed["--settings"] = ROUTER_SETTINGS
+        for flag, file in passed.items():
+            named = flags.get(flag)
+            if named != file:
+                bad.append(f"just {recipe}: {flag} names {named}, not {file}")
+            if named and not (ROOT / named).is_file():
+                bad.append(f"just {recipe}: names {named}, missing")
+        if not (ROOT / prompt).is_file():
+            bad.append(f"{prompt}: missing")
+            continue
+        body = (ROOT / prompt).read_text(encoding="utf-8")
+        lines = len(body.splitlines())
+        if lines > SESSION_LINES:
+            bad.append(f"{prompt}: {lines} lines, over {SESSION_LINES}")
+        if session not in body:
+            bad.append(f"{prompt}: does not name its own session {session}")
+        bad += [f"{prompt}: does not name the other session {other}" for other in SESSIONS.values()
+                if other != session and other not in body]
+        bad += [f"{prompt}: does not name {m}" for m in METHOD if m not in body]
+        paths = sorted({m.rstrip(".") for m in re.findall(r"[\w.~-]*(?:/[\w.~-]*)+", body)})
+        bad += [f"{prompt}: names {p}, missing from the repository" for p in paths if not _in_repo(p)]
+    settings = ROOT / ROUTER_SETTINGS
+    if settings.is_file():
+        deny = json.loads(settings.read_text(encoding="utf-8")).get("permissions", {}).get("deny", [])
+        if ROUTER_DENY not in deny:
+            bad.append(f"{ROUTER_SETTINGS}: does not deny {ROUTER_DENY}")
+    bad += _hc_sessions()
+    expect(not bad, "; ".join(bad))
+    print(len(SESSIONS), "session prompt files name each other and paths that exist; just", " and just ".join(SESSIONS),
+          "pass them, the router's with a settings file that denies", ROUTER_DENY)
+    print("; ".join(f"just {recipe} passes --model {model} --effort {effort}" for recipe, (model, effort) in SESSION_MODEL.items()))
+    print("just sessions starts just", " and just ".join(SESSIONS), "once each with hc run --bg --no-parent, named",
+          " and ".join(SESSIONS.values()) + ", through", " ".join(HC_ENV), "and just's absolute path")
+    print("just sessions shows both in the Herdr.app space", SPACE + ", in the tabs", " and ".join(SESSIONS))
+
+
+HC_ENV = ["/usr/bin/env", "PATH=$PATH"]
+SPACE = "okf-builder"
+HERDR_APP_STEPS = {
+    rf"herdr-app do space\.new --name {SPACE}\b": f"create the Herdr.app space {SPACE} when it is missing",
+    r'hc label "\$1" herdr\.space="\$space"': "label each session's terminal with herdr.space",
+    r"herdr-app do tab\.rename\b": "name each session's tab",
+    rf"\bplace {SESSIONS['router']} router\b": "place okf-router-session in the tab router",
+    rf"\bplace {SESSIONS['worker']} worker\b": "place okf-worker-session in the tab worker",
+}
+
+
+def _hc_sessions() -> list[str]:
+    """Read from just --dry-run sessions, which prints the recipe and runs nothing: hc is neither needed nor called.
+    hc looks a program up on its server's PATH, so each terminal is given env by its absolute path, the caller's
+    PATH and just by its absolute path; the recipe refuses to start when claude is not on that PATH."""
+    dry = subprocess.run(["just", "--dry-run", "sessions"], cwd=ROOT, capture_output=True, text=True)
+    expect(dry.returncode == 0, f"just --dry-run sessions exited {dry.returncode}\n{dry.stderr.strip()}")
+    started, bad = [], []
+    for line in re.findall(r"^\s*(hc run\b.*)$", dry.stderr, re.M):
+        words = [w for w in shlex.split(line) if not w.startswith(">")]
+        at = 2
+        while at < len(words) and words[at].startswith("--"):
+            at += 2 if words[at] in ("--name", "--cwd") else 1
+        options, argv = words[:at], words[at:]
+        flags = dict(zip(options, options[1:]))
+        program = Path(argv[2]) if len(argv) == 4 else Path()
+        resolvable = argv[:2] == HC_ENV and program.is_absolute() and program.name == "just" and program.is_file()
+        command = f"just {argv[3]}" if resolvable else " ".join(argv)
+        started.append((flags.get("--name"), command))
+        if not resolvable:
+            bad.append(f"just sessions: hc run for {flags.get('--name')} starts {command or 'no command'}, not "
+                       f"{' '.join(HC_ENV)} and just by its absolute path: hc looks a program up on its server's PATH")
+        bad += [f"just sessions: hc run for {command or 'no command'} lacks {flag}" for flag in ("--bg", "--no-parent")
+                if flag not in options]
+        if Path(flags.get("--cwd", "")).resolve() != ROOT.resolve():
+            bad.append(f"just sessions: hc run for {command or 'no command'} has --cwd {flags.get('--cwd')}, not the repository root")
+    expected = sorted((session, f"just {recipe}") for recipe, session in SESSIONS.items())
+    if sorted(started, key=str) != expected:
+        bad.append(f"just sessions: hc run starts {started}, not {expected} once each")
+    if not re.search(r"^\s*if ! command -v claude\b", dry.stderr, re.M):
+        bad.append("just sessions: does not refuse to start when claude is not on the PATH it hands to hc")
+    if re.search(r"\bherdr (?:workspace|tab|pane)\b", dry.stderr):
+        bad.append("just sessions: still drives herdr 0.9")
+    for step, text in HERDR_APP_STEPS.items():
+        if not re.search(step, dry.stderr):
+            bad.append(f"just sessions: does not {text}")
+    return bad
 
 
 def obsidian_setup(tmp: Path) -> None:

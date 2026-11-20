@@ -87,6 +87,7 @@ const LENSES = [
 ]
 const review = (round) => parallel(LENSES.map(l => () => agent(`${READ}
 You are a reviewer with fresh context. Review PR #${build.pr_number} of jisequilla/j3r3-okf-builder (gh pr view ${build.pr_number}; gh pr diff ${build.pr_number}). Do not read any builder report other than the PR itself. Record in head_sha the PR head commit you read (gh pr view ${build.pr_number} --json headRefOid). ${l.text} ${VERIFIED}
+A finding may be about the ticket itself (a criterion that is wrong, missing or contradicts a decision): start its summary with "Ticket:" and name the ticket's file in file.
 Label every finding against the ticket's blocking bar: "blocking" if the bar names it; "fix" for real defects outside the bar; "nit" otherwise. Another agent rules on the bar from your summaries, so write each summary to say what fails and how it shows. Do not edit the PR or post comments.`, { label: `review:${ticket}:${l.key}:r${round}`, phase: 'Review', schema: REVIEW })))
 
 // Principle 7 of the doctrine: the bar decides, not the reviewer's label; the reviewer that wrote a label never grades it.
