@@ -6,8 +6,8 @@ tags: [runbook, process, agents]
 status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-20T16:29:15Z }
-verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:18Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-12T21:41:17Z }, { by: human:jisequilla, at: 2026-11-14T17:38:44Z }, { by: human:jisequilla, at: 2026-11-20T16:31:41Z }]
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-20T16:39:09Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:18Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-12T21:41:17Z }, { by: human:jisequilla, at: 2026-11-14T17:38:44Z }, { by: human:jisequilla, at: 2026-11-20T16:31:41Z }, { by: human:jisequilla, at: 2026-11-20T16:40:06Z }]
 ---
 
 # Trigger
@@ -46,7 +46,7 @@ Start both sessions from the repository root with `just sessions`: it starts eac
      Two more entries reuse the same stages. `fix: { pr, branch, findings }` starts at the fixes, with findings the router's verdict, the worker or the owner classified as blocking, then reviews and classifies again. `rebase: { pr, reviewed_sha, files }` runs only one reviewer with fresh context on a PR rebased after its review: with `git range-diff` it checks that the rebase changed only the conflicting files, and only to reconcile them with main, and it returns the new head as `reviewed_sha` if so, or `null` with its findings.
 6. **Router: review a code change before its merge**, on the pushed head commit the worker reported. It runs the change on a bundle outside the repository, and when the change builds something a person uses (a page, an Obsidian vault) it also opens that output in the tool that reads it ([Building with agents](/base/doctrine/building-with-agents.md), principle 12). Its verdict is a comment on the pull request naming the commit, what it ran, what it opened and what it did not; it sends the worker a one-line pointer to that comment. A later push, a fix round or a rebase, needs a new verdict.
 7. **Worker: merge on the owner's word**, given in the worker session: `gh pr merge <pr> --squash --match-head-commit <sha>`, with the head the router's verdict names, which refuses if the head moved after that review (then the router reviews again). Close the tracker record citing the pull request ([Building with agents](/base/doctrine/building-with-agents.md), principle 14). CI's run on `main` (`.github/workflows/ci.yml`) is the check of the merged main. When another PR of the layer merged first and this one has to be rebased (they edit the same text files, such as `log.md`), run the workflow with `rebase`, and merge with the `reviewed_sha` it returns once the router has given its new verdict. When the layer's tickets named human-verified concepts, the owner verifies them again once they are on main, and main stays red at `--strict` only until then. Pending nits go to a single follow-up record.
-8. **Merge the layer before the next one.** The agents' worktrees branch off `origin/main`: a layer not on `origin/main` is invisible to the next one. Before the router releases the next layer, one fresh-context reviewer reads the layer's merged diff as a whole (`git diff <layer start>..origin/main`) for contracts split across tickets, names that collide and a ticket that assumed another's behaviour; a finding becomes a record of its own.
+8. **Merge the layer before the next one.** The agents' worktrees branch off `origin/main`: a layer not on `origin/main` is invisible to the next one. Before the router releases the next layer, the router launches one fresh-context reviewer, until a decision names another session, that reads the layer's merged diff as a whole (`git diff <layer start>..origin/main`) for contracts split across tickets, names that collide and a ticket that assumed another's behaviour; a finding becomes a record of its own.
 
 # Warnings
 

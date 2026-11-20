@@ -36,9 +36,22 @@ Options: "Yes, verified" (described as: "It becomes status: stable with your ver
 
 Both concepts' `generated.at` was 2026-11-20T16:29:15Z when the answers were applied.
 
+## The runbook again, after step 8 names the router
+
+On branch `docs/okf-m41-3` (pull request #138), at commit 2d15adb before the next commit. The owner, answering the PR's first "Left unclear" item in the router session ("Name the router for now"), chose the router to launch the fresh-context review of a layer's merged diff, worded to hold only until a decision says otherwise. In the worker session the owner chose the wording "Until decided otherwise" over "For now, the router". Structured question:
+
+> Do you verify the runbook 'Build a change in layers' (knowledge/base/runbooks/build-in-layers.md) at generated.at 2026-11-20T16:39:09Z, on branch docs/okf-m41-3 (PR #138)? Only step 8 changes from the version you verified at 16:29:15Z.
+
+The preview showed step 8 before ("Before the router releases the next layer, one fresh-context reviewer reads the layer's merged diff as a whole ...") and after ("Before the router releases the next layer, the router launches one fresh-context reviewer, until a decision names another session, that reads the layer's merged diff as a whole ...").
+
+Options: "Yes, verified" (described as: "Record your verification, status stable, keep this question and answer in the okf-m41.3 fragment, log.md entry, push to PR #138"), "No, change it" (described as: "Stays draft; say in the notes what step 8 should say"). The owner's answer: "Yes, verified".
+
+The runbook's `generated.at` was 2026-11-20T16:39:09Z when the answer was applied.
+
 # Distillation
 
 | Item | Kind | Outcome | Concept |
 |---|---|---|---|
 | The runbook Build a change in layers | — | verified | [Build a change in layers](/base/runbooks/build-in-layers.md) |
 | The doctrine Building with agents | — | verified | [Building with agents](/base/doctrine/building-with-agents.md) |
+| The runbook again, after step 8 names the router | — | verified | [Build a change in layers](/base/runbooks/build-in-layers.md) |
