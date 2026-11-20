@@ -6,10 +6,10 @@ resource: /.claude/workflows/okf-layer-ticket.js
 tags: [doctrine, agents, workflow, process]
 status: stable
 owner: human:jisequilla
-generated: { by: okf-builder/claude-fable-5-2, at: 2026-11-14T13:39:38Z }
-verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:26Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-14T17:30:26Z }]
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-20T16:29:15Z }
+verified: [{ by: human:jisequilla, at: 2026-11-10T22:38:26Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-14T17:30:26Z }, { by: human:jisequilla, at: 2026-11-20T16:31:41Z }]
 sources:
-  - { id: adr-0009, resource: /base/decisions/DEC-0002-build-in-layers-and-tickets.md, title: "DEC-0002: Build multi-stage changes in layers and delegated tickets" }
+  - { id: dec-0006, resource: /base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md, title: "DEC-0006: Two sessions maintain this repository, a router that plans and reviews and a worker that builds" }
   - { id: adr-0028, resource: /base/decisions/DEC-0003-where-things-go.md, title: "DEC-0003: Where things go" }
   - { id: runbook, resource: /base/runbooks/build-in-layers.md, title: Build a change in layers }
   - { id: s-a1, resource: /fragments/2026-11-04-audit-build-session.md, title: "2026-11-04 session: A1 merged" }
@@ -34,7 +34,7 @@ sources:
 
 How to carry them out is the runbook [Build a change in layers](/base/runbooks/build-in-layers.md); the rules every agent obeys are the [agents policy](/base/policies/agents-in-this-repo.md). Each principle here says why it holds and which run taught it.
 
-1. **The main session judges and does not implement.** Builders work in their own worktrees and open draft PRs; fresh-context reviewers read only the PR; the main session verifies, asks the owner and merges. *Why:* a session that both builds and judges grades its own work, and loses half-done work to compaction[^adr-0009]. *Evidence:* in A5 the fresh-context review found four defects in the git-facts script the builder had delivered, and a separate fix agent corrected them[^s-a5]. A fix that the main session's own verification finds may be made by it when the owner chooses, with each new assertion shown failing on revert; the owner chose this for the two defects that opening PR #75 in Obsidian found[^s-ov8-fix]. On 2026-11-10 the main session built okf-3vg.1 and okf-3vg.2 itself; one fresh-context review still found a crash on a kind holding an abstract kind and an instance linted twice through an alias, both fixed before the merge[^s-lessons].
+1. **The session that judges does not build.** The router plans with the owner and reviews each code change on its pushed head; the worker builds, a code change through the workflow, where builders work in their own worktrees and open draft PRs and fresh-context reviewers read only the PR. *Why:* a session that both builds and judges grades its own work, and loses half-done work to compaction[^dec-0006]. *Evidence:* in A5 the fresh-context review found four defects in the git-facts script the builder had delivered, and a separate fix agent corrected them[^s-a5]. On PR #75 the owner chose an inline fix by the session that had verified it, with each new assertion shown failing on revert, for the two defects that opening it in Obsidian found[^s-ov8-fix]. On 2026-11-10 the main session built okf-3vg.1 and okf-3vg.2 itself; one fresh-context review still found a crash on a kind holding an abstract kind and an instance linted twice through an alias, both fixed before the merge[^s-lessons]. Pull request #133 was built inline with no reviewer; tests, lint and CI passed, and two defects of the page it built reached main[^dec-0006].
 2. **The ticket's text lives in the tracker**, never only in a session's scratch folder. *Why:* scratch folders are not kept. *Evidence:* the A2 ticket files were gone and were rebuilt from the beads, where their text had been stored[^s-lost].
 3. **Measure a proposed check against the repo's own data before the ticket is written.** Run the idea over `knowledge/`, `examples/` and the fixtures and count what it would report. *Why:* a check specified in the abstract meets real data in the pre-flight, and each stop costs a round with the owner. *Evidence:* A2 needed four pre-flights: a secret pattern matching 176 ADR file names, checks firing on the repo's accepted ADRs, a verification older than a migration[^s-a2].
 4. **Read the whole source before stating what it holds.** A claim about code or data names what was read. *Why:* a claim from a partial read is passed on as fact and is caught only by the next check, if any. *Evidence:* the agent said `mask_secrets` had token-prefix patterns and that every ledger row linked a concept; the pre-flights found neither was true[^s-a2b][^s-a4].
@@ -55,13 +55,13 @@ A principle that becomes a decision is an ADR, which this doctrine then links; a
 
 * [Rules for agents working in this repo](/base/policies/agents-in-this-repo.md)
 * [Build a change in layers](/base/runbooks/build-in-layers.md)
-* [DEC-0002: Build multi-stage changes in layers and delegated tickets](/base/decisions/DEC-0002-build-in-layers-and-tickets.md)
+* [DEC-0006: Two sessions maintain this repository, a router that plans and reviews and a worker that builds](/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md)
 * [DEC-0003: Where things go](/base/decisions/DEC-0003-where-things-go.md)
 * [2026-11-04 · Building the knowledge audit and v0.9.0 with agent workflows](/fragments/2026-11-04-audit-build-session.md)
 * [2026-11-06 · Building the Obsidian viewer setup (okf-ov8) with an agent workflow](/fragments/2026-11-06-obsidian-viewer-build.md)
 * [2026-11-10 · How two other repos build with agents, and what this repo takes from them](/fragments/2026-11-10-build-lessons-from-two-repos.md)
 
-[^adr-0009]: DEC-0002, Context and Decision.
+[^dec-0006]: DEC-0006, Context (worked examples) and decisions 2 and 3.
 [^adr-0028]: DEC-0003, decisions 7 and 8.
 [^runbook]: Build a change in layers, Warnings.
 [^s-a1]: The 2026-11-04 session, "A1 merged".
