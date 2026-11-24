@@ -557,7 +557,8 @@ def _sessions(tmp: Path) -> None:
           " and ".join(SESSIONS.values()) + ", through", " ".join(HC_ENV), "and just's absolute path")
     print("just sessions shows both in the Herdr.app space", SPACE + ", in the tabs", " and ".join(SESSIONS))
     print("just sessions, run against stub hc, claude, herdr-app and sleep in", len(SESSIONS_ROWS),
-          "cases, gives each case's stdout, stderr and exit code exactly and never calls hc run")
+          "cases, gives each case's stdout, stderr and exit code exactly, calls hc label and herdr-app do with exactly "
+          "the expected arguments and never calls hc run")
 
 
 HC_ENV = ["/usr/bin/env", "PATH=$PATH"]
@@ -622,6 +623,8 @@ SESSIONS_ROWS = {
         f"sessions: Herdr.app is not open, so neither session is in its window; reach them with {ATTACH}"], []),
     "both placed": (True, True, False, ("okf-router-session", "okf-worker-session"), [
         f"sessions: both are in the Herdr.app space {SPACE}, in the tabs router and worker"], []),
+    "both placed, the space exists": (True, True, True, ("okf-router-session", "okf-worker-session"), [
+        f"sessions: both are in the Herdr.app space {SPACE}, in the tabs router and worker"], []),
     "only okf-router-session placed": (True, True, True, ("okf-router-session",), [
         f"sessions: okf-router-session is in the Herdr.app space {SPACE}, in the tab router"],
         [UNPLACED["okf-worker-session"]]),
@@ -631,12 +634,28 @@ SESSIONS_ROWS = {
     "neither placed": (True, True, True, (), [], [UNPLACED["okf-router-session"], UNPLACED["okf-worker-session"]]),
 }
 STUB_HC = """case "$1" in
-    server|label) exit 0 ;;
+    server|label|run) exit 0 ;;
     get) printf '{"name": "%s", "state": "live", "address": "terminal-%s"}\\n' "$3" "$3" ;;
     *) exit 1 ;;
 esac
 """
 STUB_SPACE = "space-1"
+STUB_PLACEHOLDER = "placeholder-1"
+LABELS = [f"label {s} herdr.space={STUB_SPACE}" for s in SESSIONS.values()]
+RENAME = {s: f"do tab.rename --id tab-{s} --name {tab}" for tab, s in SESSIONS.items()}
+# Each case's calls to hc label and to herdr-app do, in order
+SESSIONS_CALLS = {
+    "herdr-app not on PATH": ([], []),
+    "herdr-app ls fails": ([], []),
+    "both placed": (LABELS, [
+        f"do space.new --name {SPACE} --folder {ROOT} --tab placeholder --focus false",
+        RENAME["okf-router-session"], RENAME["okf-worker-session"],
+        f"do tab.close --id {STUB_PLACEHOLDER} --confirmed true"]),
+    "both placed, the space exists": (LABELS, [RENAME["okf-router-session"], RENAME["okf-worker-session"]]),
+    "only okf-router-session placed": (LABELS, [RENAME["okf-router-session"]]),
+    "only okf-worker-session placed": (LABELS, [RENAME["okf-worker-session"]]),
+    "neither placed": (LABELS, []),
+}
 
 
 def _stub(path: Path, bash: str, body: str) -> None:
@@ -661,6 +680,11 @@ def _stub_path(stubs: Path) -> str:
     return ":".join(dirs)
 
 
+def _calls(path: Path) -> list[str]:
+    """The calls a stub recorded, one per line, or none when it was never called"""
+    return path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+
+
 def _sessions_run(tmp: Path) -> list[str]:
     """Runs the real recipe, just sessions, once per case of SESSIONS_ROWS, against stubs under tmp. Before each run,
     hc must resolve to its stub and herdr-app to its stub or to nothing on the run's PATH, or the check fails without
@@ -682,7 +706,7 @@ def _sessions_run(tmp: Path) -> list[str]:
             answer = f"printf '%s\\n' \"$(<{shlex.quote(str(stubs / 'ls.json'))})\"" if opens else "exit 1"
             _stub(stubs / "herdr-app", bash, f"""case "$1 ${{2:-}}" in
     "ls ") {answer} ;;
-    "do space.new") printf '{{"space": "{STUB_SPACE}", "tab": "placeholder-1"}}\\n' ;;
+    "do space.new") printf '{{"space": "{STUB_SPACE}", "tab": "{STUB_PLACEHOLDER}"}}\\n' ;;
     "do tab.rename"|"do tab.close") exit 0 ;;
     *) exit 1 ;;
 esac
@@ -695,13 +719,19 @@ esac
                f"just sessions run, {case}: herdr-app resolves to {found} on {path}")
         proc = subprocess.run([just, "sessions"], cwd=ROOT, capture_output=True, text=True,
                               env={"PATH": path, "HOME": str(stubs), "TMPDIR": str(stubs)})
-        got = (proc.returncode, proc.stdout.splitlines(), proc.stderr.splitlines())
-        want = (0, ALREADY + rest, stderr)
+        got = (proc.returncode, proc.stdout, proc.stderr)
+        want = (0, "".join(f"{line}\n" for line in ALREADY + rest), "".join(f"{line}\n" for line in stderr))
         if got != want:
-            bad.append(f"just sessions, {case}: gives exit code, stdout and stderr {got}, not {want}")
-        calls = stubs / "calls.hc"
-        calls = calls.read_text(encoding="utf-8").splitlines() if calls.is_file() else []
-        bad += [f"just sessions, {case}: called hc {c}" for c in calls if c.split()[:1] == ["run"]]
+            bad.append(f"just sessions, {case}: gives exit code, stdout and stderr {got!r}, not {want!r}")
+        hc_calls, app_calls = _calls(stubs / "calls.hc"), _calls(stubs / "calls.herdr-app")
+        bad += [f"just sessions, {case}: called hc {c}" for c in hc_calls if c.split()[:1] == ["run"]]
+        labels, dos = SESSIONS_CALLS[case]
+        got_labels = [c for c in hc_calls if c.split()[:1] == ["label"]]
+        if got_labels != labels:
+            bad.append(f"just sessions, {case}: calls hc {got_labels}, not {labels}")
+        got_dos = [c for c in app_calls if c.split()[:1] == ["do"]]
+        if got_dos != dos:
+            bad.append(f"just sessions, {case}: calls herdr-app {got_dos}, not {dos}")
     return bad
 
 
