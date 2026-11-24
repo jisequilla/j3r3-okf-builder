@@ -472,7 +472,8 @@ def workflows(tmp: Path) -> None:
     start claude under the session's name with files that exist and each session's model and effort, and just
     sessions starts both recipes once each with hc run, in the background, without a parent and under those names,
     with the caller's PATH and just's absolute path, and shows each in the Herdr.app space okf-builder in a tab named
-    after its recipe"""
+    after its recipe; run against stub programs, just sessions tells a missing herdr-app from a closed Herdr.app and
+    its last line names only the sessions it placed"""
     found = sorted(p.relative_to(ROOT) for p in (ROOT / ".claude" / "workflows").glob("*.js"))
     expect(found, "no workflow in .claude/workflows")
     resource = re.compile(r"^resource: (/\.claude/workflows/\S+)\s*$", re.M)
@@ -485,7 +486,7 @@ def workflows(tmp: Path) -> None:
             if r == f"/{w}" and f"knowledge/{c}" not in (ROOT / w).read_text(encoding="utf-8")]
     expect(not bad, "; ".join(bad))
     print(len(found), "workflows linked both ways with", len(concepts), "concepts")
-    _sessions()
+    _sessions(tmp)
 
 
 SESSIONS = {"router": "okf-router-session", "worker": "okf-worker-session"}
@@ -501,7 +502,7 @@ def _in_repo(name: str) -> bool:
     return path.exists() and path.is_relative_to(ROOT)
 
 
-def _sessions() -> None:
+def _sessions(tmp: Path) -> None:
     """A repository path in a prompt file is any run of path characters holding a slash, in backticks or not."""
     bad = []
     for recipe, session in SESSIONS.items():
@@ -547,6 +548,7 @@ def _sessions() -> None:
         if ROUTER_DENY not in deny:
             bad.append(f"{ROUTER_SETTINGS}: does not deny {ROUTER_DENY}")
     bad += _hc_sessions()
+    bad += _sessions_run(tmp)
     expect(not bad, "; ".join(bad))
     print(len(SESSIONS), "session prompt files name each other and paths that exist; just", " and just ".join(SESSIONS),
           "pass them, the router's with a settings file that denies", ROUTER_DENY)
@@ -554,6 +556,8 @@ def _sessions() -> None:
     print("just sessions starts just", " and just ".join(SESSIONS), "once each with hc run --bg --no-parent, named",
           " and ".join(SESSIONS.values()) + ", through", " ".join(HC_ENV), "and just's absolute path")
     print("just sessions shows both in the Herdr.app space", SPACE + ", in the tabs", " and ".join(SESSIONS))
+    print("just sessions, run against stub hc, claude, herdr-app and sleep in", len(SESSIONS_ROWS),
+          "cases, gives each case's stdout, stderr and exit code exactly and never calls hc run")
 
 
 HC_ENV = ["/usr/bin/env", "PATH=$PATH"]
@@ -602,6 +606,102 @@ def _hc_sessions() -> list[str]:
     for step, text in HERDR_APP_STEPS.items():
         if not re.search(step, dry.stderr):
             bad.append(f"just sessions: does not {text}")
+    return bad
+
+
+ALREADY = [f"sessions: {s} is already running" for s in SESSIONS.values()]
+UNPLACED = {s: f"sessions: {s} is not in the Herdr.app space {SPACE}; reach it with hc attach {s}" for s in SESSIONS.values()}
+ATTACH = " and ".join(f"hc attach {s}" for s in SESSIONS.values())
+# Each case: whether herdr-app is on PATH, whether its ls succeeds, whether the space okf-builder exists, the sessions
+# whose tab is in it, then the rest of stdout and the whole of stderr
+SESSIONS_ROWS = {
+    "herdr-app not on PATH": (False, False, False, (), [
+        f"sessions: herdr-app is not on PATH, so the sessions were not placed in the Herdr.app space {SPACE}; "
+        f"reach them with {ATTACH}"], []),
+    "herdr-app ls fails": (True, False, False, (), [
+        f"sessions: Herdr.app is not open, so neither session is in its window; reach them with {ATTACH}"], []),
+    "both placed": (True, True, False, ("okf-router-session", "okf-worker-session"), [
+        f"sessions: both are in the Herdr.app space {SPACE}, in the tabs router and worker"], []),
+    "only okf-router-session placed": (True, True, True, ("okf-router-session",), [
+        f"sessions: okf-router-session is in the Herdr.app space {SPACE}, in the tab router"],
+        [UNPLACED["okf-worker-session"]]),
+    "only okf-worker-session placed": (True, True, True, ("okf-worker-session",), [
+        f"sessions: okf-worker-session is in the Herdr.app space {SPACE}, in the tab worker"],
+        [UNPLACED["okf-router-session"]]),
+    "neither placed": (True, True, True, (), [], [UNPLACED["okf-router-session"], UNPLACED["okf-worker-session"]]),
+}
+STUB_HC = """case "$1" in
+    server|label) exit 0 ;;
+    get) printf '{"name": "%s", "state": "live", "address": "terminal-%s"}\\n' "$3" "$3" ;;
+    *) exit 1 ;;
+esac
+"""
+STUB_SPACE = "space-1"
+
+
+def _stub(path: Path, bash: str, body: str) -> None:
+    """A bash script that records its arguments in calls.<name> beside it, using only bash's builtins"""
+    calls = path.parent / f"calls.{path.name}"
+    path.write_text(f"#!{bash}\nprintf '%s\\n' \"$*\" >> {shlex.quote(str(calls))}\n{body}", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _stub_path(stubs: Path) -> str:
+    """The stub directory first, then the directories of bash, grep and seq, none of them ~/.local/bin or a directory
+    that holds an hc or a herdr-app"""
+    dirs = [str(stubs)]
+    for program in ("bash", "grep", "seq"):
+        found = shutil.which(program)
+        expect(found, f"just sessions run: {program} is not on PATH")
+        folder = Path(found).parent
+        expect(folder != Path.home() / ".local" / "bin" and not any((folder / p).exists() for p in ("hc", "herdr-app")),
+               f"just sessions run: {program} lives in {folder}, beside an hc or a herdr-app")
+        if str(folder) not in dirs:
+            dirs.append(str(folder))
+    return ":".join(dirs)
+
+
+def _sessions_run(tmp: Path) -> list[str]:
+    """Runs the real recipe, just sessions, once per case of SESSIONS_ROWS, against stubs under tmp. Before each run,
+    hc must resolve to its stub and herdr-app to its stub or to nothing on the run's PATH, or the check fails without
+    running the recipe: the real hc and herdr-app are never called."""
+    just, bash = shutil.which("just"), shutil.which("bash")
+    expect(just and bash, "just sessions run: just or bash is not on PATH")
+    bad = []
+    for n, (case, (app, opens, space_exists, placed, rest, stderr)) in enumerate(SESSIONS_ROWS.items(), 1):
+        stubs = tmp / "sessions-run" / str(n)
+        stubs.mkdir(parents=True)
+        _stub(stubs / "hc", bash, STUB_HC)
+        _stub(stubs / "claude", bash, "exit 0\n")
+        _stub(stubs / "sleep", bash, "exit 0\n")
+        (stubs / "python3").symlink_to(sys.executable)
+        if app:
+            tabs = [{"id": f"tab-{s}", "terminals": [{"terminal": f"terminal-{s}"}]} for s in placed]
+            spaces = [{"id": STUB_SPACE, "name": SPACE if space_exists else "other", "tabs": tabs}]
+            (stubs / "ls.json").write_text(json.dumps({"spaces": spaces}), encoding="utf-8")
+            answer = f"printf '%s\\n' \"$(<{shlex.quote(str(stubs / 'ls.json'))})\"" if opens else "exit 1"
+            _stub(stubs / "herdr-app", bash, f"""case "$1 ${{2:-}}" in
+    "ls ") {answer} ;;
+    "do space.new") printf '{{"space": "{STUB_SPACE}", "tab": "placeholder-1"}}\\n' ;;
+    "do tab.rename"|"do tab.close") exit 0 ;;
+    *) exit 1 ;;
+esac
+""")
+        path = _stub_path(stubs)
+        hc = shutil.which("hc", path=path)
+        expect(hc == str(stubs / "hc"), f"just sessions run, {case}: hc resolves to {hc}, not the stub, on {path}")
+        found = shutil.which("herdr-app", path=path)
+        expect(found == (str(stubs / "herdr-app") if app else None),
+               f"just sessions run, {case}: herdr-app resolves to {found} on {path}")
+        proc = subprocess.run([just, "sessions"], cwd=ROOT, capture_output=True, text=True,
+                              env={"PATH": path, "HOME": str(stubs), "TMPDIR": str(stubs)})
+        got = (proc.returncode, proc.stdout.splitlines(), proc.stderr.splitlines())
+        want = (0, ALREADY + rest, stderr)
+        if got != want:
+            bad.append(f"just sessions, {case}: gives exit code, stdout and stderr {got}, not {want}")
+        calls = stubs / "calls.hc"
+        calls = calls.read_text(encoding="utf-8").splitlines() if calls.is_file() else []
+        bad += [f"just sessions, {case}: called hc {c}" for c in calls if c.split()[:1] == ["run"]]
     return bad
 
 
