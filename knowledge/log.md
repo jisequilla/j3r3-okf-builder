@@ -1,5 +1,10 @@
 # Bundle history
 
+## 2026-11-24
+* **Verification**: [Build a change in layers](/base/runbooks/build-in-layers.md) verified again by human:jisequilla at `generated.at` 2026-11-24T06:25:14Z, in answer to a structured question (SDR-0022); the question and the answer kept in [2026-11-24 · Verification of the build-in-layers runbook after its sentence on herdr-app, in a structured question](/fragments/2026-11-24-verification-okf-m41-6.md).
+* **Creation**: [2026-11-24 · Verification of the build-in-layers runbook after its sentence on herdr-app, in a structured question](/fragments/2026-11-24-verification-okf-m41-6.md): the structured question and the owner's answer, confirmed.
+* **Update**: [Build a change in layers](/base/runbooks/build-in-layers.md): its Trigger says `just sessions` shows the sessions in Herdr.app only when `herdr-app` is on `PATH` and Herdr.app is open, and that its last line names only the sessions it placed there, as pull request #139 made it (tracker item okf-m41.6).
+
 ## 2026-11-20
 * **Verification**: [Build a change in layers](/base/runbooks/build-in-layers.md) verified again by human:jisequilla at `generated.at` 2026-11-20T16:39:09Z, in answer to a structured question (SDR-0022); the question and the answer kept in [2026-11-20 · Verification of the build-in-layers runbook and the doctrine after the two-session flow, in a structured question](/fragments/2026-11-20-verification-okf-m41-3.md).
 * **Update**: [Build a change in layers](/base/runbooks/build-in-layers.md): step 8 says the router launches the fresh-context review of a layer's merged diff, until a decision names another session (pull request #138, the owner's answer to its first "Left unclear" item).

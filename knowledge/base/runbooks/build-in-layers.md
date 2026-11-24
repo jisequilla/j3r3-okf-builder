@@ -6,15 +6,15 @@ tags: [runbook, process, agents]
 status: stable
 owner: human:jisequilla
 stale_after: 2027-04-30T00:00:00Z
-generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-20T16:39:09Z }
-verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:18Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-12T21:41:17Z }, { by: human:jisequilla, at: 2026-11-14T17:38:44Z }, { by: human:jisequilla, at: 2026-11-20T16:31:41Z }, { by: human:jisequilla, at: 2026-11-20T16:40:06Z }]
+generated: { by: okf-builder/claude-opus-5-5, at: 2026-11-24T06:25:14Z }
+verified: [{ by: human:jisequilla, at: 2026-11-09T10:56:18Z }, { by: human:jisequilla, at: 2026-11-11T18:24:16Z }, { by: human:jisequilla, at: 2026-11-12T21:41:17Z }, { by: human:jisequilla, at: 2026-11-14T17:38:44Z }, { by: human:jisequilla, at: 2026-11-20T16:31:41Z }, { by: human:jisequilla, at: 2026-11-20T16:40:06Z }, { by: human:jisequilla, at: 2026-11-24T06:27:43Z }]
 ---
 
 # Trigger
 
 Any change to the repo. Two sessions maintain it: `okf-router-session`, the router, which plans with the owner, writes the tickets and reviews each code change before its merge, and `okf-worker-session`, the worker, which builds. The decision is [DEC-0006](/base/decisions/DEC-0006-two-sessions-three-kinds-of-change.md); this runbook is where its rules are carried out.
 
-Start both sessions from the repository root with `just sessions`: it starts each with `hc run` in a terminal named after it that outlives the caller's, does not start one already live under its name, and, when Herdr.app is open, shows both in its space `okf-builder`, in the tabs `router` and `worker`. Without Herdr.app, reach them with `hc attach okf-router-session` and `hc attach okf-worker-session`. Without hc, run `just router` and `just worker` in a terminal each. Each recipe starts Claude Code under the session's name with its prompt file from `build/sessions/` appended to the system prompt, and its model and effort; the router's also passes `build/sessions/router.settings.json`, which denies file edits inside the repository. Arguments pass through, and a `--model` or `--effort` among them replaces the recipe's (`just worker --resume`).
+Start both sessions from the repository root with `just sessions`: it starts each with `hc run` in a terminal named after it that outlives the caller's, does not start one already live under its name, and, when `herdr-app` is on `PATH` and Herdr.app is open, shows both in its space `okf-builder`, in the tabs `router` and `worker`; its last line names only the sessions it placed there. Otherwise, reach them with `hc attach okf-router-session` and `hc attach okf-worker-session`. Without hc, run `just router` and `just worker` in a terminal each. Each recipe starts Claude Code under the session's name with its prompt file from `build/sessions/` appended to the system prompt, and its model and effort; the router's also passes `build/sessions/router.settings.json`, which denies file edits inside the repository. Arguments pass through, and a `--model` or `--effort` among them replaces the recipe's (`just worker --resume`).
 
 # Steps
 
