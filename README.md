@@ -30,6 +30,7 @@ Every file belongs to one of four homes ([DEC-0003](knowledge/base/decisions/DEC
 |---|---|---|
 | Product | `plugin/okf-builder/` | Plugin / single source: the skills `okf-standard`, `okf-init`, `okf-capture`, `okf-fragment`, `okf-distill`, `okf-review`, `okf-lint`, `okf-index`, `okf-ask`, `okf-migrate`, `okf-projection` + Python scripts run with uv (PEP 723), the templates, the standard, and the `knowledge-architect` agent. |
 | Product | `standard/OKF-STANDARD.md` | The standard: the `knowledge/3.0` profile (structure, frontmatter, types, lifecycle, conformance). Generated copy of `okf-standard/references/OKF-STANDARD.md`. |
+| Product | `standard/OKF-WRITING-GUIDE.md` | How a concept is written: what each section holds, the eight style rules and the notes of each template. Generated copy of `okf-standard/references/OKF-WRITING-GUIDE.md`. |
 | Product | `standard/OKF-COMPATIBILITY.md` | OKF v0.1 ↔ v0.2 differences, field matrix, mapping rules and versioning policy. Generated copy of `okf-standard/references/OKF-COMPATIBILITY.md`. |
 | Product | `templates/` | Concept templates (`{{placeholders}}`): decision, ADR, runbook, playbook, system, API, table, metric, computation, term, policy, view, reference, project, fragment, conflict log. Generated copy of `okf-standard/templates/`. |
 | Product | `.claude-plugin/marketplace.json` | This repo acts as a plugin marketplace. |

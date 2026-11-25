@@ -111,14 +111,95 @@ def init_02(tmp: Path) -> None:
     expect(not (k / "decisions").exists(), "init created decisions/ outside base/")
 
 
+GUIDE = "OKF-WRITING-GUIDE.md"
+# The line between a concept template's frontmatter and its first heading that points to the guide, exactly
+GUIDE_POINTER = ("{{How to write this concept: OKF-WRITING-GUIDE.md, in the okf-standard skill's references. "
+                 "Delete this line.}}")
+# The note of each section of a decision (SDR-0028 decision 4), exactly, in the order of the sections
+DECISION_NOTES = {
+    "Context": ("The forces that make a decision needed now, in one paragraph. Then a worked example, before and after. "
+                "Not how the decision was reached: that is in the source fragment."),
+    "Decision": "What is decided, as numbered points, each one sentence a reader can act on.",
+    "Alternatives considered": "One row per option really weighed, with the reason it lost in a phrase.",
+    "Consequences": "What changes for the reader. One line each: positive, accepted debt, follow-up.",
+    "Related": "Links only, one per line.",
+}
+# Each concept template with its notes, section by section
+TEMPLATE_NOTES = {"decision.md": DECISION_NOTES, "adr.md": DECISION_NOTES}
+# The skills that write or verify a concept, each of which names the guide
+GUIDE_SKILLS = ("okf-capture", "okf-distill", "okf-review", "okf-standard")
+# A note: one {{...}} on a line of its own, with no "|" and no "}}" inside it
+NOTE_RE = re.compile(r"^\{\{((?:(?!\}\})[^|])*)\}\}$")
+
+
+def template_notes(path: Path, notes: dict[str, str]) -> None:
+    """The template has the guide's pointer once, as its first body line, and each # section exactly one note, the
+    line after its heading and a blank line, equal to its note in notes."""
+    body = text(path).split("---\n", 2)[2]
+    expect(text(path).count(GUIDE_POINTER) == 1 and body.startswith(f"\n{GUIDE_POINTER}\n\n# "),
+           f"{path}: the pointer to the guide is not the one line between the frontmatter and the first heading")
+    lines = body.splitlines()
+    starts = [i for i, line in enumerate(lines) if line.startswith("# ")]
+    headings = [lines[i][2:] for i in starts]
+    expect(headings == list(notes), f"{path}: sections {headings}, expected {list(notes)}")
+    for i, end in zip(starts, starts[1:] + [len(lines)]):
+        heading, section = lines[i][2:], lines[i + 1:end]
+        found = [line for line in section if NOTE_RE.match(line)]
+        expect(len(found) == 1 and section[:2] == ["", found[0]],
+               f"{path}: section # {heading} does not have exactly one note, after its heading and a blank line: {found}")
+        got = NOTE_RE.match(found[0]).group(1)
+        expect(got == notes[heading], f"{path}: section # {heading} has the note {got!r}, not {notes[heading]!r}")
+
+
+def writing_guide(tmp: Path) -> None:
+    """each concept template, in the plugin and in the root copy, has the pointer to OKF-WRITING-GUIDE.md and one note
+    per section equal to its expected text; okf-capture, okf-distill, okf-review and okf-standard name the guide"""
+    for name, notes in TEMPLATE_NOTES.items():
+        for path in (REF / "templates" / name, Path("templates") / name):
+            template_notes(path, notes)
+    print(f"{', '.join(TEMPLATE_NOTES)}: the pointer to the guide, and one note per section as expected")
+    missing = [s for s in GUIDE_SKILLS if GUIDE not in text(PLUGIN / "skills" / s / "SKILL.md")]
+    expect(not missing, f"SKILL.md does not name {GUIDE}: {', '.join(missing)}")
+    print(f"{', '.join(GUIDE_SKILLS)} name {GUIDE}")
+
+
+def guide_beside_standard(root: Path) -> int:
+    """Each OKF-STANDARD.md under root, or in a zip under it or root itself a zip, has OKF-WRITING-GUIDE.md beside it, byte for byte the
+    source; returns how many places carry it."""
+    import zipfile
+
+    source = (ROOT / REF / "references" / GUIDE).read_bytes()
+    places = 0
+    for p in sorted(root.rglob("*")) if root.is_dir() else [root]:
+        if p.name == "OKF-STANDARD.md":
+            guide = p.with_name(GUIDE)
+            expect(guide.is_file() and guide.read_bytes() == source,
+                   f"{guide.relative_to(ROOT)}: missing or not byte for byte the source")
+            places += 1
+        elif p.suffix == ".zip":
+            with zipfile.ZipFile(p) as zf:
+                names = set(zf.namelist())
+                for n in sorted(names):
+                    if n.rsplit("/", 1)[-1] == "OKF-STANDARD.md":
+                        g = n[:-len("OKF-STANDARD.md")] + GUIDE
+                        expect(g in names and zf.read(g) == source,
+                               f"{p.relative_to(ROOT)}:{g}: missing or not byte for byte the source")
+                        places += 1
+    expect(places, f"{root.relative_to(ROOT)} carries no OKF-STANDARD.md")
+    return places
+
+
 def decision_template(tmp: Path) -> None:
-    """templates/decision.md filled in as DEC-0001 of a fresh bundle: its frontmatter whole, lint --strict with no
-    finding, and listed under # Decisions of base/decisions/index.md"""
+    """templates/decision.md filled in as DEC-0001 of a fresh bundle: no placeholder, note or pointer left, its
+    frontmatter whole, lint --strict with no finding, and listed under # Decisions of base/decisions/index.md"""
     k = tmp / "decision-template" / "knowledge"
     uv(S / "okf_init.py", "--root", k.parent, *INIT)
     fill = {"nnnn": "0001", "title": "How we work", "one_sentence_description": "The team works in pairs.",
             "tags": "team", "actor": "human:test", "now": "2026-11-14T00:00:00Z"}
     filled = re.sub(r"\{\{(.*?)\}\}", lambda m: fill.get(m.group(1), "Text."), text(REF / "templates" / "decision.md"))
+    expect("{{" not in filled, f"decision.md filled in still holds a placeholder:\n{filled}")
+    left = [n for n in [*DECISION_NOTES.values(), GUIDE_POINTER.strip("{}")] if n in filled]
+    expect(not left, f"decision.md filled in still holds the text of {left}")
     rel = "base/decisions/DEC-0001-how-we-work.md"
     (k / rel).write_text(filled.replace(": ...", ": none."), encoding="utf-8")
     fm = yaml.safe_load(filled.split("---\n")[1])
@@ -218,6 +299,8 @@ def m365(tmp: Path) -> None:
            and not (ROOT / M365 / "okf-distill" / "templates" / "decision.md").exists(),
            "okf-distill: does not point to okf-capture's decision.md")
     print("companion files", companions, "; okf-capture ships decision.md and okf-distill points to it")
+    print(guide_beside_standard(ROOT / "dist" / "m365"), f"places in dist/m365 carry {GUIDE} beside OKF-STANDARD.md, "
+          "byte for byte the source")
     projection = M365 / "okf-projection" / "scripts" / "okf_projection.py"
     expect((ROOT / projection).is_file(), "okf-projection: does not ship okf_projection.py")
     report = json.loads(uv(projection, EX, "--json"))
@@ -395,6 +478,9 @@ def copilot(tmp: Path) -> None:
     expect(not missing, "okf.agent.md does not name: " + ", ".join(missing))
     expect((pack / "AGENTS.okf.md").is_file(), "the pack has no AGENTS.okf.md")
     print("copilot pack:", len(out), "skills, all named by the @okf agent")
+    for where in (pack, ROOT / "dist" / "okf-copilot-pack.zip"):
+        carried = guide_beside_standard(where)
+        print(f"{where.relative_to(ROOT)}: {carried} place(s) carry {GUIDE} beside OKF-STANDARD.md, byte for byte the source")
     for skills in (PLUGIN / "skills", Path("dist/copilot/.github/skills")):
         print(last_line(uv(Path("build/check_skills.py"), skills)))
 
@@ -419,9 +505,13 @@ def builtin_profile(tmp: Path) -> None:
 
 
 def copies(tmp: Path) -> None:
-    """the committed root standard/ and templates/ match the ones build/copies.py writes"""
+    """build/copies.py writes standard/OKF-WRITING-GUIDE.md equal to its source, and the committed root standard/
+    and templates/ match the ones it writes"""
     out = tmp / "copies"
     run("python3", "build/copies.py", out)
+    guide = out / "standard" / GUIDE
+    expect(guide.is_file() and guide.read_bytes() == (ROOT / REF / "references" / GUIDE).read_bytes(),
+           f"build/copies.py does not write standard/{GUIDE} equal to its source")
     try:
         for sub in ("standard", "templates"):
             run("diff", "-rq", sub, out / sub)
@@ -1115,7 +1205,7 @@ def closing(tmp: Path) -> None:
     print("promoted concepts are drafts with no verified:", ", ".join(promoted))
 
 
-STEPS = {"unit": unit, "init-0.2": init_02, "decision-template": decision_template, "init-0.1": init_01, "google-fixtures": google_fixtures,
+STEPS = {"unit": unit, "init-0.2": init_02, "writing-guide": writing_guide, "decision-template": decision_template, "init-0.1": init_01, "google-fixtures": google_fixtures,
          "migration": migration, "profile-migration": profile_migration, "m365": m365, "copilot": copilot,
          "builtin-profile": builtin_profile, "copies": copies, "m365-agent": m365_agent, "bundles": bundles, "index": index,
          "workflows": workflows, "obsidian-setup": obsidian_setup, "viewer": viewer, "dogfood": dogfood,
