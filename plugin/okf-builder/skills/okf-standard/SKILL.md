@@ -89,7 +89,7 @@ What is in force for a concept is the built-in Domain Profile, `<skills>/okf-sta
 <skills>/okf-standard/scripts/okf_init.py | okf_lint.py | okf_profile.py | okf_index.py | okf_migrate.py | okf_audit.py | okf_close.py | okf_projection.py | okf_obsidian.py | okf_common.py
 <skills>/okf-standard/templates/*.md
 <skills>/okf-standard/profiles/knowledge-3.0.md       # the built-in Domain Profile; okf_lint.py --profiles lists it as "built-in"
-<skills>/okf-standard/references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
+<skills>/okf-standard/references/OKF-STANDARD.md | OKF-WRITING-GUIDE.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
 ```
 
 Python ≥ 3.9 and PyYAML; run with `uv run`, which installs PyYAML, or with `python3` where PyYAML is installed. If the environment cannot run scripts (for example some M365 agents), apply the rules by hand from `references/` and say so.
@@ -99,6 +99,7 @@ Python ≥ 3.9 and PyYAML; run with `uv run`, which installs PyYAML, or with `py
 - Detailed profile questions (naming rules, lifecycle, conformance): read `references/OKF-STANDARD.md`.
 - Spec questions (sources, verified, Attested Computation, conformance §11): read `references/OKF-SPEC-v0.2.md`; for older bundles, `references/OKF-SPEC-v0.1.md`. These are verbatim copies of Google's spec, licensed under `references/OKF-SPEC-LICENSE.md`.
 - Differences between versions and field mapping: `references/OKF-COMPATIBILITY.md`.
+- How to write a concept (what each section holds, the eight style rules, the notes of each template): read `references/OKF-WRITING-GUIDE.md`.
 
 ## Concept writing rules
 

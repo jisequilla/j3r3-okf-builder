@@ -4,7 +4,7 @@
 Usage:
     python3 build/copies.py [OUT]
 
-Replaces OUT/standard/ with OKF-STANDARD.md and OKF-COMPATIBILITY.md from the okf-standard skill's references/,
+Replaces OUT/standard/ with OKF-STANDARD.md, OKF-WRITING-GUIDE.md and OKF-COMPATIBILITY.md from the okf-standard skill's references/,
 and OUT/templates/ with its templates/*.md. OUT defaults to the repository root. Edit the source, never the copies.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 REF = ROOT / "plugin" / "okf-builder" / "skills" / "okf-standard"
-STANDARD = ("OKF-STANDARD.md", "OKF-COMPATIBILITY.md")
+STANDARD = ("OKF-STANDARD.md", "OKF-WRITING-GUIDE.md", "OKF-COMPATIBILITY.md")
 
 
 def write_copies(out: Path) -> None:

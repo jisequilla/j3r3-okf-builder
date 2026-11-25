@@ -95,7 +95,7 @@ M365_INVENTORY = """## Where everything is
 In this package each skill carries the scripts and templates it uses, in its own `scripts/` and `templates/`. This skill carries only the references:
 
 ```
-references/OKF-STANDARD.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
+references/OKF-STANDARD.md | OKF-WRITING-GUIDE.md | OKF-COMPATIBILITY.md | OKF-SPEC-v0.1.md | OKF-SPEC-v0.2.md
 ```
 """
 

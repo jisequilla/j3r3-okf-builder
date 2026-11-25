@@ -35,4 +35,4 @@ They can be copied into `tools/okf/` of any repo for CI; the CI job needs uv (fo
 
 ## Standard
 
-`skills/okf-standard/references/OKF-STANDARD.md` defines the profile; `OKF-COMPATIBILITY.md` holds the v0.1↔v0.2 matrix. Original specs in `references/OKF-SPEC-v0.1.md` and `OKF-SPEC-v0.2.md` (Apache-2.0, GoogleCloudPlatform/knowledge-catalog).
+`skills/okf-standard/references/OKF-STANDARD.md` defines the profile; `OKF-WRITING-GUIDE.md` says how a concept is written; `OKF-COMPATIBILITY.md` holds the v0.1↔v0.2 matrix. Original specs in `references/OKF-SPEC-v0.1.md` and `OKF-SPEC-v0.2.md` (Apache-2.0, GoogleCloudPlatform/knowledge-catalog).

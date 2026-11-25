@@ -491,6 +491,8 @@ A kind's directory, here `requests/`: the kind's `description` from the Domain P
 | Extract a closed unit of work | It moves to its own repository | `parent` removed; its `base/profile.md` `extends` the definition of its kind at `<path>@<commit>`; an **Update** entry in both bundles' `log.md` |
 | Any of the above | Log | An entry in the `log.md` of the affected directory and/or the root |
 
+A concept is written, and a person verifies it at Human review, against `OKF-WRITING-GUIDE.md`: each section holds only what its template's note says, and the concept follows the guide's eight style rules.
+
 ---
 
 ## 7. Conformance
@@ -583,5 +585,6 @@ Operating rules:
 
 - OKF v0.2 spec: `SPEC.md` at https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf (v0.1: the same file at commit `ee67a5c`)
 - v0.1 ↔ v0.2 compatibility and the profile 2.0 → 3.0 migration: `OKF-COMPATIBILITY.md`
+- How a concept is written, section by section, and the eight style rules: `OKF-WRITING-GUIDE.md`
 - Announcement: https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing
 - LLM-wiki pattern (Karpathy): https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
